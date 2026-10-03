@@ -21,7 +21,7 @@ import rfc8785
 from pydantic import BaseModel, ConfigDict, Field
 
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
-from aptl.utils.strict_json import loads_strict
+from aptl.utils.strict_json import loads_strict, model_validate_json_strict
 
 _SHA256 = r"^sha256:[a-f0-9]{64}$"
 _IMAGE_DIGEST = r"^[a-z0-9][a-z0-9._/-]*@sha256:[a-f0-9]{64}$"
@@ -74,7 +74,7 @@ def verify_seat_launch(
     if len(payload) > _MAX_DOCUMENT_BYTES:
         raise SeatLaunchError("appliance launch descriptor exceeds its limit")
     try:
-        descriptor = SeatLaunchDescriptor.model_validate_json(payload)
+        descriptor = model_validate_json_strict(SeatLaunchDescriptor, payload)
     except ValueError as exc:
         raise SeatLaunchError("invalid appliance launch descriptor") from exc
 

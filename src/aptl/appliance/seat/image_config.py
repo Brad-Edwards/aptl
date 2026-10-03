@@ -15,13 +15,13 @@ publishes nothing a participant can reach, is refused rather than launched.
 
 from __future__ import annotations
 
-import json
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aptl.appliance.seat.prereqs import HostPrerequisites
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy, GuestPublication
+from aptl.utils.strict_json import loads_strict
 
 SEAT_IMAGE_CONFIG_MEDIA_TYPE = "application/vnd.aptl.seat.config.v1+json"
 
@@ -64,8 +64,6 @@ class SeatImageConfig(BaseModel):
         # The seat exists to project the guest's endpoints to the host; an
         # image that publishes none cannot be reached and must not launch.
         audiences = [item.audience for item in self.boundary.guest_publications]
-        if not audiences:
-            raise ValueError("a seat image must publish at least one guest endpoint")
         if "participant" not in audiences:
             raise ValueError("a seat image must publish a participant endpoint")
         return self
@@ -85,9 +83,9 @@ def parse_seat_image_config(payload: bytes) -> SeatImageConfig:
     """Parse and validate one seat image config blob, fail-closed."""
 
     try:
-        document = json.loads(payload)
+        document = loads_strict(payload)
     except ValueError as exc:
-        raise SeatImageConfigError("seat image config is not valid JSON") from exc
+        raise SeatImageConfigError(f"seat image config is not valid JSON: {exc}") from exc
     if not isinstance(document, dict):
         raise SeatImageConfigError("seat image config is not a JSON object")
     try:

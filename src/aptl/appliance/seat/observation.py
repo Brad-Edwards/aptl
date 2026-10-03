@@ -15,6 +15,7 @@ from dataclasses import dataclass
 import rfc8785
 
 from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.namespace import enter_private_network, in_private_network
 from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
@@ -87,13 +88,90 @@ def wait_for_loopback_listeners(
     return observed
 
 
+def probe_desktop_publication(
+    endpoint: BoundaryEndpoint, *, timeout_seconds: float = 2,
+    namespace_pid: int | None = None,
+) -> bool:
+    """Check the actual Guacamole HTTP page and prompt-free session path."""
+
+    if namespace_pid is not None:
+        try:
+            prefix = enter_private_network(namespace_pid)
+            script = (
+                "import http.client,json,sys;"
+                "c=http.client.HTTPConnection(sys.argv[1],int(sys.argv[2]),timeout=2);"
+                "c.request('GET','/');assert c.getresponse().status==200;c.close();"
+                "c=http.client.HTTPConnection(sys.argv[1],int(sys.argv[2]),timeout=2);"
+                "c.request('POST','/api/tokens',body=b'',headers={'Content-Type':'application/x-www-form-urlencoded'});"
+                "r=c.getresponse();assert r.status==200 and json.loads(r.read(4096)).get('authToken');c.close()"
+            )
+            return subprocess.run(
+                [*prefix, "python3", "-c", script, endpoint.address, str(endpoint.port)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL, timeout=max(5, timeout_seconds * 3),
+                check=False,
+            ).returncode == 0
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            return False
+
+    connection = None
+    try:
+        connection = http.client.HTTPConnection(
+            endpoint.address, endpoint.port, timeout=timeout_seconds
+        )
+        connection.request("GET", "/")
+        if connection.getresponse().status != 200:
+            return False
+        connection.close()
+        connection = http.client.HTTPConnection(
+            endpoint.address, endpoint.port, timeout=timeout_seconds
+        )
+        connection.request(
+            "POST", "/api/tokens", body=b"",
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        response = connection.getresponse()
+        return response.status == 200 and bool(
+            json.loads(response.read(4096)).get("authToken")
+        )
+    except (OSError, http.client.HTTPException, ValueError):
+        return False
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def wait_for_desktop_publication(
+    mappings: tuple[BoundaryEndpoint, ...],
+    *,
+    process_alive: Callable[[], bool],
+    timeout_seconds: float = 120,
+    namespace_pid: int | None = None,
+) -> None:
+    """Require the guest desktop gateway through its actual host mapping."""
+
+    endpoints = [item for item in mappings if item.audience == "participant"]
+    if len(endpoints) != 1:
+        raise ValueError("seat desktop publication is incomplete")
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        if probe_desktop_publication(endpoints[0], namespace_pid=namespace_pid):
+            return
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or not process_alive():
+            raise SeatLauncherError(
+                "guest.desktop-unavailable", "desktop gateway did not become ready"
+            )
+        time.sleep(min(1, remaining))
+
+
 def wait_for_web_publications(
     mappings: tuple[BoundaryEndpoint, ...],
     *,
     process_alive: Callable[[], bool],
     timeout_seconds: float = 30,
 ) -> None:
-    """Require the guest UI and API to answer through their actual host mappings."""
+    """Retain the signed browser/API readiness contract of older seat images."""
 
     endpoints = {item.audience: item for item in mappings}
     if "participant" not in endpoints or "recovery" not in endpoints:
@@ -105,8 +183,12 @@ def wait_for_web_publications(
             endpoint = endpoints[audience]
             connection = None
             try:
-                connection = http.client.HTTPConnection(endpoint.address, endpoint.port, timeout=2)
-                connection.request("GET", "/" if audience == "participant" else "/api/health")
+                connection = http.client.HTTPConnection(
+                    endpoint.address, endpoint.port, timeout=2
+                )
+                connection.request(
+                    "GET", "/" if audience == "participant" else "/api/health"
+                )
                 response = connection.getresponse()
                 if (audience == "participant" and response.status == 200) or (
                     audience == "recovery" and response.status == 401
@@ -132,14 +214,19 @@ def _collect_listeners_via_ss(
     """Parse loopback TCP listeners from ``ss`` output when available."""
 
     try:
+        prefix = (
+            enter_private_network(owner_pid)
+            if owner_pid is not None and in_private_network(owner_pid)
+            else ()
+        )
         result = subprocess.run(
-            ["ss", "-H", "-ltnp"],
+            [*prefix, "ss", "-H", "-ltnp"],
             capture_output=True,
             text=True,
             timeout=10,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, ValueError, subprocess.TimeoutExpired):
         return ()
     if result.returncode != 0:
         return ()

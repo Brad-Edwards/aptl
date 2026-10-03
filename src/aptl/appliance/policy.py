@@ -17,34 +17,20 @@ def full_techvault_boundary_policy() -> ApplianceBoundaryPolicy:
         {
             "schema_version": "aptl.appliance-boundary/v2",
             "policy_id": "techvault-full",
-            "generation": 2,
+            "generation": 3,
             "workbench_policy_version": "participant-workbench-profile/v1",
             "default_deny": False,
             "guest_publications": [
                 {
                     "audience": "participant",
                     "address": "127.0.0.1",
-                    "port": 3000,
-                    "protocol": "tcp",
-                },
-                {
-                    "audience": "recovery",
-                    "address": "127.0.0.1",
-                    "port": 8400,
-                    "protocol": "tcp",
-                },
-                {
-                    "audience": "host-mcp",
-                    "address": "127.0.0.1",
-                    "port": 2222,
+                    "port": 8080,
                     "protocol": "tcp",
                 },
             ],
-            "host_mcp_contract": "aptl.restricted-ssh-mcp/v1",
             "docker_authority": {
                 "allowed_holder_labels": [
                     "aptl.node.address=provision.node.shuffle-orborus",
-                    "aptl.web.control-plane=true",
                 ],
                 "require_guest_daemon": True,
             },

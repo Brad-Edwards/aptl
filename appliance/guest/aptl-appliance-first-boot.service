@@ -10,12 +10,14 @@ Wants=network-online.target
 Type=exec
 ExecStart=/usr/local/libexec/aptl-appliance-first-boot
 Environment=HOME=/var/lib/aptl
+Environment=APTL_SEAT_DESKTOP_HANDOFF=1
+Environment=APTL_SEAT_DESKTOP_MCP_SMOKE=1
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=false
 ProtectSystem=strict
-ReadWritePaths=/var/lib/aptl /opt/aptl/project
+ReadWritePaths=/var/lib/aptl /opt/aptl/project /home/aptl /etc /usr/local/share/ca-certificates
 
 [Install]
 WantedBy=multi-user.target

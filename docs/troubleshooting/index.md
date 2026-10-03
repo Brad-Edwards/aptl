@@ -99,6 +99,34 @@ The destructive stop asks for confirmation. It removes project volumes but
 does not prune the Docker daemon. Do not use `docker system prune` as APTL
 recovery: it can remove resources belonging to other projects.
 
+### `aptl lab stop -v` reports pending host cleanup
+
+After it removes the volumes, the destructive stop also clears host-side state
+that described them, such as the recorded Wazuh agent enrollment baseline. Each
+lab start records that work under `.aptl/lifecycle/`, and the installed APTL
+release finishes it, including records written by earlier releases. The
+stop reports the two failure classes separately:
+
+- `[lifecycle-docker-teardown-failed]` means Docker teardown failed. Host
+  cleanup was not attempted, because the host state still describes the
+  retained volumes. Resolve the Docker error first.
+- `[lifecycle-host-cleanup-pending]` means Docker teardown completed and the
+  volumes are gone, but the listed cleanup actions did not finish. Each entry
+  names the action, the admitted pack, the record, and a reason code.
+
+Retry with `aptl lab stop -v --yes` after resolving the cause. A repeat stop is
+safe when the Docker resources are already gone: completed actions are not
+repeated, and pending ones run again. Do not delete or edit the files under
+`.aptl/lifecycle/` to clear the error; the records are the audit trail.
+
+| Reason | Meaning and action |
+| --- | --- |
+| `provider-reset-authority-unavailable` | No installed adapter declares support for that pack's cleanup. Install an adapter release that supports the recorded pack version and digest. |
+| `provider-reset-authority-ambiguous` | More than one installed adapter claims the cleanup. Uninstall the duplicate. |
+| `provider-hook-failed` | The pack's cleanup handler failed. Check the log, then retry. |
+| `host-state-unsafe` | A symlink or non-file sits at the cleanup path. APTL refuses to follow it. Inspect and remove it manually. |
+| `cleanup-record-malformed`, `cleanup-action-unsupported` | The record cannot be read or was written by a newer APTL release. Upgrade APTL, or report the record name. |
+
 Do not replace recovery with raw `docker compose up`. `aptl lab start` owns
 scenario realization, generated configuration, credentials, port selection,
 readiness, MCP setup, and run recording. `aptl kill` is reserved for emergency
@@ -193,13 +221,23 @@ Read the phase first:
   container is listening yet. Docker accepts the connection on the host and
   then closes it. When this state lasts for the whole budget, the API never
   started. Inspect the container logs, and check that the container is not
-  restarting or running out of memory.
+  restarting or running out of memory. If the manager container and other
+  Wazuh daemons are running but `wazuh-apid` is absent, TechVault's single
+  backend retry starts the missing API daemon in that same container. On an
+  older running seat, use `docker exec` to run
+  `/var/ossec/bin/wazuh-control status` in the existing manager container,
+  then run `wazuh-control start` there if the API is absent. This preserves the
+  container and retained volumes. The normal authenticated readiness check
+  still decides whether the lab is ready. Establish the cause of an API exit
+  from its logs; certificate generation alone does not prove it.
 - **`authentication`**: the API answered but did not issue a session.
   `credentials_rejected` (HTTP 401 or 403) means the API rejected the
   `INDEXER_USERNAME`/`INDEXER_PASSWORD` or `API_USERNAME`/`API_PASSWORD`
   values from `.env`. For the indexer, a retained `wazuh-indexer-data` volume
-  can still hold an earlier admin password: run `aptl lab stop -v`, then
-  `aptl lab start`, or restore the original `INDEXER_PASSWORD`.
+  can still hold an earlier admin password. Restore the original
+  `INDEXER_PASSWORD` if the data must be kept. `aptl lab stop -v` removes
+  retained lab volumes and is a destructive reset, so use it only after an
+  intentional backup and reset decision.
 - **`manager_status`**: the manager API authenticated but reported no running
   manager daemons. See the silent-daemon failure mode in the previous section.
 

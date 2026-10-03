@@ -15,11 +15,21 @@ set -euo pipefail
 # Refuse an accidental multi-hour software-emulated bake.
 export LIBGUESTFS_BACKEND=${LIBGUESTFS_BACKEND:-direct}
 export LIBGUESTFS_BACKEND_SETTINGS=force_kvm
+guestfs_command=(env)
+if test "${APTL_SEAT_LIBGUESTFS_SUDO:-0}" = 1; then
+  guestfs_command=(sudo env "LIBGUESTFS_BACKEND=$LIBGUESTFS_BACKEND"
+    "LIBGUESTFS_BACKEND_SETTINGS=$LIBGUESTFS_BACKEND_SETTINGS")
+fi
 
 # shellcheck disable=SC1091
 source "$(dirname "${BASH_SOURCE[0]}")/seat-base-image.env"
 
 source_root=$PWD
+host_python=${APTL_SEAT_HOST_PYTHON:-$source_root/.venv/bin/python}
+if ! test -x "$host_python"; then
+  echo "seat image build requires an installed project Python environment: $host_python" >&2
+  exit 2
+fi
 source_commit=$(git rev-parse HEAD)
 source_dirty=0
 if test -n "$(git status --porcelain --untracked-files=normal)"; then
@@ -27,7 +37,7 @@ if test -n "$(git status --porcelain --untracked-files=normal)"; then
   echo 'diagnostic build from dirty source; publication will be refused' >&2
 fi
 build_root=${APTL_SEAT_BUILD_ROOT:-$PWD/build/seat-image}
-disk_gib=${APTL_SEAT_DISK_GIB:-250}
+disk_gib=${APTL_SEAT_DISK_GIB:-128}
 if ! [[ "$disk_gib" =~ ^[1-9][0-9]{1,3}$ ]] || ((disk_gib < 64 || disk_gib > 4096)); then
   echo 'APTL_SEAT_DISK_GIB must be between 64 and 4096' >&2
   exit 2
@@ -44,7 +54,7 @@ test ! -e "$build_root" || {
 install -d -m 0700 "$build_root" "$build_root/input" "$build_root/cache" \
   "$build_root/out"
 
-for tool in qemu-img virt-customize virt-sysprep virt-sparsify docker python3 npm; do
+for tool in qemu-img virt-customize virt-sysprep virt-sparsify docker python3 npm uv; do
   command -v "$tool" >/dev/null || {
     echo "seat image build requires $tool" >&2
     exit 2
@@ -73,6 +83,7 @@ lock_dir=$(mktemp -d -p "$build_root" images.XXXXXXXX)
 export APTL_LOCAL_IMAGE_LOCK_FILE="$lock_dir/images.txt"
 commit=$(git rev-parse --short=12 HEAD)
 export APTL_LOCAL_IMAGE_TAG_SUFFIX="seat-${commit}-$$"
+export APTL_SEAT_BAKE_SKIP_WEB=1
 "$source_root/scripts/appliance/build-local-images.sh"
 
 while read -r canonical built _id; do
@@ -100,8 +111,7 @@ install -d -m 0700 "$payload/wheelhouse"
 "$target_python" -m pip download --require-hashes \
   -r "$source_root/requirements/runtime.txt" --dest "$payload/wheelhouse"
 cp "$source_root/requirements/runtime.txt" "$payload/requirements.txt"
-python3 -m build --wheel --no-isolation --outdir "$payload/wheelhouse" \
-  "$source_root"
+uv build --wheel --out-dir "$payload/wheelhouse" "$source_root"
 python3 - "$source_root/pyproject.toml" "$payload/wheelhouse" \
   "$payload/aptl-wheel-requirements.txt" <<'PYTHON'
 import hashlib
@@ -126,11 +136,42 @@ PYTHON
 for package in "$source_root/mcp/aptl-mcp-common" "$source_root"/mcp/mcp-*; do
   (cd "$package" && npm ci --no-audit --no-fund && npm run build)
 done
-(cd "$source_root/web" && npm ci --no-audit --no-fund && npm run build)
+
+install -d -m 0700 "$build_root/input/claude"
+cp "$source_root/appliance/guest/claude/package.json" \
+  "$source_root/appliance/guest/claude/package-lock.json" \
+  "$build_root/input/claude/"
+npm ci --prefix "$build_root/input/claude" --omit=dev --no-audit --no-fund
+tar -cf "$payload/claude-runtime.tar" -C "$build_root/input/claude" \
+  package.json package-lock.json node_modules
+
+# The desktop gateway is part of the signed offline closure. Pull exact
+# upstream digests, then give the guest stable local tags that survive
+# docker save/load without a registry or the host Docker daemon.
+desktop_images=(
+  'guacamole/guacamole:1.6.0@sha256:f344085e618bb05e22b964b0208dbd06d3468275bac70206f93805245e067b40 aptl-seat-guacamole:1.6.0'
+  'guacamole/guacd:1.6.0@sha256:8974eaa9ba32f713daf311e7cc8cd7e4cdfba1edea39eed75524e78ef4b08f4f aptl-seat-guacd:1.6.0'
+  'postgres:16-alpine@sha256:721873c34ceb9f8d8fc265984940dc982404c105f19ad51be9fdc5970a6080ea aptl-seat-postgres:16'
+  'nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94 aptl-seat-nginx:stable'
+)
+desktop_tags=()
+for entry in "${desktop_images[@]}"; do
+  read -r pinned local_tag <<<"$entry"
+  docker pull "$pinned"
+  docker tag "$pinned" "$local_tag"
+  desktop_tags+=("$local_tag")
+done
+docker run --rm aptl-seat-guacamole:1.6.0 \
+  /opt/guacamole/bin/initdb.sh --postgresql |
+  sed '/^-- Create default user "guacadmin"/,$d' >"$payload/guac-schema.sql"
+test -s "$payload/guac-schema.sql"
+for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py desktop-handoff.py desktop-mcp-smoke.py desktop-session.sh; do
+  cp "$source_root/appliance/guest/$filename" "$payload/"
+done
 
 # Build a clean project tree first, then write the image-bound participant
 # profile into that tree. The checkout itself is never modified by the bake.
-python3 - "$source_root" "$build_root/input/source-project.tar" <<'PYTHON'
+"$host_python" - "$source_root" "$build_root/input/source-project.tar" <<'PYTHON'
 import pathlib
 import sys
 
@@ -142,7 +183,7 @@ archive_project(root, pathlib.Path(sys.argv[2]))
 PYTHON
 install -d -m 0700 "$build_root/input/project"
 tar -xf "$build_root/input/source-project.tar" -C "$build_root/input/project"
-PYTHONPATH="$source_root/src" python3 \
+PYTHONPATH="$source_root/src" "$host_python" \
   "$source_root/scripts/appliance/assemble-seat-inputs.py" \
   --project "$build_root/input/project" --work "$build_root/input" \
   --local-image-lock "$APTL_LOCAL_IMAGE_LOCK_FILE" \
@@ -150,16 +191,41 @@ PYTHONPATH="$source_root/src" python3 \
   --tags-output "$build_root/input/image-tags.txt" \
   --tag-ids-output "$build_root/input/image-tag-ids.json"
 readarray -t image_tags <"$build_root/input/image-tags.txt"
-docker save --output "$payload/oci-images.tar" "${image_tags[@]}"
-PYTHONPATH="$source_root/src" python3 \
+docker save --output "$payload/oci-images.tar" "${image_tags[@]}" "${desktop_tags[@]}"
+extra_image_args=()
+for tag in "${desktop_tags[@]}"; do
+  extra_image_args+=(--extra-image-tag "$tag")
+done
+PYTHONPATH="$source_root/src" "$host_python" \
   "$source_root/scripts/appliance/assemble-seat-inputs.py" \
   --project "$build_root/input/project" --work "$build_root/input" \
   --local-image-lock "$APTL_LOCAL_IMAGE_LOCK_FILE" \
   --roles-output "$build_root/input/image-roles.json" \
   --tags-output "$build_root/input/image-tags.txt" \
   --tag-ids-output "$build_root/input/image-tag-ids.json" \
-  --verify-archive "$payload/oci-images.tar"
-python3 - "$source_root" "$build_root/input/project" "$payload/project.tar" <<'PYTHON'
+  --verify-archive "$payload/oci-images.tar" \
+  "${extra_image_args[@]}"
+# The built MCP entrypoints need runtime packages, but the TypeScript and
+# vitest trees used to compile them would otherwise add gigabytes to the disk.
+# Package "prepare" hooks rebuild file dependencies during npm prune even
+# with --ignore-scripts. Remove those hooks only in the archived guest copy.
+python3 - "$build_root/input/project/mcp" <<'PYTHON'
+import json
+from pathlib import Path
+import sys
+
+root = Path(sys.argv[1])
+for package in (root / "aptl-mcp-common", *sorted(root.glob("mcp-*"))):
+    path = package / "package.json"
+    document = json.loads(path.read_text(encoding="utf-8"))
+    document.get("scripts", {}).pop("prepare", None)
+    path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
+PYTHON
+for package in "$build_root/input/project/mcp/aptl-mcp-common" \
+  "$build_root"/input/project/mcp/mcp-*; do
+  (cd "$package" && npm prune --omit=dev --ignore-scripts --no-audit --no-fund)
+done
+"$host_python" - "$source_root" "$build_root/input/project" "$payload/project.tar" <<'PYTHON'
 import pathlib
 import sys
 
@@ -184,29 +250,29 @@ cp "$source_root/appliance/guest/aptl-launch.mount" "$payload/"
 # --- bake --------------------------------------------------------------
 disk=$build_root/out/seat-disk.qcow2
 qemu-img create -f qcow2 "$disk" "${disk_gib}G" >/dev/null
-virt-resize --expand /dev/sda1 "$base" "$disk"
+"${guestfs_command[@]}" virt-resize --expand /dev/sda1 "$base" "$disk"
 
-virt-customize --add "$disk" \
+"${guestfs_command[@]}" virt-customize --add "$disk" \
   --run-command 'mkdir -m 0700 -p /opt/aptl-stage' \
   --copy-in "$build_root/input/offline-payload.tar:/opt/aptl-stage" \
   --copy-in "$source_root/appliance/guest/provision-offline.sh:/opt/aptl-stage" \
   --run-command 'chmod 0500 /opt/aptl-stage/provision-offline.sh' \
   --run-command '/opt/aptl-stage/provision-offline.sh'
 
-virt-sysprep --add "$disk" --operations defaults
+"${guestfs_command[@]}" virt-sysprep --add "$disk" --operations defaults
 # Provisioning temporarily copied and extracted the offline payload inside the
 # guest. Discard those now-free ext4 blocks before qcow2 compression, otherwise
 # the registry layer still carries the deleted multi-gigabyte staging data.
-virt-sparsify --in-place "$disk"
+"${guestfs_command[@]}" virt-sparsify --in-place "$disk"
 
 # Inspect the actual finalized guest. This catches missing Docker, Python
 # entrypoints, an unexpanded root filesystem, and leaked build state before
 # anything can be published.
-virt-customize --add "$disk" \
+"${guestfs_command[@]}" virt-customize --add "$disk" \
   --copy-in "$source_root/appliance/guest/scan-golden.sh:/tmp" \
   --run-command "chmod 0500 /tmp/scan-golden.sh && APTL_SEAT_DISK_GIB=$disk_gib /tmp/scan-golden.sh && rm /tmp/scan-golden.sh && truncate -s 0 /etc/machine-id"
 
-test "$(virt-cat -a "$disk" /etc/machine-id | wc -c)" -eq 0 || {
+test "$("${guestfs_command[@]}" virt-cat -a "$disk" /etc/machine-id | wc -c)" -eq 0 || {
   echo 'final seat disk still contains a machine identity' >&2
   exit 1
 }
@@ -216,7 +282,7 @@ mv "$disk.compact" "$disk"
 chmod 0444 "$disk"
 
 # --- self-description --------------------------------------------------
-PYTHONPATH="$source_root/src" python3 \
+PYTHONPATH="$source_root/src" "$host_python" \
   "$source_root/scripts/appliance/write-seat-image-config.py" \
   --output "$build_root/out/seat-image-config.json" \
   --disk "$disk"

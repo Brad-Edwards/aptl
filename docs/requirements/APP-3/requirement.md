@@ -28,6 +28,23 @@ Issue #823 supplies the release artifact consumed by the host launcher in issue 
 
 ## Traceability
 
+- IMPLEMENTS → GITHUB_ISSUE `1178` (Browser desktop in the signed disposable seat)
+- IMPLEMENTS → CODE_FILE `appliance/guest/seat-desktop.py` (Per-overlay Guacamole and xrdp identity)
+- IMPLEMENTS → CODE_FILE `appliance/guest/desktop-handoff.py` (Live guest MCP inputs for the desktop account)
+- IMPLEMENTS → CODE_FILE `appliance/guest/desktop-mcp-smoke.py` (Red and blue MCP calls before desktop readiness)
+- IMPLEMENTS → CONFIG `appliance/guest/desktop-compose.yml` (Offline browser desktop gateway)
+- IMPLEMENTS → CODE_FILE `scripts/appliance/assemble-seat-inputs.py` (Exact archive identity for scenario and desktop images)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/namespace.py` (Per-user host network isolation without a participant login)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/vm.py` (Private Guacamole namespace with unrestricted outbound NAT)
+- IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/observation.py` (Live gateway admission inside the user's network namespace)
+- TESTS → TEST `tests/test_seat_desktop.py` (Private overlay credentials and prompt-free gateway configuration)
+- TESTS → TEST `tests/test_appliance_seat_namespace.py` (Prompt-free gateway inaccessible outside the user's namespace)
+- TESTS → TEST `tests/test_appliance_seat_vm.py` (Unrestricted QEMU NAT and private desktop namespace)
+- TESTS → TEST `tests/test_seat_image_build.py` (Offline desktop closure and golden-image contract)
+- TESTS → TEST `tests/test_appliance_seat_observation.py` (Host-mapped desktop readiness)
+- DOCUMENTS → DOCUMENTATION `docs/adrs/adr-061-gateless-vm-seat-access.md` (Owner-selected desktop access contract)
+- DOCUMENTS → DOCUMENTATION `docs/reviews/1178-seat-desktop-diagnostic.md` (One-host desktop and provider network diagnostic)
+
 - IMPLEMENTS → GITHUB_ISSUE `1022` (VM-only seat delivery and qualification)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/policy.py` (Explicit signed VM-only containment policy)
 - IMPLEMENTS → CODE_FILE `src/aptl/appliance/seat/lifecycle.py` (Generation-bound VM seat lifecycle and admission)

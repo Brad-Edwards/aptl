@@ -89,7 +89,7 @@ def test_cached_config_stays_with_selected_disk_when_tag_moves(
     )
     result = _load_seat_image(paths)
     assert result.config_digest == _digest(payload)
-    assert result.config.participant.port == 3000
+    assert result.config.participant.port == 8080
 
     (cache / disk_digest.removeprefix("sha256:") / "seat-config.json").write_bytes(
         b"tampered"
@@ -130,7 +130,7 @@ def test_guest_services_use_verified_launch_policy(
     )
     monkeypatch.setattr(guest_services, "_LAUNCH_DESCRIPTOR", path)
     guest_services.main()
-    assert {binding.listen_port for binding in observed} == {3000, 8400, 2222}
+    assert {binding.listen_port for binding in observed} == {8080}
     assert {binding.listen_address for binding in observed} == {
         DEFAULT_QEMU_GUEST_ADDRESS
     }
@@ -231,6 +231,18 @@ def test_release_smoke_uses_the_same_home_as_first_boot() -> None:
     release_smoke = (guest / "seat-qualification-smoke.service").read_text()
     assert "Environment=HOME=/var/lib/aptl" in first_boot.splitlines()
     assert "Environment=HOME=/var/lib/aptl" in release_smoke.splitlines()
+
+
+def test_first_boot_can_install_scenario_browser_ca_certificates() -> None:
+    guest = Path(__file__).resolve().parents[1] / "appliance/guest"
+    first_boot = (guest / "aptl-appliance-first-boot.service").read_text()
+    writable = next(
+        line.removeprefix("ReadWritePaths=").split()
+        for line in first_boot.splitlines()
+        if line.startswith("ReadWritePaths=")
+    )
+    assert "/usr/local/share/ca-certificates" in writable
+    assert "/etc" in writable
 
 
 def test_archive_rejects_tracked_credential_alias(tmp_path):

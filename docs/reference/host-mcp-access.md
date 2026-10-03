@@ -1,5 +1,9 @@
 # Host CLI access to an acquired full lab
 
+**Legacy seat path:** New desktop seat images from issue #1178 run agents in
+the guest and do not enroll this host MCP transport. This reference remains
+for older signed seat images and the separate local integration workflow.
+
 Host Claude Code and Codex use OpenSSH to carry MCP stdio to a fixed guest
 `aptl mcp-access dispatch` command. The user's provider login stays in the host
 client account. The transport enrolls a separate Ed25519 public key; it does

@@ -231,6 +231,8 @@ nav:
     - ADR-057 Agent Execution Compartments: adrs/adr-057-agent-execution-compartments.md
     - ADR-058 Adoption and Security Release Gates: adrs/adr-058-adoption-and-security-release-gates.md
     - ADR-059 Canonical TechVault Delivery and Host MCP Access: adrs/adr-059-canonical-techvault-delivery-and-host-mcp-access.md
+    - ADR-060 VM-Only Seat Containment: adrs/adr-060-vm-only-seat-containment.md
+    - ADR-061 Browser Desktop for VM Seats: adrs/adr-061-gateless-vm-seat-access.md
 
 extra:
   social:

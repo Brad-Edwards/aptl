@@ -12,6 +12,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 from aptl.appliance.seat.errors import SeatLauncherError
+from aptl.appliance.seat.namespace import enter_private_network
 from aptl.appliance.seat.models import SeatRecord
 from aptl.appliance.seat.persistence import load_seat_record
 
@@ -44,6 +45,8 @@ def resolve_kiosk_access(
     port = participants[0].port
     if participant_port is not None and participant_port != port:
         raise SeatLauncherError("invalid-mapping", "participant port differs from staged mapping")
+    if participants[0].guest_port == 8080:
+        return port, None
     return port, _kiosk_login_token(seat_root, record)
 
 
@@ -60,6 +63,7 @@ def build_kiosk_launch_plan(
     participant_port: int = 443,
     browser_command: str | None = None,
     launch_token: str | None = None,
+    namespace_pid: int | None = None,
 ) -> KioskLaunchPlan:
     """Return a fullscreen browser argv for the participant origin."""
 
@@ -67,13 +71,17 @@ def build_kiosk_launch_plan(
     # Plans are safe to print; credentials only enter the private bootstrap.
     del launch_token
     browser = browser_command or _default_browser()
-    argv = (
+    browser_argv = (
         browser,
         "--kiosk",
         "--no-first-run",
         "--disable-translate",
         "--disable-session-crashed-bubble",
         url,
+    )
+    argv = (
+        (*enter_private_network(namespace_pid), *browser_argv)
+        if namespace_pid is not None else browser_argv
     )
     return KioskLaunchPlan(argv=argv, url=url)
 
@@ -85,6 +93,7 @@ def open_participant_kiosk(
     dry_run: bool = False,
     bootstrap_directory: Path | None = None,
     launch_token: str | None = None,
+    namespace_pid: int | None = None,
 ) -> KioskLaunchPlan:
     """Launch or plan the participant kiosk browser wrapper."""
 
@@ -92,6 +101,7 @@ def open_participant_kiosk(
         participant_port=participant_port,
         browser_command=browser_command,
         launch_token=launch_token,
+        namespace_pid=namespace_pid,
     )
     if dry_run:
         return plan

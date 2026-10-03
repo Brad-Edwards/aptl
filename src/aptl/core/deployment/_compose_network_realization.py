@@ -301,12 +301,13 @@ class ComposeRealizationNetworkMixin:
                 f"{_DEFAULT_BRIDGE_NETWORK}."
             ]
         observed = self.container_inspect(container_name)
+        failures: list[str] = []
         if not observed or _DEFAULT_BRIDGE_NETWORK in _container_networks(observed):
-            return [
+            failures.append(
                 f"Container {container_name}: removal of the default bridge "
                 "was not observed."
-            ]
-        return []
+            )
+        return failures
 
     def _reconnect_static_ip_drifts(
         self,

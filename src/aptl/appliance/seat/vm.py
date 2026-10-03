@@ -124,6 +124,36 @@ class VmProcessIdentity:
     executable: str
 
 
+def _optional_serial_ports(
+    spec: VmLaunchSpec, access_socket: Path, privilege_socket: Path,
+) -> tuple[tuple[str, Path, str], ...]:
+    """Return only the private channels admitted by this launch."""
+
+    ports: list[tuple[str, Path, str]] = []
+    if spec.include_access_channel:
+        ports.append(("access", access_socket, "org.aptl.access"))
+    if spec.include_privilege_channel:
+        ports.append(("privileges", privilege_socket, "org.aptl.privileges"))
+    return tuple(ports)
+
+
+def _optional_serial_argv(
+    ports: tuple[tuple[str, Path, str], ...],
+) -> tuple[str, ...]:
+    """Build QEMU arguments for explicitly selected private serial ports."""
+
+    return tuple(
+        part
+        for identifier, path, name in ports
+        for part in (
+            "-chardev",
+            f"socket,id=aptl-{identifier},path={path},server=on,wait=off",
+            "-device",
+            f"virtserialport,chardev=aptl-{identifier},name={name}",
+        )
+    )
+
+
 def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
     """Return hardened fixed argv for one local-KVM seat."""
 
@@ -133,13 +163,13 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
     )
     access_socket = spec.access_socket or spec.overlay_path.with_suffix(".access.sock")
     privilege_socket = spec.privilege_socket or spec.overlay_path.with_suffix(".privilege.sock")
+    optional_ports = _optional_serial_ports(spec, access_socket, privilege_socket)
     for path in (
         spec.overlay_path,
         spec.launch_mount,
         management_socket,
         readiness_socket,
-        *((access_socket,) if spec.include_access_channel else ()),
-        *((privilege_socket,) if spec.include_privilege_channel else ()),
+        *(path for _, path, _ in optional_ports),
     ):
         if any(character in str(path) for character in (",", "\n", "\x00")):
             raise ValueError("path contains a QEMU option separator")
@@ -185,18 +215,7 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
         f"socket,id=aptl-readiness,path={readiness_socket},server=on,wait=off",
         "-device",
         "virtserialport,chardev=aptl-readiness,name=org.aptl.readiness",
-        *((
-            "-chardev",
-            f"socket,id=aptl-access,path={access_socket},server=on,wait=off",
-            "-device",
-            "virtserialport,chardev=aptl-access,name=org.aptl.access",
-        ) if spec.include_access_channel else ()),
-        *((
-            "-chardev",
-            f"socket,id=aptl-privileges,path={privilege_socket},server=on,wait=off",
-            "-device",
-            "virtserialport,chardev=aptl-privileges,name=org.aptl.privileges",
-        ) if spec.include_privilege_channel else ()),
+        *_optional_serial_argv(optional_ports),
         "-device",
         "virtio-rng-pci",
         "-qmp",

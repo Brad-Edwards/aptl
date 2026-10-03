@@ -1873,3 +1873,4 @@ src/aptl/appliance/seat/privileges.py	optional-delivery	Keep private seat privil
 tests/test_seat_maintenance.py	tests-follow-owner	Retain host administrator rescue regression coverage with the appliance owner
 tests/test_seat_privilege_qualification.py	tests-follow-owner	Retain live seat privilege probe regression coverage with the appliance owner
 tests/test_seat_privileges.py	tests-follow-owner	Retain guest privilege boundary regression coverage with the appliance owner
+src/aptl/cli/seat_inputs.py	optional-delivery	Keep seat CLI input validation with the appliance owner

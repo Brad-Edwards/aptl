@@ -15,6 +15,22 @@ from aptl.appliance.seat.persistence import load_seat_record
 from aptl.appliance.seat.vm import read_vm_pid
 
 
+def _stopped_overlay(seat_root: Path) -> tuple[Path, int]:
+    """Return the contained overlay and owner after stopped-state checks."""
+
+    record = load_seat_record(seat_root)
+    if record is None:
+        raise SeatLauncherError("corrupt-seat-state", "seat is not staged")
+    if read_vm_pid(seat_root) is not None:
+        raise SeatLauncherError("seat-running", "stop the seat before rescue")
+    overlay = contained_path(seat_root, record.overlay_path, label="seat overlay")
+    info = overlay.stat(follow_symlinks=False)
+    owner = seat_root.stat(follow_symlinks=False).st_uid
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != owner or info.st_mode & 0o077:
+        raise SeatLauncherError("corrupt-seat-state", "seat overlay is unsafe")
+    return overlay, owner
+
+
 def rescue_seat_overlay(seat_root: Path) -> None:
     """Open an offline guest-root shell without changing participant privileges."""
 
@@ -29,18 +45,7 @@ def rescue_seat_overlay(seat_root: Path) -> None:
             "missing-rescue-tool", "seat rescue requires runuser and virt-rescue"
         )
     with seat_mutation_lock(seat_root):
-        record = load_seat_record(seat_root)
-        if record is None:
-            raise SeatLauncherError("corrupt-seat-state", "seat is not staged")
-        if read_vm_pid(seat_root) is not None:
-            raise SeatLauncherError("seat-running", "stop the seat before rescue")
-        overlay = contained_path(
-            seat_root, record.overlay_path, label="seat overlay"
-        )
-        info = overlay.stat(follow_symlinks=False)
-        owner = seat_root.stat(follow_symlinks=False).st_uid
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != owner or info.st_mode & 0o077:
-            raise SeatLauncherError("corrupt-seat-state", "seat overlay is unsafe")
+        overlay, owner = _stopped_overlay(seat_root)
         try:
             account = pwd.getpwuid(owner)
         except KeyError as exc:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import socket
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from aptl.appliance.seat.errors import SeatLauncherError
@@ -41,11 +42,13 @@ def read_private_password(path: Path) -> str:
                 raise ValueError("unsafe password file")
             payload = source.read(MAX_PASSWORD_LENGTH + 1)
         return validate_sudo_password(payload.decode("utf-8"))
-    except (OSError, UnicodeError, ValueError, PathContainmentError) as exc:
+    except (OSError, ValueError, PathContainmentError) as exc:
         raise SeatLauncherError("invalid-sudo-password", "sudo password file is invalid") from exc
 
 
 def _receive_frame(connection: socket.socket) -> dict[str, object]:
+    """Read one bounded JSON line from the private guest channel."""
+
     payload = bytearray()
     while b"\n" not in payload:
         if len(payload) >= MAX_FRAME_BYTES:
@@ -63,26 +66,39 @@ def _receive_frame(connection: socket.socket) -> dict[str, object]:
     return result
 
 
+def _connect_admin_channel(
+    socket_path: Path, *, process_alive: Callable[[], bool], deadline: float,
+) -> socket.socket:
+    """Wait for the VM's private channel while its tracked process is alive."""
+
+    connection: socket.socket | None = None
+    while connection is None:
+        if not process_alive() or time.monotonic() >= deadline:
+            raise ValueError("admin channel unavailable")
+        try:
+            connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            connection.settimeout(2)
+            connection.connect(str(socket_path))
+        except OSError:
+            if connection is not None:
+                connection.close()
+            connection = None
+            time.sleep(0.2)
+    return connection
+
+
 def deliver_sudo_password(
     socket_path: Path, *, password: str | None, instance_id: str,
-    descriptor_digest: str, process_alive, timeout_seconds: float = 180,
+    descriptor_digest: str, process_alive: Callable[[], bool],
+    timeout_seconds: float = 180,
 ) -> None:
     """Send a first-start password only after the correct guest asks for it."""
 
     deadline = time.monotonic() + timeout_seconds
-    connection: socket.socket | None = None
     try:
-        while connection is None:
-            if not process_alive() or time.monotonic() >= deadline:
-                raise ValueError("admin channel unavailable")
-            try:
-                connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                connection.settimeout(2)
-                connection.connect(str(socket_path))
-            except (OSError, socket.timeout):
-                connection.close()
-                connection = None
-                time.sleep(0.2)
+        connection = _connect_admin_channel(
+            socket_path, process_alive=process_alive, deadline=deadline,
+        )
         with connection:
             connection.settimeout(max(1, deadline - time.monotonic()))
             request = _receive_frame(connection)
@@ -100,7 +116,7 @@ def deliver_sudo_password(
             connection.sendall(payload)
             if _receive_frame(connection) != {"kind": "applied"}:
                 raise ValueError("admin channel did not acknowledge application")
-    except (OSError, ValueError, socket.timeout) as exc:
+    except (OSError, ValueError) as exc:
         raise SeatLauncherError(
             "failed-admin-setup", "administrative desktop setup did not complete"
         ) from exc

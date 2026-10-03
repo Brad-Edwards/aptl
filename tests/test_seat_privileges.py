@@ -29,7 +29,8 @@ from aptl.appliance.seat.privileges import (
 def _guest_module():
     path = Path(__file__).resolve().parents[1] / "appliance/guest/seat-privileges.py"
     spec = importlib.util.spec_from_file_location("seat_privileges_guest", path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

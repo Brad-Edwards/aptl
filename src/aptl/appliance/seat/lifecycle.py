@@ -90,6 +90,8 @@ from aptl.core.appliance_boundary_inventory import (
 
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
+SELECT_DESKTOP_MODE = "select administrative or event desktop mode"
+UNSUPPORTED_DESKTOP_MODE = "selected image does not support desktop modes"
 ACCESS_REQUEST_NAME = "access-request.json"
 # How long a real guest may take to offer host access after boot is not
 # measured here, and the previous 120s applied only to pre-qualified
@@ -368,11 +370,11 @@ def stage_seat(
     if image.config.desktop_privilege_contract is not None:
         if desktop_mode not in {"administrative", "event"}:
             raise SeatLauncherError(
-                "invalid-desktop-mode", "select administrative or event desktop mode"
+                "invalid-desktop-mode", SELECT_DESKTOP_MODE
             )
     elif desktop_mode is not None:
         raise SeatLauncherError(
-            "unsupported-desktop-mode", "selected image does not support desktop modes"
+            "unsupported-desktop-mode", UNSUPPORTED_DESKTOP_MODE
         )
     require_host_prerequisites(
         image.config.resources,
@@ -439,9 +441,9 @@ def _write_launch_descriptor(
         )
     supported = image.config.desktop_privilege_contract is not None
     if supported and desktop_mode not in {"administrative", "event"}:
-        raise SeatLauncherError("invalid-desktop-mode", "select administrative or event desktop mode")
+        raise SeatLauncherError("invalid-desktop-mode", SELECT_DESKTOP_MODE)
     if not supported and desktop_mode is not None:
-        raise SeatLauncherError("unsupported-desktop-mode", "selected image does not support desktop modes")
+        raise SeatLauncherError("unsupported-desktop-mode", UNSUPPORTED_DESKTOP_MODE)
     descriptor = SeatLaunchDescriptor(
         schema_version="aptl.appliance-launch/v3" if supported else "aptl.appliance-launch/v2",
         image_reference=str(image.selection.reference),
@@ -749,6 +751,8 @@ def _deliver_administrative_input(
     mode: str | None, socket_path: Path, options: StartSeatOptions,
     record: SeatRecord, seat_root: Path, tracked_pid: int,
 ) -> None:
+    """Apply a chosen admin password through the private VM channel."""
+
     if mode != "administrative":
         return
     deliver_sudo_password(
@@ -763,6 +767,8 @@ def _deliver_administrative_input(
 def _require_image_mode_contract(
     image: ResolvedSeatImage, mode: str | None,
 ) -> None:
+    """Require an exact match between signed support and launch selection."""
+
     if (mode is not None) != (image.config.desktop_privilege_contract is not None):
         raise SeatLauncherError(
             "desktop-contract-mismatch", "selected image and launch mode differ"
@@ -1106,7 +1112,7 @@ def reset_seat(
         raise SeatLauncherError("corrupt-seat-state", "seat launch descriptor is missing")
     selected_mode = desktop_mode if desktop_mode is not None else previous_mode
     if selected_mode is not None and selected_mode not in {"administrative", "event"}:
-        raise SeatLauncherError("invalid-desktop-mode", "select administrative or event desktop mode")
+        raise SeatLauncherError("invalid-desktop-mode", SELECT_DESKTOP_MODE)
     if replace_image or desktop_mode is not None:
         candidate_paths = _seat_paths(
             seat_root, seat_id=seat_id, image_reference=image_reference,
@@ -1115,9 +1121,9 @@ def reset_seat(
         target_image = _load_seat_image(candidate_paths, use_retained=not replace_image)
         supported = target_image.config.desktop_privilege_contract is not None
         if supported and selected_mode is None:
-            raise SeatLauncherError("invalid-desktop-mode", "select administrative or event desktop mode")
+            raise SeatLauncherError("invalid-desktop-mode", SELECT_DESKTOP_MODE)
         if not supported and selected_mode is not None:
-            raise SeatLauncherError("unsupported-desktop-mode", "selected image does not support desktop modes")
+            raise SeatLauncherError("unsupported-desktop-mode", UNSUPPORTED_DESKTOP_MODE)
     invalidate_host_access(seat_root, reason="seat-reset")
     stop_vm(seat_root)
     paths = _seat_paths(

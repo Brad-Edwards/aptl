@@ -14,7 +14,8 @@ import pytest
 def _probe():
     path = Path(__file__).resolve().parents[1] / "appliance/guest/seat-privilege-qualification.py"
     spec = importlib.util.spec_from_file_location("seat_privilege_qualification", path)
-    assert spec is not None and spec.loader is not None
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

@@ -246,6 +246,19 @@ def _node_network_aliases(node: DeploymentNodeRealization) -> tuple[str, ...]:
     )
 
 
+def _required_ipv4_is_observed(
+    info: dict[str, Any],
+    network_name: str,
+    attachment: DeploymentNetworkAttachment,
+) -> bool:
+    """Require an allocated IPv4 address and honor any authored static address."""
+
+    observed_ip = _container_network_ip(info, network_name)
+    return bool(observed_ip) and (
+        not attachment.ipv4_address or observed_ip == attachment.ipv4_address
+    )
+
+
 def _realized_attachment_failures(
     node_name: str,
     info: dict[str, Any],
@@ -276,10 +289,7 @@ def _realized_attachment_failures(
         if not isinstance(endpoint, dict):
             failures.append(f"{prefix}: missing declared network attachment.")
             continue
-        observed_ip = _container_network_ip(info, network_name)
-        if not observed_ip or (
-            attachment.ipv4_address and observed_ip != attachment.ipv4_address
-        ):
+        if not _required_ipv4_is_observed(info, network_name, attachment):
             failures.append(f"{prefix}: required IPv4 address was not observed.")
         observed_aliases = endpoint.get("Aliases")
         if not isinstance(observed_aliases, list) or not set(aliases).issubset(

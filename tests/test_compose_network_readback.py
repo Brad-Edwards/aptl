@@ -317,7 +317,8 @@ def test_authored_scenario_networks_cannot_report_success_on_default_bridge(
     assert not [d.message for d in lowered.diagnostics if d.is_error]
     spec = lowered.deployment_spec([])
     assert _needs_compose(spec) == (selection != "bounded-participant-agency-techvault")
-    assert spec.nodes and spec.networks
+    assert spec.nodes
+    assert spec.networks
     assert all(node.network_attachments for node in spec.nodes)
 
     backend.host_list_lab_networks = MagicMock(

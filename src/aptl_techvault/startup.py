@@ -25,11 +25,14 @@ from aptl.backends.scenario_service_policy import (
 )
 from raes_processor.semantics.realization import CONCERN_PAYLOAD_PATH
 from aptl.core.scenario_bundle import ScenarioBundle
+from aptl.utils.logging import get_logger
 from aptl_techvault.log_sources import realize_log_sources
 from aptl_techvault.database import realize_database
 from aptl_techvault.redis_acl_observation import observe_redis_app_authorizations
 from aptl_techvault.runtime_parameters import TECHVAULT_PACK_SET_DIGEST
 from aptl_techvault.wazuh_credentials import techvault_wazuh_environment
+
+log = get_logger("techvault-startup")
 
 
 class TechVaultStartupProvider:
@@ -134,7 +137,7 @@ class TechVaultStartupProvider:
 
     @staticmethod
     def before_backend_retry(context: StartupHookContext) -> None:
-        """Repair a stuck manager without moving retry policy out of core."""
+        """Repair a stopped manager API before core's single admitted retry."""
 
         container = "aptl-wazuh-manager"
         probe = [
@@ -149,13 +152,47 @@ class TechVaultStartupProvider:
             if (info.get("State") or {}).get("Status") != "running":
                 return
             result = context.backend.container_exec(container, probe, timeout=10)
-            count = (
-                int((result.stdout or "0").strip()) if result.returncode == 0 else None
-            )
+            observed = (result.stdout or "").strip() if result.returncode == 0 else ""
+            count = int(observed) if observed else None
             if count == 0:
                 context.backend.container_restart(container)
-        except Exception:
+            elif count is not None and count > 0:
+                TechVaultStartupProvider._start_missing_wazuh_api(context, container)
+        except Exception as exc:
+            log.warning(
+                "Wazuh manager retry preparation failed (%s); "
+                "readiness remains authoritative",
+                type(exc).__name__,
+            )
+
+    @staticmethod
+    def _start_missing_wazuh_api(context: StartupHookContext, container: str) -> None:
+        """Start only an API that Wazuh reports absent in a live manager."""
+
+        status = context.backend.container_exec(
+            container,
+            ["/var/ossec/bin/wazuh-control", "status"],
+            timeout=10,
+        )
+        if status.returncode != 0:
             return
+        status_lines = {line.strip() for line in (status.stdout or "").splitlines()}
+        if "wazuh-apid not running..." not in status_lines:
+            return
+
+        repair = context.backend.container_exec(
+            container,
+            ["/var/ossec/bin/wazuh-control", "start"],
+            timeout=30,
+        )
+        if repair.returncode != 0:
+            log.warning(
+                "Wazuh manager API recovery failed (exit %s); "
+                "readiness remains authoritative",
+                repair.returncode,
+            )
+            return
+        log.info("Wazuh manager API recovery invoked; readiness remains authoritative")
 
     @staticmethod
     def compose_startup_policy() -> ScenarioComposeStartupPolicy:

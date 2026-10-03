@@ -52,7 +52,7 @@ jobs:
       # The immutable merge revision, never the pull-request head. Phase E reads requirement
       # state from the merged tree and executes none of the delivered code; `fetch-depth: 0`
       # brings every branch, so the merge commit is present on the dispatch path too.
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0

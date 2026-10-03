@@ -43,19 +43,16 @@ from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.profiles import WorkbenchConfigurationError
 from aptl.cli._common import resolve_optional_config_for_cli
 from aptl.cli.seat_inputs import (
+    DEFAULT_SEAT_IMAGE,
     _current_desktop_mode,
     _default_appliance_cache,
     _parse_mappings,
     _resolved_seat_root,
+    _selected_source,
     _sudo_password_for_load,
 )
 
 app = typer.Typer(help="Operate one disposable appliance seat on a physical host.")
-
-# The published seat image. A user who does not want it points --image
-# somewhere else; nothing else about the seat changes.
-DEFAULT_SEAT_IMAGE = "ghcr.io/brad-edwards/aptl-seat:latest"
-
 
 def _emit(payload: dict[str, object]) -> None:
     """Print one bounded JSON payload on stdout."""
@@ -68,18 +65,6 @@ def _fail(exc: SeatLauncherError) -> None:
 
     typer.echo(json.dumps({"error": exc.code, "message": exc.message}), err=True)
     raise typer.Exit(code=2) from exc
-
-
-def _selected_source(image: str | None, seat_root: Path) -> str:
-    """Honor explicit/configured sources and the existing seat before defaults."""
-
-    config = resolve_optional_config_for_cli(Path.cwd())
-    if image is not None:
-        return image
-    if config.seat.image is not None:
-        return config.seat.image
-    record = load_seat_record(seat_root)
-    return record.image_reference if record is not None else DEFAULT_SEAT_IMAGE
 
 
 def _confirm(message: str, *, yes: bool) -> None:

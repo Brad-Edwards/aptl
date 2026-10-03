@@ -35,18 +35,27 @@ def _subnet_conflict_message(
     """Build an actionable overlap error for a planned Docker network."""
 
     docker_name = str(details.get("name") or "unknown")
+    prefix = (
+        f"APTL cannot create realized network {network.name} ({network.cidr}) "
+        f"because Docker network {docker_name} already uses {existing_subnet}."
+    )
+    if docker_name == "bridge":
+        return (
+            f"{prefix} Docker's built-in bridge cannot be removed. "
+            "Use non-overlapping scenario subnets, or have the daemon operator "
+            "configure a non-overlapping default bridge (the `bip` setting in "
+            "daemon.json). Changing it requires a planned Docker restart and "
+            "affects other workloads; APTL will not change it automatically. "
+            "Then rerun `aptl lab start`."
+        )
     containers = details.get("containers")
     container_note = ""
     if isinstance(containers, list):
         names = ", ".join(str(name) for name in containers if name)
         if names:
-            container_note = (
-                f" Stop/remove attached container(s) first: {names}."
-            )
+            container_note = f" Stop/remove attached container(s) first: {names}."
     return (
-        f"APTL cannot create realized network {network.name} ({network.cidr}) "
-        f"because Docker network {docker_name} already uses {existing_subnet}."
-        f"{container_note} Remove that network with "
+        f"{prefix}{container_note} Remove that network with "
         f"`docker network rm {docker_name}` after confirming it is stale, "
         "or configure non-overlapping APTL subnets, then rerun "
         "`aptl lab start`."
@@ -62,11 +71,14 @@ def _needs_network_creation(
 
     if not network.cidr:
         return False
-    return _match_managed_network(
-        network.name,
-        managed_networks,
-        project_name,
-    ) is None
+    return (
+        _match_managed_network(
+            network.name,
+            managed_networks,
+            project_name,
+        )
+        is None
+    )
 
 
 def _planned_networks_to_create(

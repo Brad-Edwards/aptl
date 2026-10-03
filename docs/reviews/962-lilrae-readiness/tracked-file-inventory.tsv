@@ -267,6 +267,7 @@ docs/architecture/issue-1022-appliance-seat-delivery-preflight.md	architecture-h
 docs/architecture/issue-1022-historical-branch-audit.md	architecture-history	Preserve audited branch comparison and scoped repair decisions
 docs/architecture/issue-1179-pending-lab-cleanup-preflight.md	architecture-history	Preserve issue 1179 upgrade-safe pending cleanup decisions and guardrails
 docs/architecture/issue-1188-wazuh-api-cold-boot-preflight.md	architecture-history	Preserve issue 1188 Wazuh API recovery boundary and causal limits
+docs/architecture/issue-1191-wazuh-api-cold-boot-rca-preflight.md	architecture-history	Preserve issue 1191 Wazuh status-contract and bounded RCA capture guardrails
 docs/architecture/issue-550-soc-selected-profile-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-557-participant-implementation-binding-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 docs/architecture/issue-589-scenario-pack-capture-ownership-preflight.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
@@ -1840,7 +1841,6 @@ src/aptl/backends/_raes_participant_models.py	core-candidate	Keep generic partic
 src/aptl/backends/_raes_participant_planning.py	core-candidate	Keep generic SDL participant delivery planning with RAES integration
 src/aptl/backends/_raes_participant_snapshot.py	core-candidate	Keep governed participant snapshot handoff with RAES runtime integration
 src/aptl/backends/_raes_participant_transport.py	core-candidate	Keep generic authenticated host transport and role scoped MCP rendering with RAES integration
-src/aptl/core/deployment/_compose_image_free_network_reconciliation.py	backend-substrate	Retain declared image-free network reconciliation with Compose realization
 src/aptl_techvault/study_capture_registrations.py	scenario-integration	Keep participant study capture declarations with the TechVault scenario adapter
 docs/architecture/issue-958-execution-boundary-preflight.md	architecture-history	Preserve issue 958 execution-boundary ownership decisions and guardrails
 src/aptl/core/execution_boundary.py	core-candidate	Keep selected-daemon observation and disclosure with the lab lifecycle owner
@@ -1863,3 +1863,6 @@ tests/test_seat_launch_descriptor.py	tests-follow-owner	Retain VM seat regressio
 src/aptl/appliance/seat/private_vm.py	optional-delivery	Keep rootless VM network startup with the appliance owner
 src/aptl_techvault/database.py	scenario-integration	Keep TechVault database realization with the scenario adapter
 tests/test_techvault_database.py	tests-follow-owner	Retain TechVault database regression coverage with the scenario owner
+docs/architecture/issue-1194-shipped-seat-network-preflight.md	architecture-history	Preserve shipped seat network investigation scope and runtime ownership decisions
+docs/reviews/1194-seat-network-investigation.md	architecture-history	Preserve matched seat network evidence and documented historical limits
+tests/test_compose_network_readback.py	tests-follow-owner	Retain declared network endpoint observation regressions with the deployment backend

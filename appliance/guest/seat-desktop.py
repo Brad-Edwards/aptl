@@ -15,13 +15,15 @@ from pathlib import Path
 
 SOURCE = Path("/opt/aptl/desktop")
 RUNTIME = Path("/var/lib/aptl/overlay/desktop")
+ADMIN_PASSWORD = Path("/var/lib/aptl/overlay/desktop-admin-password")
 
 
 def connection_sql(rdp_password: str) -> str:
     """Grant the fixed browser identity one RDP connection."""
 
-    if len(rdp_password) != 64 or any(c not in "0123456789abcdef" for c in rdp_password):
-        raise ValueError("RDP password must be generated hex")
+    if not rdp_password or any(c in rdp_password for c in "\x00\r\n"):
+        raise ValueError("RDP password is invalid")
+    password_hex = rdp_password.encode("utf-8").hex()
     return f"""
 INSERT INTO guacamole_entity (name, type) VALUES ('participant', 'USER');
 INSERT INTO guacamole_user (entity_id, password_hash, password_date)
@@ -32,7 +34,7 @@ VALUES ('Seat Desktop', 'rdp');
 INSERT INTO guacamole_connection_parameter (connection_id, parameter_name, parameter_value)
 SELECT connection_id, parameter_name, parameter_value FROM guacamole_connection,
 (VALUES ('hostname', 'host.docker.internal'), ('port', '3389'),
-        ('username', 'aptl'), ('password', '{rdp_password}'),
+        ('username', 'aptl'), ('password', convert_from(decode('{password_hex}', 'hex'), 'UTF8')),
         ('security', 'any'), ('ignore-cert', 'true'),
         ('color-depth', '16'), ('resize-method', 'display-update'))
 AS parameters(parameter_name, parameter_value)
@@ -67,12 +69,18 @@ def _credentials() -> dict[str, str]:
     else:
         values = {"database": secrets.token_hex(32), "rdp": secrets.token_hex(32)}
         _write_private(path, json.dumps(values, sort_keys=True))
-    if set(values) != {"database", "rdp"} or any(
-        not isinstance(value, str)
-        or len(value) != 64
-        or any(character not in "0123456789abcdef" for character in value)
-        for value in values.values()
-    ):
+    if ADMIN_PASSWORD.exists():
+        info = ADMIN_PASSWORD.stat()
+        if ADMIN_PASSWORD.is_symlink() or info.st_uid != 0 or info.st_mode & 0o077:
+            raise RuntimeError("administrative password file is unsafe")
+        values["rdp"] = ADMIN_PASSWORD.read_text(encoding="utf-8")
+    if (set(values) != {"database", "rdp"}
+            or not isinstance(values["database"], str)
+            or len(values["database"]) != 64
+            or any(c not in "0123456789abcdef" for c in values["database"])
+            or not isinstance(values["rdp"], str)
+            or not values["rdp"]
+            or any(c in values["rdp"] for c in "\x00\r\n")):
         raise RuntimeError("invalid desktop credentials")
     return values
 

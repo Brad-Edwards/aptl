@@ -5,8 +5,9 @@ using [VM-only containment](../adrs/adr-060-vm-only-seat-containment.md).
 New images open an XFCE desktop in the browser through Guacamole. The desktop
 has a browser and red/blue Claude terminals; APTL adds no participant login or
 host MCP grant. Scenario services keep their own authentication.
-The guest `aptl` desktop account has passwordless sudo inside its own VM. This
-does not grant sudo to the host Unix account that launched the seat.
+On new images, the operator selects the guest `aptl` account's privilege mode
+at seat load time. This does not change the host Unix account that launched
+the seat.
 Additional isolation and controlled egress between workloads inside a guest are
 not promised; that work is tracked in #1127. The signed boundary policy the image
 carries identifies this contract explicitly.
@@ -92,11 +93,71 @@ sudo apt-get install qemu-system-x86 qemu-utils ovmf bubblewrap util-linux slirp
 No shared `seat-state` directory is required. Each user's seat state is
 created privately below that user's own `$XDG_STATE_HOME` or home directory.
 
-## Start a seat
+## Choose desktop privileges and start a seat
 
 ```bash
+aptl seat start --desktop-mode event
+```
+
+New signed seat images require an explicit mode. In `event` mode, the guest
+`aptl` desktop account has no sudo authorization and is not in the guest Docker
+group. The root-owned first-boot service still starts the lab and desktop; its
+Docker access is not given to the participant. The physical host account is
+unchanged. An operator with host administration rights can stop the seat and
+maintain or reset its disposable overlay without giving the participant sudo.
+
+For guest-root diagnosis without resetting the overlay, stop the seat as its
+host owner, then run the rescue command as a host administrator with
+`virt-rescue` installed:
+
+```bash
+aptl seat stop --seat-root /home/seat-user/.local/state/aptl/seat
+sudo aptl seat rescue --seat-root /home/seat-user/.local/state/aptl/seat
+```
+
+The command holds the seat lifecycle lock, refuses a running VM, and opens the
+overlay through `virt-rescue` as the seat's host owner. The operator can inspect
+or repair files in the guest filesystem; exit the rescue shell before starting
+the seat again. The participant's guest account receives no administrative
+grant from this route.
+
+For an administrative seat, select the mode at first start. The CLI asks for
+the guest `aptl` sudo password without echoing it. An intentionally empty
+answer installs a passwordless sudo rule while retaining a nonempty generated
+xrdp password for the browser desktop. A nonempty answer becomes the guest
+account password used by sudo and xrdp. The image never contains that choice or
+password; first boot receives it on a private VM channel before xrdp starts.
+Administrative users run Docker through sudo; they are not in the Docker group.
+
+```bash
+aptl seat start --desktop-mode administrative
+```
+
+Automation can supply a private file owned by the launching host user, with no
+group or world permissions. A zero-byte file deliberately selects passwordless
+sudo. The option is accepted only for an administrative first start; the
+password is never placed in a command argument, environment variable, launch
+descriptor, or host seat record.
+
+```bash
+aptl seat start --desktop-mode administrative --sudo-password-file /private/path/password
+```
+
+The mode is bound to the seat's launch generation. `aptl seat stop` and a warm
+`aptl seat start` retain it without asking for the password again. To change
+the mode or password, reset the seat, which destroys its overlay, then start
+it again with the desired mode and a fresh password choice:
+
+```bash
+aptl seat stop
+aptl seat reset --desktop-mode event
 aptl seat start
 ```
+
+Older selected image digests keep their existing privilege behavior and do
+not accept a desktop mode. An explicit image update and reset is required to
+use the new mode contract. The default image reference is sticky, so
+publication alone never changes an existing seat.
 
 The first run asks before any registry lookup or download. Declining, pressing
 Enter, or providing no stdin leaves the image and seat untouched. `--yes` (or
@@ -224,43 +285,6 @@ Wazuh uses `https://wazuh.dashboard:<port-from-lab-info>` so its certificate
 hostname remains valid. These are scenario surfaces, with no additional APTL
 sign-in.
 
-### Access a hosted desktop through Tailscale
-
-Tailscale access is an operator choice. The seat still publishes Guacamole only
-inside its host user's private network namespace. To reach it from a tailnet,
-install the bounded relay and its systemd template on the physical host:
-
-```bash
-sudo install -m 0755 scripts/appliance/seat-tailnet-relay.py \
-  /usr/local/libexec/aptl-seat-tailnet-relay
-sudo install -m 0644 scripts/appliance/aptl-seat-tailnet@.service \
-  /etc/systemd/system/aptl-seat-tailnet@.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now aptl-seat-tailnet@heron1.service
-sudo systemctl enable --now aptl-seat-tailnet@heron2.service
-```
-
-The template reads each owner's current ready seat mapping and QEMU process
-identity, so a restarted seat can select a new inner port without editing the
-unit. Each relay exposes a root-only Unix socket, with no host TCP listener.
-For this host's two seats, explicitly publish those sockets with Tailscale
-Serve on different HTTPS ports:
-
-```bash
-sudo tailscale serve --bg --https=8443 --yes \
-  unix:/run/aptl-seat-tailnet-heron1/desktop.sock
-sudo tailscale serve --bg --https=10000 --yes \
-  unix:/run/aptl-seat-tailnet-heron2/desktop.sock
-```
-
-The tailnet's existing membership and access policy control who can reach
-those URLs. Guacamole adds no separate participant login. A relay refuses
-connections while its seat is stopped, unready, tainted, or no longer matches
-the tracked QEMU process. Check the mapping with `sudo tailscale serve status`.
-To remove access, run `sudo tailscale serve --https=8443 off` (and similarly
-for port `10000`), then disable the corresponding systemd relay unit. Use
-different systemd instances and HTTPS ports for other seat owners.
-
 Inspect coarse health (no credentials):
 
 ```bash
@@ -339,8 +363,9 @@ scans the guest and writes its launch config.
 boot loads local image bytes and starts the normal admitted lab without pulling
 containers. The qualification script exercises real Docker, range and semantic
 MCP operations in a disposable VM; also exercise the actual `aptl seat` path,
-Guacamole-to-xrdp desktop, browser reopening, scenario web services, cleanup,
-clean-range startup, stop and reset before publishing.
+scenario web services, cleanup, clean-range startup, stop and reset before
+publishing. Check the Guacamole-to-xrdp desktop and browser reopening on the
+published immutable reference before promoting its public tag.
 Record source, disk and config hashes with the observed results. The build
 writes `seat-build.json` binding those bytes to the source commit. Dirty builds
 are diagnostic artifacts and cannot be published; changed output bytes also
@@ -361,8 +386,20 @@ The script pushes the disk/config by content key, checks anonymous access, signs
 the immutable manifest and verifies its signature. Its output is the immutable
 reference. `APTL_SEAT_IMAGE_TAG` optionally adds an immutable human-readable tag.
 Test the immutable reference with a fresh CLI and empty private cache before
-promoting: rerun with `APTL_SEAT_PUBLISH_LATEST=1`. The script reuses existing
-content. Anonymous checks try at most three times and stop immediately on HTTP
+promoting. The privilege qualifier starts real seats in event mode and both
+administrative password modes, checks guest sudo/PAM and Docker group access
+on each stopped overlay, and verifies a warm restart without a new password:
+
+```bash
+scripts/appliance/qualify-seat-privileges.sh ghcr.io/owner/seat@sha256:<published-digest>
+```
+
+For a non-default publisher, pass its public key as the second argument. This
+gate requires KVM and `libguestfs-tools`. Its automated checks do not replace
+a browser login through Guacamole and xrdp; record that observation separately.
+After qualification, rerun the publisher with
+`APTL_SEAT_PUBLISH_LATEST=1`. The script reuses existing content. Anonymous
+checks try at most three times and stop immediately on HTTP
 401/403. A registry failure requires diagnosis; repeatedly rebuilding an image
 cannot repair package permissions or a broken tag.
 

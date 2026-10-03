@@ -52,6 +52,8 @@ class VmLaunchSpec:
     readiness_socket: Path | None = None
     access_socket: Path | None = None
     include_access_channel: bool = False
+    privilege_socket: Path | None = None
+    include_privilege_channel: bool = False
     guest_adapter_address: str = DEFAULT_QEMU_GUEST_ADDRESS
     mappings: tuple[BoundaryEndpoint, ...] = field(
         default_factory=lambda: (
@@ -130,12 +132,14 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
         ".readiness.sock"
     )
     access_socket = spec.access_socket or spec.overlay_path.with_suffix(".access.sock")
+    privilege_socket = spec.privilege_socket or spec.overlay_path.with_suffix(".privilege.sock")
     for path in (
         spec.overlay_path,
         spec.launch_mount,
         management_socket,
         readiness_socket,
         *((access_socket,) if spec.include_access_channel else ()),
+        *((privilege_socket,) if spec.include_privilege_channel else ()),
     ):
         if any(character in str(path) for character in (",", "\n", "\x00")):
             raise ValueError("path contains a QEMU option separator")
@@ -187,6 +191,12 @@ def build_qemu_argv(spec: VmLaunchSpec) -> tuple[str, ...]:
             "-device",
             "virtserialport,chardev=aptl-access,name=org.aptl.access",
         ) if spec.include_access_channel else ()),
+        *((
+            "-chardev",
+            f"socket,id=aptl-privileges,path={privilege_socket},server=on,wait=off",
+            "-device",
+            "virtserialport,chardev=aptl-privileges,name=org.aptl.privileges",
+        ) if spec.include_privilege_channel else ()),
         "-device",
         "virtio-rng-pci",
         "-qmp",
@@ -208,9 +218,12 @@ def _prepare_vm_sockets(spec: VmLaunchSpec) -> None:
         ".readiness.sock"
     )
     access_socket = spec.access_socket or spec.overlay_path.with_suffix(".access.sock")
+    privilege_socket = spec.privilege_socket or spec.overlay_path.with_suffix(".privilege.sock")
     socket_paths = [management_socket, readiness_socket]
     if spec.include_access_channel:
         socket_paths.append(access_socket)
+    if spec.include_privilege_channel:
+        socket_paths.append(privilege_socket)
     for socket_path in socket_paths:
         socket_path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         socket_path.unlink(missing_ok=True)

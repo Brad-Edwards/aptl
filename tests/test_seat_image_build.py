@@ -157,7 +157,10 @@ def test_generated_config_reserves_the_baked_disks_virtual_size(
     )
 
     assert module.main() == 0
-    assert json.loads(output.read_bytes())["resources"]["disk_bytes"] == 210 * 1024**3
+    written = json.loads(output.read_bytes())
+    assert written["resources"]["disk_bytes"] == 210 * 1024**3
+    assert written["schema_version"] == "aptl.seat-image/v2"
+    assert written["desktop_privilege_contract"] == "aptl.desktop-privileges/v1"
 
 
 def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
@@ -190,6 +193,14 @@ def test_bake_uses_the_proven_offline_guest_provisioning() -> None:
     assert "APTL_WEB_LAUNCH_TOKEN" not in first_boot
     assert "APTL_API_TOKEN" not in first_boot
     assert "start-seat-desktop" in first_boot
+    assert first_boot.index("seat-privileges.py") < first_boot.index("start-seat-desktop")
+    assert "usermod --append --groups docker aptl" not in provision
+    assert "gpasswd --delete aptl docker" in provision
+    assert "gpasswd --delete aptl sudo" in provision
+    assert "systemctl disable xrdp.service" in provision
+    scan = (ROOT / "appliance/guest/scan-golden.sh").read_text()
+    assert "test ! -e /etc/sudoers.d/90-aptl-desktop" in scan
+    assert "docker|sudo" in scan
     from aptl.appliance.loopback_proxy import build_proxy_bindings
     from aptl.appliance.policy import full_techvault_boundary_policy
     from aptl.appliance.seat.vm import DEFAULT_QEMU_GUEST_ADDRESS

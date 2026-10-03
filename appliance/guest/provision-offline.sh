@@ -58,7 +58,7 @@ test -f "$payload_dir/aptl-launch.mount"
 test -d "$payload_dir/system-packages"
 test -f "$payload_dir/system-packages.sha256"
 test -f "$payload_dir/claude-runtime.tar"
-for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py desktop-handoff.py desktop-mcp-smoke.py desktop-session.sh guac-schema.sql; do
+for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py seat-privileges.py desktop-handoff.py desktop-mcp-smoke.py desktop-session.sh guac-schema.sql; do
     test -f "$payload_dir/$filename"
 done
 
@@ -129,13 +129,11 @@ systemctl mask avahi-daemon.service avahi-daemon.socket 2>/dev/null || true
 if ! getent passwd aptl >/dev/null; then
     useradd --create-home --home-dir /home/aptl --shell /bin/bash aptl
 fi
-usermod --append --groups docker aptl
-# The desktop participant already controls this guest's Docker daemon. Let
-# them administer this disposable VM without its generated xrdp password.
-install -d -m 0755 /etc/sudoers.d
-printf 'aptl ALL=(ALL:ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/90-aptl-desktop
-chmod 0440 /etc/sudoers.d/90-aptl-desktop
-visudo -cf /etc/sudoers >/dev/null
+# The signed disk never grants the participant root-equivalent access. A
+# selected administrative overlay applies its sudo rule before desktop login.
+gpasswd --delete aptl docker 2>/dev/null || true
+gpasswd --delete aptl sudo 2>/dev/null || true
+rm -f /etc/sudoers.d/90-aptl-desktop
 printf 'xfce4-session\n' >/home/aptl/.xsession
 install -d -m 0755 /home/aptl/.config/autostart \
     /home/aptl/.config/xfce4/xfconf/xfce-perchannel-xml
@@ -191,7 +189,7 @@ usermod --append --groups ssl-cert xrdp
 chown -R aptl:aptl /home/aptl
 
 install -d -m 0755 /opt/aptl/desktop
-for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py desktop-handoff.py desktop-mcp-smoke.py guac-schema.sql; do
+for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py seat-privileges.py desktop-handoff.py desktop-mcp-smoke.py guac-schema.sql; do
     install -m 0444 "$payload_dir/$filename" "/opt/aptl/desktop/$filename"
 done
 install -m 0755 "$payload_dir/desktop-session.sh" \
@@ -201,7 +199,7 @@ cat >/usr/local/bin/start-seat-desktop <<'EOF'
 exec /usr/bin/python3 /opt/aptl/desktop/seat-desktop.py
 EOF
 chmod 0755 /usr/local/bin/start-seat-desktop
-systemctl enable xrdp.service
+systemctl disable xrdp.service
 
 install -d -m 0755 /opt/aptl/project
 tar --extract --file "$payload_dir/project.tar" \

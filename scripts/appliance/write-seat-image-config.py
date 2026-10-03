@@ -71,7 +71,8 @@ def main() -> int:
         raise SystemExit("seat disk has no usable virtual size")
 
     config = {
-        "schema_version": "aptl.seat-image/v1",
+        "schema_version": "aptl.seat-image/v2",
+        "desktop_privilege_contract": "aptl.desktop-privileges/v1",
         "resources": {**RESOURCES, "disk_bytes": virtual_size},
         "boundary": full_techvault_boundary_policy().model_dump(mode="json"),
         "binding": {

@@ -38,3 +38,25 @@ def test_duplicate_launch_key_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(SeatLaunchError, match="invalid appliance launch descriptor"):
         verify_seat_launch(path)
+
+
+def test_new_launch_requires_exactly_one_desktop_mode() -> None:
+    from pydantic import ValidationError
+
+    values = dict(
+        schema_version="aptl.appliance-launch/v3",
+        image_reference="ghcr.io/owner/seat:latest",
+        image_digest="sha256:" + "a" * 64,
+        image_config_digest="sha256:" + "b" * 64,
+        boundary_policy_digest="sha256:" + "c" * 64,
+        boundary_helper_image="example.test/helper@sha256:" + "d" * 64,
+        egress_proxy_image="example.test/proxy@sha256:" + "e" * 64,
+        participant_routes_digest="sha256:" + "f" * 64,
+        host_observation_id="observation",
+    )
+    assert SeatLaunchDescriptor(**values, desktop_mode="event").desktop_mode == "event"
+    assert SeatLaunchDescriptor(**values, desktop_mode="administrative").desktop_mode == "administrative"
+    with pytest.raises(ValidationError):
+        SeatLaunchDescriptor(**values)
+    with pytest.raises(ValidationError):
+        SeatLaunchDescriptor(**(values | {"schema_version": "aptl.appliance-launch/v2"}), desktop_mode="event")

@@ -5,6 +5,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -12,6 +13,10 @@ import typer
 from pydantic import ValidationError
 
 from aptl.appliance.seat.context import StartSeatOptions
+from aptl.appliance.seat.launch_descriptor import SeatLaunchDescriptor
+from aptl.appliance.seat.maintenance import rescue_seat_overlay
+from aptl.appliance.seat.privileges import read_private_password, validate_sudo_password
+from aptl.utils.strict_json import model_validate_json_strict
 from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_identity
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.retained_image import cache_for_seat
@@ -100,6 +105,44 @@ def _resolved_seat_root(seat_root: Path | None) -> Path:
     return (seat_root if seat_root is not None else default_seat_root()).resolve()
 
 
+def _current_desktop_mode(seat_root: Path) -> str | None:
+    descriptor_path = seat_root / "launch/appliance-launch.json"
+    if not descriptor_path.is_file():
+        return None
+    return model_validate_json_strict(
+        SeatLaunchDescriptor, descriptor_path.read_bytes()
+    ).desktop_mode
+
+
+def _sudo_password_for_load(
+    mode: str | None, source: Path | None, *, first_load: bool,
+) -> str | None:
+    if source is not None and mode != "administrative":
+        raise SeatLauncherError(
+            "invalid-sudo-password", "sudo password requires administrative mode"
+        )
+    if source is not None and not first_load:
+        raise SeatLauncherError(
+            "desktop-mode-mismatch", "reset the seat to change sudo password"
+        )
+    if mode != "administrative" or not first_load:
+        return None
+    if source is not None:
+        return read_private_password(source)
+    if not sys.stdin.isatty():
+        raise SeatLauncherError(
+            "missing-sudo-password", "use a private sudo password file in noninteractive mode"
+        )
+    try:
+        return validate_sudo_password(
+            getpass.getpass("Guest aptl sudo password (empty = passwordless): ")
+        )
+    except (EOFError, KeyboardInterrupt) as exc:
+        raise SeatLauncherError(
+            "missing-sudo-password", "administrative sudo password was not supplied"
+        ) from exc
+
+
 def _default_appliance_cache() -> Path:
     """Return the current user's XDG-compatible appliance cache."""
 
@@ -163,6 +206,7 @@ def stage(
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
     mapping: list[str] | None = typer.Option(None, "--mapping"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
 ) -> None:
     """Resolve the seat image and persist a staged seat record."""
 
@@ -179,6 +223,7 @@ def stage(
             image_reference=image,
             image_cache_dir=image_cache,
             mappings=mappings,
+            desktop_mode=desktop_mode,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -192,6 +237,7 @@ def _access_options(
     access_identity_file: Path | None = None, access_project_dir: Path | None = None,
     access_profile: str = "red", access_client: list[str] | None = None,
     access_hours: int = 8,
+    desktop_mode: str | None = None, sudo_password: str | None = None,
 ) -> StartSeatOptions:
     """Enroll the same automatic or explicit caller for start and recovery."""
 
@@ -248,6 +294,7 @@ def _access_options(
         mappings=mappings, access_enrollment=enrollment,
         access_identity_file=access_identity_file, access_project_dir=access_project_dir,
         access_clients=clients, check_for_image_update=False,
+        desktop_mode=desktop_mode, sudo_password=sudo_password,
     )
 
 
@@ -268,11 +315,23 @@ def start(
     access_client: list[str] | None = typer.Option(None, "--access-client"),
     access_hours: int = typer.Option(8, "--access-hours", min=1, max=24),
     no_check: bool = typer.Option(False, "--no-check"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
+    sudo_password_file: Path | None = typer.Option(None, "--sudo-password-file"),
 ) -> None:
     """Start the seat VM and validate host exposure."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
+        existing = load_seat_record(seat_root)
+        existing_mode = _current_desktop_mode(seat_root) if existing is not None else None
+        effective_mode = desktop_mode or existing_mode
+        first_load = (
+            existing is None
+            or not (seat_root / existing.overlay_path).exists()
+        )
+        sudo_password = _sudo_password_for_load(
+            effective_mode, sudo_password_file, first_load=first_load
+        )
         image_cache = image_cache or _default_appliance_cache()
         mappings = _parse_mappings(mapping)
         image = _prepare_seat_image(
@@ -289,6 +348,7 @@ def start(
                 access_identity_file=access_identity_file,
                 access_project_dir=access_project_dir, access_profile=access_profile,
                 access_client=access_client, access_hours=access_hours,
+                desktop_mode=desktop_mode, sudo_password=sudo_password,
             ),
         )
     except WorkbenchConfigurationError as exc:
@@ -312,6 +372,19 @@ def stop(seat_root: Path | None = typer.Option(None, "--seat-root")) -> None:
     _emit({"stopped": True, "seat": record.model_dump(mode="json")})
 
 
+@app.command("rescue")
+def rescue(seat_root: Path = typer.Option(..., "--seat-root")) -> None:
+    """Open a stopped seat overlay for host-admin guest-root maintenance."""
+
+    try:
+        rescue_seat_overlay(_resolved_seat_root(seat_root))
+    except (OSError, SeatLauncherError) as exc:
+        _fail(exc if isinstance(exc, SeatLauncherError) else SeatLauncherError(
+            "failed-rescue", "seat rescue did not complete"
+        ))
+    _emit({"rescued": True})
+
+
 @app.command("reset")
 def reset(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
@@ -320,6 +393,7 @@ def reset(
     public_key: Path | None = typer.Option(None, "--public-key"),
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
 ) -> None:
     """Destroy overlay state and restage the seat."""
 
@@ -334,6 +408,7 @@ def reset(
             seat_id=seat_id,
             image_reference=image,
             image_cache_dir=image_cache,
+            desktop_mode=desktop_mode,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -348,11 +423,18 @@ def recover(
     public_key: Path | None = typer.Option(None, "--public-key"),
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
+    sudo_password_file: Path | None = typer.Option(None, "--sudo-password-file"),
 ) -> None:
     """Instructor recovery: reset and start the seat."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
+        sudo_password = _sudo_password_for_load(
+            desktop_mode or _current_desktop_mode(seat_root),
+            sudo_password_file,
+            first_load=True,
+        )
         image_cache = image_cache or _default_appliance_cache()
         image = _prepare_seat_image(
             image, seat_root, image_cache, yes=yes, public_key=public_key
@@ -362,7 +444,10 @@ def recover(
             seat_id=seat_id,
             image_reference=image,
             image_cache_dir=image_cache,
-            options=_access_options(seat_root, seat_id, image, image_cache),
+            options=_access_options(
+                seat_root, seat_id, image, image_cache,
+                desktop_mode=desktop_mode, sudo_password=sudo_password,
+            ),
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -428,6 +513,7 @@ def update_image(
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
     to: str | None = typer.Option(None, "--to"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
 ) -> None:
     """Verify a replacement, reset the stopped seat, and retire its old image."""
 
@@ -445,6 +531,7 @@ def update_image(
         selection, removed = update_seat_image(
             seat_root, image_reference=image, image_cache_dir=image_cache,
             to_digest=to,
+            desktop_mode=desktop_mode,
         )
     except SeatImageError as exc:
         _fail(SeatLauncherError("image-unavailable", str(exc)))

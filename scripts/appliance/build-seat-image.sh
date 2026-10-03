@@ -165,7 +165,7 @@ docker run --rm aptl-seat-guacamole:1.6.0 \
   /opt/guacamole/bin/initdb.sh --postgresql |
   sed '/^-- Create default user "guacadmin"/,$d' >"$payload/guac-schema.sql"
 test -s "$payload/guac-schema.sql"
-for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py desktop-handoff.py desktop-mcp-smoke.py desktop-session.sh; do
+for filename in desktop-compose.yml desktop-nginx.conf seat-desktop.py seat-privileges.py desktop-handoff.py desktop-mcp-smoke.py desktop-session.sh; do
   cp "$source_root/appliance/guest/$filename" "$payload/"
 done
 

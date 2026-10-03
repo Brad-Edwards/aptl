@@ -9,6 +9,7 @@ import json
 import socket
 import stat
 import sys
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
@@ -33,6 +34,12 @@ def _guest_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture
+def short_socket_path():
+    with tempfile.TemporaryDirectory(prefix="aptl-seat-", dir="/tmp") as folder:
+        yield Path(folder) / "channel.sock"
 
 
 @pytest.mark.parametrize("password", ["", "correct horse battery staple", "pa:ss'\\word☃"])
@@ -68,8 +75,8 @@ def test_private_password_file_accepts_explicit_empty_and_rejects_symlink(tmp_pa
         read_private_password(parent_link / "password")
 
 
-def test_host_sends_password_only_to_matching_guest(tmp_path: Path) -> None:
-    path = tmp_path / "channel.sock"
+def test_host_sends_password_only_to_matching_guest(short_socket_path: Path) -> None:
+    path = short_socket_path
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(str(path))
     server.listen(1)
@@ -98,8 +105,8 @@ def test_host_sends_password_only_to_matching_guest(tmp_path: Path) -> None:
         assert result.result(timeout=5) == "pass'☃"
 
 
-def test_host_rejects_unused_replacement_password(tmp_path: Path) -> None:
-    path = tmp_path / "channel.sock"
+def test_host_rejects_unused_replacement_password(short_socket_path: Path) -> None:
+    path = short_socket_path
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     server.bind(str(path))
     server.listen(1)

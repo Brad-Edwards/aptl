@@ -137,14 +137,11 @@ class ComposeGenericBaseImageMixin(object):
 
         if build is None:
             return []
+        pin, failures = self._pin_parent_image(parent) if parent else (None, [])
+        if failures:
+            return failures
         dockerfile, build_context = build
-        build_args: list[str] = []
-        pin: str | None = None
-        if parent is not None:
-            pin, failure = self._pin_parent_image(parent)
-            if pin is None:
-                return [failure]
-            build_args = ["--build-arg", f"APTL_PARENT_IMAGE={pin}"]
+        build_args = ["--build-arg", f"APTL_PARENT_IMAGE={pin}"] if pin else []
         built = self._run(
             [
                 "docker",
@@ -160,16 +157,9 @@ class ComposeGenericBaseImageMixin(object):
         )
         if pin is not None:
             self._run(["docker", "image", "rm", pin], timeout=60)
-        if built.returncode != 0:
-            # Without the builder's own words this reads as "the image did not
-            # build", which is true of a missing Dockerfile, an unreachable
-            # base and a failing RUN alike.
-            detail = (built.stderr or built.stdout or "").strip().splitlines()
-            reason = detail[-1] if detail else "no builder output"
-            return [f"failed to build generic base image {image_ref}: {reason}"]
-        return []
+        return _build_failures(image_ref, built)
 
-    def _pin_parent_image(self, parent: str) -> tuple[str | None, str]:
+    def _pin_parent_image(self, parent: str) -> tuple[str | None, list[str]]:
         """Tag ``parent`` by its image ID and return that content-bound tag."""
 
         inspected = self._run(
@@ -177,10 +167,24 @@ class ComposeGenericBaseImageMixin(object):
         )
         image_id = (inspected.stdout or "").strip()
         if inspected.returncode != 0 or not image_id.startswith("sha256:"):
-            return None, f"cannot read the image ID of parent base image {parent}"
+            return None, [f"cannot read the image ID of parent base image {parent}"]
         repository = parent.rsplit(":", 1)[0]
         pin = f"{repository}:sha256-{image_id.removeprefix('sha256:')}"
         tagged = self._run(["docker", "tag", parent, pin], timeout=30)
         if tagged.returncode != 0:
-            return None, f"cannot pin parent base image {parent} to {pin}"
-        return pin, ""
+            return None, [f"cannot pin parent base image {parent} to {pin}"]
+        return pin, []
+
+
+def _build_failures(image_ref: str, built: object) -> list[str]:
+    """Return the build failure, in the builder's own words, or nothing."""
+
+    if getattr(built, "returncode", 1) == 0:
+        return []
+    # Without the builder's own words this reads as "the image did not build",
+    # which is true of a missing Dockerfile, an unreachable base and a failing
+    # RUN alike.
+    output = getattr(built, "stderr", "") or getattr(built, "stdout", "") or ""
+    detail = output.strip().splitlines()
+    reason = detail[-1] if detail else "no builder output"
+    return [f"failed to build generic base image {image_ref}: {reason}"]

@@ -311,13 +311,19 @@ def test_scanner_and_validation_gates_block_and_are_required() -> None:
         ]
         gates = [w for w in trivy if w["exit-code"] == "1"]
         records = [w for w in trivy if w["exit-code"] == "0"]
-        assert len(gates) == 1 and len(records) == 1, job
+        assert len(gates) == 1, job
+        assert len(records) == 1, job
         assert records[0]["format"] == "sarif"
         assert "ignore-unfixed" not in records[0]
         assert gates[0]["severity"] == records[0]["severity"] == "CRITICAL,HIGH,MEDIUM"
-        # Waivers relax the gate only; the record keeps every finding tracked.
         assert gates[0]["trivyignores"] == ".trivyignore.yaml"
-        assert "trivyignores" not in records[0]
+        if job == "trivy-iac":
+            # Misconfiguration waivers are permanent design decisions.
+            assert records[0]["trivyignores"] == ".trivyignore.yaml"
+        else:
+            # Vulnerability waivers relax the gate only; the record and code
+            # scanning keep tracking findings that have no upstream fix yet.
+            assert "trivyignores" not in records[0]
         if job != "trivy-iac":
             assert gates[0]["ignore-unfixed"] == "true"
 

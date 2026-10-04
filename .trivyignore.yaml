@@ -2,7 +2,9 @@
 # Dockerfiles or exact package versions and states why the finding cannot be
 # fixed there. A waiver never covers a whole rule, severity, or directory, and
 # never covers a vulnerability whose fix the image can take: the CI gates fail
-# on all of those. Waivers apply to the gates only, never to the SARIF record.
+# on all of those. Misconfiguration waivers are permanent design decisions and
+# also apply to the IaC SARIF record; vulnerability waivers apply to the gates
+# only, so those findings stay tracked in code scanning.
 misconfigurations:
   # DS-0002 "image user should not be root". Each image below starts a process
   # that requires uid 0 inside the container by its own privilege model. None

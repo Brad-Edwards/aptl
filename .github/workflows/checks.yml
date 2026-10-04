@@ -498,8 +498,10 @@ jobs:
   #   2. Fails the job on any finding that has an available fix (and, for IaC
   #      and secrets, on any finding at all). `.trivyignore.yaml` holds the only
   #      waivers, each scoped to exact paths or package versions with its
-  #      reason. Waivers apply to the gate only, never to the record, so a
-  #      waived finding stays tracked in code scanning.
+  #      reason. Vulnerability waivers (temporary: no upstream fix yet) apply
+  #      to the gate only, so those findings stay tracked in code scanning.
+  #      Misconfiguration waivers are permanent design decisions and apply to
+  #      the IaC record as well.
   # Code-scanning upload needs a token that can write security events, which
   # fork and Dependabot pull requests do not get; their gate still runs.
   trivy-fs:
@@ -560,7 +562,9 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Record all findings (SARIF)
+      # Misconfiguration waivers are permanent, reviewed design decisions, so
+      # the record honors them too; only unwaived misconfigurations are tracked.
+      - name: Record all unwaived findings (SARIF)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
@@ -570,6 +574,7 @@ jobs:
           exit-code: '0'
           severity: CRITICAL,HIGH,MEDIUM
           limit-severities-for-sarif: 'true'
+          trivyignores: .trivyignore.yaml
       - name: Upload SARIF artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

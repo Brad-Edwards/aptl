@@ -51,9 +51,9 @@ RUN systemctl enable rsyslog sshd systemd-user-sessions && \
     systemctl enable systemd-user-sessions.service && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
-# Configure SSH
+# Configure SSH. No host keys are baked in: sshd.service pulls in
+# sshd-keygen.target, which generates this container's own keys at boot.
 RUN mkdir /var/run/sshd && \
-    ssh-keygen -A && \
     sed -i 's/#PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config && \
     sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config

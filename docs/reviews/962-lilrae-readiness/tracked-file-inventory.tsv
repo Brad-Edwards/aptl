@@ -1882,3 +1882,6 @@ docs/architecture/issue-1183-techvault-postgresql-startup-preflight.md	architect
 src/aptl_techvault/database_access.py	scenario-integration	Keep TechVault database client-authentication realization with the scenario adapter
 src/aptl_techvault/database_support.py	scenario-integration	Keep TechVault database realization helpers with the scenario adapter
 src/aptl/backends/scenario_runtime_selection.py	core-candidate	Keep scenario runtime-selection reporting with the startup provider contract
+containers/_host-identity/aptl-host-identity	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/_host-identity/aptl-host-identity.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+containers/_host-identity/install.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity

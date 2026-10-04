@@ -11,6 +11,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
         systemd systemd-sysv dbus gnupg openssh-server ca-certificates \
         iputils-ping nmap python3 python3-pip curl wget dnsutils netcat-openbsd \
         smbclient ldap-utils sqlmap hydra python3-impacket \
+    && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
 # Node 22 ships npm 10, whose bundled dependencies carry fixed advisories.
@@ -45,5 +46,9 @@ RUN set -eu; \
             --include=dev --ignore-scripts --no-audit --no-fund; \
     done; \
     rm -rf /opt/aptl/npm-source /tmp/aptl-cache-src /tmp/aptl-cache-deps /opt/aptl/npm-cache-pack
+# Ship no private keys; each container generates its own at boot (issue #1193).
+COPY containers/_host-identity /tmp/aptl-host-identity
+RUN sh /tmp/aptl-host-identity/install.sh && rm -rf /tmp/aptl-host-identity
+
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

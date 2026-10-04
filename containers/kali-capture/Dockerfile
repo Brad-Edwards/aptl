@@ -3,12 +3,16 @@ FROM debian:13-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# The entrypoint generates the only host key sshd uses (under /run). The
+# package-generated keys are deleted in the layer that creates them, so the
+# image ships no private key (issue #1193).
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && apt-get install -y --no-install-recommends \
         python3 \
         openssh-client \
         openssh-server \
     && useradd --uid 1000 --create-home --shell /bin/sh kali \
     && passwd -d kali \
+    && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY containers/kali-capture/entrypoint.sh /usr/local/bin/entrypoint.sh

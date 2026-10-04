@@ -47,14 +47,16 @@ def test_api_joins_only_the_configured_socket_group() -> None:
 def test_api_image_default_user_is_not_root() -> None:
     dockerfile = (REPO_ROOT / "web" / "Dockerfile.api").read_text(encoding="utf-8")
     users = re.findall(r"^USER\s+(\S+)", dockerfile, re.MULTILINE)
-    assert users and users[-1].split(":")[0] not in {"0", "root"}
+    assert users
+    assert users[-1].split(":")[0] not in {"0", "root"}
 
 
 def test_env_example_documents_how_to_set_both_values() -> None:
     example = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
     assert re.search(r"^APTL_WEB_API_USER=", example, re.MULTILINE)
     assert re.search(r"^APTL_DOCKER_SOCKET_GID=", example, re.MULTILINE)
-    assert "id -u" in example and "id -g" in example
+    assert "id -u" in example
+    assert "id -g" in example
     assert "stat -c %g /var/run/docker.sock" in example
 
 

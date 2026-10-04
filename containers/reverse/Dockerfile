@@ -29,6 +29,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     curl \
     wget \
     ca-certificates \
+    && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done); \
@@ -47,7 +48,8 @@ RUN systemctl enable rsyslog ssh systemd-user-sessions && \
     ln -sf /usr/lib/systemd/system/systemd-user-sessions.service /etc/systemd/system/multi-user.target.wants/
 
 COPY --chmod=644 base/sshd/00-aptl-hardening.conf /etc/ssh/sshd_config.d/
-RUN ssh-keygen -A && sshd -t
+# Validate the config against throwaway host keys; no key stays in a layer.
+RUN ssh-keygen -A && sshd -t && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
 
 RUN useradd -m -s /bin/bash labadmin && \
     usermod -aG sudo labadmin && \
@@ -96,6 +98,10 @@ RUN systemctl enable reverse-tools-install.service
 EXPOSE 514
 
 VOLUME ["/var/log", "/home"]
+
+# Ship no private keys; each container generates its own at boot (issue #1193).
+COPY _host-identity /tmp/aptl-host-identity
+RUN sh /tmp/aptl-host-identity/install.sh && rm -rf /tmp/aptl-host-identity
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 

@@ -26,6 +26,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     curl \
     wget \
     ca-certificates \
+    && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Trim systemd for container usage
@@ -48,7 +49,8 @@ RUN systemctl enable rsyslog ssh systemd-user-sessions && \
 # /etc/ssh/sshd_config.d/*.conf, so the policy is a drop-in rather than an
 # in-place edit of the distribution's own config.
 COPY --chmod=644 base/sshd/00-aptl-hardening.conf /etc/ssh/sshd_config.d/
-RUN ssh-keygen -A && sshd -t
+# Validate the config against throwaway host keys; no key stays in a layer.
+RUN ssh-keygen -A && sshd -t && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
 
 # Create labadmin user
 RUN useradd -m -s /bin/bash labadmin && \
@@ -70,6 +72,10 @@ COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
 
 RUN mkdir -p /etc/falco/config.d
 COPY base/falco_custom.yaml /etc/falco/config.d/
+
+# Ship no private keys; each container generates its own at boot (issue #1193).
+COPY _host-identity /tmp/aptl-host-identity
+RUN sh /tmp/aptl-host-identity/install.sh && rm -rf /tmp/aptl-host-identity
 
 EXPOSE 514
 

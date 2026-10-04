@@ -19,6 +19,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         systemd systemd-sysv dbus gnupg \
         bind9 dnsutils iptables postgresql samba python3-pip python3-venv \
+    && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem \
     && apt-get clean \
     && find /var/lib/apt/lists -mindepth 1 -delete
 COPY requirements/runtime.txt /tmp/aptl-runtime-requirements.txt
@@ -27,5 +28,9 @@ RUN python3 -m venv /opt/aptl/venv \
         -r /tmp/aptl-runtime-requirements.txt \
     && rm /tmp/aptl-runtime-requirements.txt
 ENV PATH="/opt/aptl/venv/bin:${PATH}"
+# Ship no private keys; each container generates its own at boot (issue #1193).
+COPY containers/_host-identity /tmp/aptl-host-identity
+RUN sh /tmp/aptl-host-identity/install.sh && rm -rf /tmp/aptl-host-identity
+
 STOPSIGNAL SIGRTMIN+3
 CMD ["/sbin/init"]

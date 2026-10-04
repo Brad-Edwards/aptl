@@ -4,43 +4,57 @@ The pack-qualified startup provider calls this after the generic nodes exist.
 The generic materializer places the exact SQL artifacts, but does not execute
 them or configure a PostgreSQL cluster. This adapter closes that gap without
 changing the customer portal or its intended weaknesses.
+
+Every realized fact is read from the admitted declaration: the PostgreSQL
+service, listener, scenario database, schema tables, login role, and the
+network the database and portal share. Client authentication is the one open
+posture; ``database_access`` applies the backend's selection.
 """
 
 from __future__ import annotations
 
 import ipaddress
 import re
-from typing import Protocol
 
+from aptl.core.deployment.errors import BackendTimeoutError
+from aptl_techvault.database_access import apply_configuration, ensure_credential
+from aptl_techvault.database_support import (
+    FAILURE_CLUSTER,
+    FAILURE_FOREIGN_STATE,
+    FAILURE_OBJECTS,
+    FAILURE_SELECTION,
+    RESTART_TIMEOUT,
+    DatabaseBackend,
+    DeclaredDatabase,
+    RealizationFailure,
+    query,
+    read_output,
+    succeeded,
+)
 from aptl_techvault.log_source_support import _postgres_cluster
 
 _IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*\Z")
-# TechVault's authored, guest-only network; this is not an external endpoint.
-_INTERNAL_NETWORK = ipaddress.ip_network("172.20.2.0/24")  # NOSONAR
+_CLIENT_NODE = "webapp"
 _SCHEMA = "/opt/db-init/01-schema.sql"
 _SEED = "/opt/db-init/02-seed-data.sql"
-_EXPECTED_TABLES = frozenset(
-    {
-        "users",
-        "customers",
-        "files",
-        "api_keys",
-        "audit_log",
-        "backup_config",
-        "sessions",
-        "comments",
-    }
+_MARKER_PREFIX = "aptl-techvault-db-init"
+_PENDING_PREFIX = f"{_MARKER_PREFIX}-pending"
+# The in-guest seed deadline stays below the host exec budget, so a timed-out
+# host call never leaves a seed transaction running inside the container.
+_SEED_DEADLINE = 90
+_SEED_LOCK_TIMEOUT = "30s"
+_SEED_STATEMENT_TIMEOUT = "60s"
+# Authenticates through the portal's own client settings, bounded in time.
+_PORTAL_QUERY = (
+    "import sys; sys.path.insert(0, '/app'); import app, psycopg2; "
+    "connection = psycopg2.connect(**dict(app.DB_CONFIG, connect_timeout=10)); "
+    "cursor = connection.cursor(); "
+    "cursor.execute('SELECT current_database(), current_user'); "
+    "row = cursor.fetchone(); connection.close(); "
+    "sys.exit(0 if list(row) == sys.argv[1:3] else 3)"
 )
 
-
-class DatabaseBackend(Protocol):
-    """Container command boundary supplied by the running lab backend."""
-
-    def container_exec(
-        self, name: str, cmd: list[str], *, timeout: int | None = None
-    ) -> object:
-        """Run a bounded command in the named scenario container."""
-        ...
+_Attachments = dict[str, tuple[ipaddress.IPv4Address, ipaddress.IPv4Network]]
 
 
 def _value(item: object) -> str:
@@ -48,267 +62,251 @@ def _value(item: object) -> str:
     return str(getattr(item, "value", item) or "")
 
 
-def _exec(backend: DatabaseBackend, container: str, argv: list[str]) -> object:
-    """Execute a bounded database setup command."""
-    return backend.container_exec(container, argv, timeout=60)
+# --- Declaration selection ---------------------------------------------------
 
 
-def _read(backend: DatabaseBackend, container: str, argv: list[str]) -> str | None:
-    """Read successful command output, preserving failure as None."""
-    result = _exec(backend, container, argv)
-    if getattr(result, "returncode", 1) != 0:
-        return None
-    return str(getattr(result, "stdout", "") or "").strip()
+def _attachments(node: object) -> _Attachments:
+    """Map each declared network to the node's address and the network CIDR."""
+    selected: _Attachments = {}
+    for attachment in getattr(node, "network_attachments", ()):
+        try:
+            address = ipaddress.IPv4Address(
+                str(getattr(attachment, "ipv4_address", "") or "")
+            )
+            network = ipaddress.IPv4Network(str(getattr(attachment, "cidr", "") or ""))
+        except ValueError:
+            continue
+        if address in network:
+            selected[str(getattr(attachment, "network", ""))] = (address, network)
+    return selected
 
 
-def _ok(backend: DatabaseBackend, container: str, argv: list[str]) -> bool:
-    """Return whether a database setup command succeeded."""
-    return getattr(_exec(backend, container, argv), "returncode", 1) == 0
+def _postgres_service(node: object) -> object | None:
+    """Return the node's single declared PostgreSQL service, if it has one."""
+    services = getattr(getattr(node, "runtime", None), "database_services", ())
+    single = len(services) == 1 and _value(services[0].engine) == "postgresql"
+    return services[0] if single else None
 
 
-def _psql(statement: str, database: str = "postgres") -> list[str]:
-    """Build a local PostgreSQL query without invoking a shell."""
-    return [
-        "runuser",
-        "-u",
-        "postgres",
-        "--",
-        "psql",
-        "-d",
-        database,
-        "-Atqc",
-        statement,
-    ]
-
-
-def _internal_address(node: object) -> str | None:
-    """Read the one declared address on TechVault's internal network."""
-    addresses = [
-        str(getattr(attachment, "ipv4_address", "") or "")
-        for attachment in getattr(node, "network_attachments", ())
-        if getattr(attachment, "network", "") == "internal-net"
-    ]
-    if len(addresses) != 1:
-        return None
-    try:
-        address = ipaddress.ip_address(addresses[0])
-    except ValueError:
-        return None
-    return str(address) if address in _INTERNAL_NETWORK else None
-
-
-def _declared_nodes(nodes: tuple[object, ...]) -> tuple[object, object] | None:
-    """Require exactly one database and one portal node."""
-    db_nodes = [node for node in nodes if getattr(node, "name", "") == "db"]
-    web_nodes = [node for node in nodes if getattr(node, "name", "") == "webapp"]
-    return (db_nodes[0], web_nodes[0]) if len(db_nodes) == len(web_nodes) == 1 else None
-
-
-def _postgres_service(db_node: object) -> object | None:
-    """Require the single PostgreSQL service declared by the pack."""
-    runtime = getattr(db_node, "runtime", None)
-    services = getattr(runtime, "database_services", ())
-    return services[0] if len(services) == 1 and _value(services[0].engine) == "postgresql" else None
-
-
-def _declared_listener(service: object) -> bool:
-    """Require the pack's single PostgreSQL listener on all guest interfaces."""
-    listeners = getattr(service, "listeners", ())
-    return (
-        len(listeners) == 1
-        and listeners[0].address == "0.0.0.0"
-        and listeners[0].port == 5432
-    )
-
-
-def _service_identity(service: object | None) -> tuple[str, str] | None:
-    """Select one valid scenario database and login role."""
-    if service is None:
-        return None
+def _service_identity(service: object) -> tuple[str, str, frozenset[str]] | None:
+    """Select one scenario database, its declared tables, and one login role."""
     databases = [
-        entry.name for entry in service.databases if _value(entry.origin) == "scenario"
+        entry for entry in service.databases if _value(entry.origin) == "scenario"
     ]
     roles = [
         entry.name
         for entry in service.roles
         if _value(entry.origin) == "scenario" and entry.can_login
     ]
-    if (
-        not _declared_listener(service)
-        or len(databases) != 1
-        or len(roles) != 1
-        or not all(_IDENTIFIER.fullmatch(name) for name in (*databases, *roles))
-    ):
+    if len(databases) != 1 or len(roles) != 1:
         return None
-    return databases[0], roles[0]
+    tables = frozenset(
+        f"{schema.name}.{table.name}"
+        for schema in databases[0].schemas
+        for table in schema.tables
+    )
+    names = [databases[0].name, roles[0], *(p for t in tables for p in t.split("."))]
+    valid = bool(tables) and all(_IDENTIFIER.fullmatch(name) for name in names)
+    return (databases[0].name, roles[0], tables) if valid else None
 
 
-def _declared_database(
-    nodes: tuple[object, ...],
-) -> tuple[str, str, str, str, str] | None:
-    """Select one pack-declared DB, role, and web client without guessing."""
-
-    selected_nodes = _declared_nodes(nodes)
-    if selected_nodes is None:
+def _service_listener(service: object) -> tuple[str, int] | None:
+    """Require the single declared IPv4 listener."""
+    listeners = getattr(service, "listeners", ())
+    try:
+        address = str(ipaddress.IPv4Address(str(listeners[0].address)))
+        port = int(listeners[0].port)
+    except (IndexError, TypeError, ValueError):
         return None
-    db_node, web_node = selected_nodes
-    db_address, web_address = _internal_address(db_node), _internal_address(web_node)
-    identity = _service_identity(_postgres_service(db_node))
+    return (address, port) if len(listeners) == 1 and 0 < port < 65536 else None
+
+
+def _shared_network(
+    db_node: object, web_node: object
+) -> tuple[ipaddress.IPv4Address, ipaddress.IPv4Network] | None:
+    """Return the database's address on the one network it shares with the portal."""
+    db_networks, web_networks = _attachments(db_node), _attachments(web_node)
+    shared = [
+        name
+        for name, (_, scope) in db_networks.items()
+        if name in web_networks and web_networks[name][1] == scope
+    ]
+    return db_networks[shared[0]] if len(shared) == 1 else None
+
+
+def _declaration(db_node: object, web_node: object) -> DeclaredDatabase | None:
+    """Build the declaration from one database node and its portal client."""
+    service = _postgres_service(db_node)
+    identity = _service_identity(service)
+    listener = _service_listener(service)
+    network = _shared_network(db_node, web_node)
     db_container = str(getattr(db_node, "container_name", "") or "")
     web_container = str(getattr(web_node, "container_name", "") or "")
-    if db_address and web_address and identity and db_container and web_container:
-        database, role = identity
-        return db_container, web_container, database, role, db_address
-    return None
-
-
-def _configure_network(
-    backend: DatabaseBackend,
-    container: str,
-    version: str,
-    cluster: str,
-    database: str,
-    role: str,
-) -> bool:
-    """Apply the declared listener and authored internal-subnet trust posture."""
-
-    if not _ok(
-        backend,
-        container,
-        _psql("ALTER SYSTEM SET listen_addresses = '0.0.0.0'"),
-    ):
-        return False
-    path = f"/etc/postgresql/{version}/{cluster}/pg_hba.conf"
-    rule = f"host {database} {role} {_INTERNAL_NETWORK} trust"
-    script = (
-        f"set -eu; grep -Fqx '{rule}' '{path}' || printf '%s\\n' '{rule}' >> '{path}'"
-    )
-    return (
-        _ok(backend, container, ["sh", "-c", script])
-        and _ok(backend, container, ["pg_ctlcluster", version, cluster, "restart"])
-        and _read(backend, container, _psql("SHOW listen_addresses")) == "0.0.0.0"
-    )
-
-
-def _ensure_role(backend: DatabaseBackend, container: str, role: str) -> bool:
-    """Create the declared login role only when it is absent."""
-    role_exists = _read(
-        backend, container, _psql(f"SELECT 1 FROM pg_roles WHERE rolname = '{role}'")
-    )
-    if role_exists not in ("", "1"):
-        return False
-    return bool(role_exists) or _ok(
-        backend,
-        container,
-        ["runuser", "-u", "postgres", "--", "createuser", "--login", role],
-    )
-
-
-def _ensure_database(
-    backend: DatabaseBackend, container: str, database: str, role: str
-) -> bool:
-    """Create the declared database with the pack role as owner."""
-    database_exists = _read(
-        backend,
-        container,
-        _psql(f"SELECT 1 FROM pg_database WHERE datname = '{database}'"),
-    )
-    if database_exists not in ("", "1"):
-        return False
-    return bool(database_exists) or _ok(
-        backend,
-        container,
-        ["runuser", "-u", "postgres", "--", "createdb", "-O", role, database],
-    )
-
-
-def _tables(backend: DatabaseBackend, container: str, database: str) -> str | None:
-    """Read the schema tables visible in the declared database."""
-    return _read(
-        backend,
-        container,
-        _psql(
-            "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
-            database,
-        ),
-    )
-
-
-def _seed_tables(
-    backend: DatabaseBackend, container: str, database: str, role: str
-) -> str | None:
-    """Run both pack SQL files in one transaction as the declared role."""
-    if not _ok(
-        backend,
-        container,
-        [
-            "runuser", "-u", "postgres", "--", "psql", "-d", database,
-            "-1", "-v", "ON_ERROR_STOP=1", "-c", f"SET ROLE {role}",
-            "-f", _SCHEMA, "-f", _SEED,
-        ],
-    ):
+    complete = identity and listener and network and db_container and web_container
+    if not complete:
         return None
-    return _tables(backend, container, database)
-
-
-def _verify_seed(backend: DatabaseBackend, container: str, database: str, tables: str | None) -> bool:
-    """Confirm the exact authored schema and at least one seeded user."""
-    if tables is None or set(tables.splitlines()) != _EXPECTED_TABLES:
-        return False
-    count = _read(backend, container, _psql("SELECT count(*) FROM users", database))
-    return count is not None and count.isdecimal() and int(count) > 0
-
-
-def _ensure_objects(
-    backend: DatabaseBackend,
-    container: str,
-    database: str,
-    role: str,
-) -> bool:
-    """Install the declared role, database, and pack SQL idempotently."""
-    if not all(
-        _ok(backend, container, ["test", "-s", path]) for path in (_SCHEMA, _SEED)
-    ):
-        return False
-    if not _ensure_role(backend, container, role) or not _ensure_database(
-        backend, container, database, role
-    ):
-        return False
-    tables = _tables(backend, container, database)
-    if tables == "":
-        tables = _seed_tables(backend, container, database, role)
-    return _verify_seed(backend, container, database, tables)
-
-
-def _portal_can_query(backend: DatabaseBackend, container: str) -> bool:
-    """Probe through the participant portal's own database client."""
-    probe = (
-        "import sys; sys.path.insert(0, '/app'); import app; "
-        "connection = app.get_db(); cursor = connection.cursor(); "
-        "cursor.execute('SELECT count(*) FROM users'); "
-        "assert cursor.fetchone()[0] > 0; connection.close()"
+    database, role, tables = identity
+    return DeclaredDatabase(
+        db_container=db_container,
+        web_container=web_container,
+        database=database,
+        role=role,
+        db_address=str(network[0]),
+        scope=network[1],
+        listen_address=listener[0],
+        port=listener[1],
+        tables=tables,
     )
-    return _ok(backend, container, ["python3", "-c", probe])
+
+
+def _declared_database(nodes: tuple[object, ...]) -> DeclaredDatabase | None:
+    """Select one pack-declared DB, role, client network, and tables."""
+    db_nodes = [node for node in nodes if _postgres_service(node) is not None]
+    web_nodes = [node for node in nodes if getattr(node, "name", "") == _CLIENT_NODE]
+    unique = len(db_nodes) == 1 and len(web_nodes) == 1
+    return _declaration(db_nodes[0], web_nodes[0]) if unique else None
+
+
+# --- Role, database, and pack SQL --------------------------------------------
+
+
+def _ensure_absent_then_create(
+    backend: DatabaseBackend, container: str, probe: str, create: list[str]
+) -> None:
+    """Create a catalog object only when a successful probe found it absent."""
+    if query(backend, container, probe) == "1":
+        return
+    if not succeeded(backend, container, ["runuser", "-u", "postgres", "--", *create]):
+        raise RealizationFailure(FAILURE_OBJECTS)
+
+
+def _init_digests(backend: DatabaseBackend, container: str) -> str:
+    """Identify the exact pack SQL by digest, without secret bytes."""
+    present = all(
+        succeeded(backend, container, ["test", "-s", path]) for path in (_SCHEMA, _SEED)
+    )
+    output = read_output(backend, container, ["sha256sum", _SCHEMA, _SEED]) or ""
+    digests = [line.split()[0] for line in output.splitlines() if line.strip()]
+    if (
+        not present
+        or len(digests) != 2
+        or not all(re.fullmatch(r"[0-9a-f]{64}", item) for item in digests)
+    ):
+        raise RealizationFailure(FAILURE_OBJECTS)
+    return f"sha256:{digests[0]} sha256:{digests[1]}"
+
+
+def _current_marker(backend: DatabaseBackend, selected: DeclaredDatabase) -> str:
+    """Read the database comment that records initialization state."""
+    return query(
+        backend,
+        selected.db_container,
+        "SELECT coalesce(shobj_description(oid, 'pg_database'), '') "
+        f"FROM pg_database WHERE datname = '{selected.database}'",
+    )
+
+
+def _declared_tables_present(
+    backend: DatabaseBackend, selected: DeclaredDatabase
+) -> frozenset[str]:
+    """Read which tables exist in the declared schemas."""
+    schemas = sorted({table.split(".")[0] for table in selected.tables})
+    listed = ", ".join(f"'{schema}'" for schema in schemas)
+    output = query(
+        backend,
+        selected.db_container,
+        "SELECT schemaname || '.' || tablename FROM pg_tables "
+        f"WHERE schemaname IN ({listed}) ORDER BY 1",
+        selected.database,
+    )
+    return frozenset(line for line in output.splitlines() if line)
+
+
+def _seed(backend: DatabaseBackend, selected: DeclaredDatabase, marker: str) -> None:
+    """Run both pack SQL files and the marker in one bounded transaction."""
+    argv = [
+        "runuser", "-u", "postgres", "--",
+        "timeout", "-k", "5", str(_SEED_DEADLINE),
+        "psql", "-X", "-d", selected.database, "-1", "-v", "ON_ERROR_STOP=1",
+        "-c", f"SET LOCAL lock_timeout = '{_SEED_LOCK_TIMEOUT}'",
+        "-c", f"SET LOCAL statement_timeout = '{_SEED_STATEMENT_TIMEOUT}'",
+        "-c", "SELECT pg_advisory_xact_lock(hashtext('aptl-techvault-db-init'))",
+        "-c", f"SET ROLE {selected.role}",
+        "-f", _SCHEMA, "-f", _SEED,
+        "-c", f"COMMENT ON DATABASE {selected.database} IS '{marker}'",
+    ]  # fmt: skip
+    try:
+        committed = succeeded(backend, selected.db_container, argv, RESTART_TIMEOUT)
+    except BackendTimeoutError:
+        # The outcome is unknown until the marker is read back.
+        committed = False
+    # A failure after commit (or a concurrent initializer) is settled by the
+    # marker, which only a committed initialization writes.
+    if not committed and _current_marker(backend, selected) != marker:
+        raise RealizationFailure(FAILURE_OBJECTS)
+    if _declared_tables_present(backend, selected) != selected.tables:
+        raise RealizationFailure(FAILURE_OBJECTS)
+
+
+def _ensure_objects(backend: DatabaseBackend, selected: DeclaredDatabase) -> None:
+    """Install the declared role, database, and pack SQL exactly once.
+
+    The database is created together with a pending marker, so only storage
+    this adapter created (or an interrupted bootstrap of the same pack SQL) is
+    ever seeded; any other unmarked database is left alone and reported.
+    """
+    container = selected.db_container
+    digests = _init_digests(backend, container)
+    complete, pending = f"{_MARKER_PREFIX} {digests}", f"{_PENDING_PREFIX} {digests}"
+    _ensure_absent_then_create(
+        backend,
+        container,
+        f"SELECT 1 FROM pg_roles WHERE rolname = '{selected.role}'",
+        ["createuser", "--login", selected.role],
+    )
+    _ensure_absent_then_create(
+        backend,
+        container,
+        f"SELECT 1 FROM pg_database WHERE datname = '{selected.database}'",
+        ["createdb", "-O", selected.role, selected.database, pending],
+    )
+    current = _current_marker(backend, selected)
+    # A complete marker means this run was initialized; participant changes stand.
+    if current == complete:
+        return
+    if current != pending or _declared_tables_present(backend, selected):
+        raise RealizationFailure(FAILURE_FOREIGN_STATE)
+    _seed(backend, selected, complete)
+
+
+# --- Orchestration -----------------------------------------------------------
+
+
+def _realize(backend: DatabaseBackend, selected: DeclaredDatabase) -> None:
+    """Configure, initialize, and verify the selected database."""
+    cluster = _postgres_cluster(backend, selected.db_container)
+    if cluster is None:
+        raise RealizationFailure(FAILURE_CLUSTER)
+    apply_configuration(backend, selected, cluster)
+    _ensure_objects(backend, selected)
+    ensure_credential(backend, selected)
+    # The participant web process, not a local postgres superuser, must be able
+    # to authenticate over the declared network route as the declared role.
+    portal = ["python3", "-c", _PORTAL_QUERY, selected.database, selected.role]
+    if not succeeded(backend, selected.web_container, portal):
+        raise RealizationFailure(
+            "TechVault portal cannot query PostgreSQL at "
+            f"{selected.db_address}:{selected.port}"
+        )
 
 
 def realize_database(backend: DatabaseBackend, nodes: tuple[object, ...]) -> list[str]:
     """Build and verify the declared DB; return only bounded, nonsecret errors."""
-
     selected = _declared_database(nodes)
-    if selected is None:
-        return ["TechVault database declaration or internal client is unavailable"]
-    container, web_container, database, role, db_address = selected
-    cluster = _postgres_cluster(backend, container)
-    if cluster is None:
-        failure = "TechVault PostgreSQL cluster is unavailable"
-    elif not _configure_network(backend, container, *cluster, database, role):
-        failure = "TechVault PostgreSQL internal listener could not be realized"
-    elif not _ensure_objects(backend, container, database, role):
-        failure = "TechVault PostgreSQL role, database, or pack SQL could not be realized"
-    # The participant web process, not a local postgres superuser, must be able
-    # to use the declared network route and read its own seeded users table.
-    elif not _portal_can_query(backend, web_container):
-        failure = f"TechVault portal cannot query PostgreSQL at {db_address}:5432"
-    else:
-        failure = None
-    return [failure] if failure else []
+    try:
+        if selected is None:
+            raise RealizationFailure(FAILURE_SELECTION)
+        _realize(backend, selected)
+    except RealizationFailure as failure:
+        return [str(failure)]
+    return []

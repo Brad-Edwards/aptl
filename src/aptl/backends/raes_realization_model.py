@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -248,8 +249,9 @@ class AptlRealization(object):
     ) -> DeploymentRealizationSpec:
         """Return typed backend realization input for this RAES realization."""
 
+        cidrs = {network.name: network.cidr for network in self.networks}
         nodes = tuple(
-            _deployment_node_realization(node)
+            _deployment_node_realization(node, cidrs)
             for node in self.nodes
             if node.backend_services or node.container_name or node.os
         )
@@ -354,8 +356,9 @@ def _single_or_none(values: tuple[str, ...]) -> str | None:
 
 def _deployment_node_realization(
     node: NodeRealization,
+    cidrs: Mapping[str, str | None],
 ) -> DeploymentNodeRealization:
-    """Return backend-facing node input with per-network static IPs."""
+    """Return backend-facing node input with per-network static IPs and CIDRs."""
 
     assignments = dict(node.static_address_assignments)
     return DeploymentNodeRealization(
@@ -368,6 +371,7 @@ def _deployment_node_realization(
             DeploymentNetworkAttachment(
                 network=network,
                 ipv4_address=assignments.get(network),
+                cidr=cidrs.get(network),
             )
             for network in node.networks
         ),

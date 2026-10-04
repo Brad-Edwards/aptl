@@ -12,6 +12,7 @@ from aptl.backends.scenario_startup import (
     ENTRY_POINT_GROUP,
     ScenarioStartupProviderError,
     ScenarioStartupPlan,
+    ScenarioStartupSelection,
     StartupHookContext,
     _safe_relative_script,
     observe_scenario_runtime_concerns,
@@ -568,3 +569,38 @@ def test_startup_adapter_is_registered_outside_framework() -> None:
         or "import aptl_techvault" in path.read_text(encoding="utf-8")
     }
     assert offenders == set()
+
+
+def test_runtime_selections_are_reported_value_free_or_flagged() -> None:
+    from raes_contracts.realization_structure import validate_realization_value
+
+    from aptl.backends.scenario_startup import (
+        ScenarioRuntimeSelection,
+        scenario_runtime_selection_details,
+    )
+    from aptl_techvault.startup import TechVaultStartupProvider
+
+    def selection(provider):
+        return ScenarioStartupSelection(identity=None, provider=provider, plan=None)
+
+    reported = scenario_runtime_selection_details(selection(TechVaultStartupProvider()))
+
+    assert reported == [
+        {
+            "node": "db",
+            "subject": "database-client-authentication",
+            "choice": TechVaultStartupProvider.runtime_selections[0].choice,
+            "reference": "OpenRAE/env-packs#411",
+        }
+    ]
+    assert validate_realization_value(
+        {"scenario_runtime_selections": reported}
+    ).conformant
+    assert scenario_runtime_selection_details(None) == []
+    assert scenario_runtime_selection_details(selection(SimpleNamespace())) == []
+    malformed = SimpleNamespace(
+        runtime_selections=[ScenarioRuntimeSelection("db", "x", "y")]
+    )
+    assert scenario_runtime_selection_details(selection(malformed)) == [
+        {"error": "scenario runtime selections are malformed"}
+    ]

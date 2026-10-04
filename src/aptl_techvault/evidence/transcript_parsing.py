@@ -137,7 +137,7 @@ def _binding_schema_keys() -> tuple[str, ...]:
         channel_kind=registration.channel_kind,
         capture_kind=registration.capture_kind,
         capture_scope=registration.capture_scope,
-        expected_media_types=("text/plain",),
+        expected_media_types=("application/json",),
         required_artifact_roles=("participant_session_transcript",),
         sensitivity="plain",
         redaction_required=True,

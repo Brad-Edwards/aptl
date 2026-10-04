@@ -69,7 +69,7 @@ _WORKFLOW_SCENARIO = dedent(
         loss_disclosure: required
     objectives:
       validate:
-        entity: blue
+        owner: blue
         success: {assertions: [health]}
     workflows:
       response:
@@ -295,7 +295,7 @@ def test_drive_failed_objective_with_on_failure_successor():
                 loss_disclosure: required
             objectives:
               validate:
-                entity: blue
+                owner: blue
                 success: {assertions: [health]}
             workflows:
               response:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Mapping, Sequence
 
 from aptl.core.evidence.adapters.sources import SourceResult
@@ -48,24 +49,26 @@ class SuricataRuleReadinessSource:
             return _failure()
         digests = payload["realized_byte_digests"]
         identities = payload["content_identities"]
-        lines = [
-            f"image_ref={payload['image_ref']}",
-            f"image_digest={payload['image_digest']}",
-            "native_configuration=ok",
-            "source=suricata-builtin",
-            "source=techvault-local",
-            *(
-                f"content_identity.{key}={identities[key]}"
-                for key in sorted(identities)
-            ),
-            *(f"content_digest.{key}={digests[key]}" for key in sorted(digests)),
-            *(f"local_sid={sid}" for sid in sorted(TECHVAULT_LOCAL_SIDS)),
-            f"local_rule_count={len(TECHVAULT_LOCAL_SIDS)}",
-        ]
+        record = {
+            "schema_version": "aptl-techvault-suricata-readiness/v1",
+            "image_ref": payload["image_ref"],
+            "image_digest": payload["image_digest"],
+            "native_configuration": "ok",
+            "selected_sources": ["suricata-builtin", "techvault-local"],
+            "content_identities": {
+                key: identities[key] for key in sorted(identities)
+            },
+            "content_digests": {key: digests[key] for key in sorted(digests)},
+            "local_sids": sorted(TECHVAULT_LOCAL_SIDS),
+            "local_rule_count": len(TECHVAULT_LOCAL_SIDS),
+        }
         return SourceResult(
             status=CollectorStatus.OK,
-            chunks=(("\n".join(lines) + "\n").encode(),),
-            media_type="text/plain",
+            records=[record],
+            chunks=(
+                json.dumps(record, sort_keys=True, separators=(",", ":")).encode(),
+            ),
+            media_type="application/json",
             source_pipeline={
                 "source_refs": [
                     {

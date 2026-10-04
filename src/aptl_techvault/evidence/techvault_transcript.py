@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -87,24 +88,42 @@ def _transcript_result(
 ) -> SourceResult:
     """Render validated sessions and their custody metadata."""
 
-    chunks: list[bytes] = []
+    rendered_sessions: list[dict[str, object]] = []
     frame_count = 0
     for session in sorted(
         sessions, key=lambda item: (item.started_at, item.session_id)
     ):
-        chunks.append(f"=== session {session.session_id} start ===\n".encode())
+        rendered_frames: list[dict[str, object]] = []
         for frame in session.frames:
-            chunks.append(
-                f"[{frame.sequence}:{frame.direction}:{frame.timestamp}] ".encode()
-                + frame.data
-                + b"\n"
+            rendered_frames.append(
+                {
+                    "sequence": frame.sequence,
+                    "timestamp": frame.timestamp,
+                    "direction": frame.direction,
+                    "data": frame.data.decode("utf-8"),
+                }
             )
             frame_count += 1
-        chunks.append(_session_footer(session))
+        rendered_sessions.append(
+            {
+                "session_id": session.session_id,
+                "started_at": session.started_at,
+                "finished_at": session.finished_at,
+                "close_reason": session.close_reason,
+                "final_chain_digest": session.final_chain_digest,
+                "frames": rendered_frames,
+            }
+        )
+    payload = {
+        "schema_version": "aptl-techvault-transcript/v1",
+        "sessions": rendered_sessions,
+    }
     return SourceResult(
         status=CollectorStatus.OK if sessions else CollectorStatus.EMPTY_OK,
-        chunks=tuple(chunks),
-        media_type="text/plain",
+        chunks=(
+            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(),
+        ),
+        media_type="application/json",
         source_min_time=min((item.started_at for item in sessions), default=start_iso),
         source_max_time=max((item.finished_at for item in sessions), default=end_iso),
         source_pipeline={
@@ -119,15 +138,6 @@ def _transcript_result(
             "frame_count": frame_count,
         },
     )
-
-
-def _session_footer(session: TranscriptSession) -> bytes:
-    """Render one bounded custody footer without changing its wire format."""
-
-    return (
-        f"=== session {session.session_id} end close={session.close_reason} "
-        f"chain={session.final_chain_digest} ===\n"
-    ).encode()
 
 
 def _valid_transcript_session(

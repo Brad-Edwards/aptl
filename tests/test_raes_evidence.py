@@ -169,7 +169,7 @@ def test_open_scope_without_an_otel_dependent_demand_omits_optional_stack():
     ("requirement_id", "changed"),
     [
         ("cortex-enrichment-readback", {"retention": "archival"}),
-        ("suricata-local-rule-readiness", {"media_types": ["application/json"]}),
+        ("suricata-local-rule-readiness", {"source_class": "external"}),
         ("suricata-login-sqli-alert", {"integrity": "signature"}),
         ("redteam-session-transcript", {"redaction": "aggregate_only"}),
     ],

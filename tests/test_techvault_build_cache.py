@@ -25,7 +25,7 @@ def test_cache_refuses_an_unqualified_pack_before_writing(tmp_path, monkeypatch)
 
     bundle = env_pack_bundle(tmp_path / "source")
     bundle = replace(
-        bundle, pack_identity=PackIdentity("techvault", "0.1.0", "sha256:" + "0" * 64)
+        bundle, pack_identity=PackIdentity("techvault", "0.1.1", "sha256:" + "0" * 64)
     )
     monkeypatch.setattr(build_cache, "env_pack_bundle", lambda *args: bundle)
     with pytest.raises(ValueError, match="identity"):

@@ -47,7 +47,7 @@ BUILD_CACHE_STAGING = Path("/opt/aptl/npm-cache-pack")
 def prepare_cache_inputs(destination: Path, staging: Path) -> PackIdentity:
     """Verify both source artifacts and emit only the fixed dependency inputs."""
     bundle = env_pack_bundle(staging, "techvault")
-    expected = PackIdentity("techvault", "0.1.0", TECHVAULT_PACK_SET_DIGEST)
+    expected = PackIdentity("techvault", "0.1.1", TECHVAULT_PACK_SET_DIGEST)
     if bundle.pack_identity != expected:
         raise ValueError("unsupported cache input pack identity")
     files = _verified_lockfiles(bundle.root)

@@ -246,7 +246,7 @@ _REDTEAM_SESSION_TRANSCRIPT = _techvault_registration(
         "aptl.collector.redteam-session-transcript",
         _OfferSpec(
             artifact_role="participant_session_transcript",
-            media_type="text/plain",
+            media_type=_JSON_MEDIA_TYPE,
             capture_kind="observation",
             source_refs=frozenset(),
             scope=_TRANSCRIPT_SCOPE,
@@ -270,7 +270,7 @@ _SURICATA_RULE_READINESS = _techvault_registration(
         "aptl.collector.suricata-rule-readiness",
         _OfferSpec(
             artifact_role="network_detection_rule_readiness",
-            media_type="text/plain",
+            media_type=_JSON_MEDIA_TYPE,
             capture_kind="log",
             source_refs=frozenset(
                 {
@@ -301,7 +301,7 @@ _SURICATA_WAZUH_SQLI = _techvault_registration(
         "aptl.collector.suricata-wazuh-sqli",
         _OfferSpec(
             artifact_role="network_detection_alert",
-            media_type="application/x-ndjson",
+            media_type=_JSON_MEDIA_TYPE,
             capture_kind="log",
             source_refs=frozenset(
                 {

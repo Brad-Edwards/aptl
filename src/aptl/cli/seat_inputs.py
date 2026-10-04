@@ -12,9 +12,22 @@ from pydantic import ValidationError
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.launch_descriptor import SeatLaunchDescriptor
 from aptl.appliance.seat.paths import default_seat_root
+from aptl.appliance.seat.persistence import load_seat_record
 from aptl.appliance.seat.privileges import read_private_password, validate_sudo_password
+from aptl.cli._common import resolve_optional_config_for_cli
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.utils.strict_json import model_validate_json_strict
+
+def _selected_source(image: str | None, seat_root: Path, default_image: str) -> str:
+    """Honor explicit/configured sources and the existing seat before defaults."""
+
+    config = resolve_optional_config_for_cli(Path.cwd())
+    if image is not None:
+        return image
+    if config.seat.image is not None:
+        return config.seat.image
+    record = load_seat_record(seat_root)
+    return record.image_reference if record is not None else default_image
 
 
 def _parse_mappings(values: list[str] | None) -> tuple[BoundaryEndpoint, ...] | None:

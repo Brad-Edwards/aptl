@@ -47,6 +47,7 @@ from aptl.cli.seat_inputs import (
     _default_appliance_cache,
     _parse_mappings,
     _resolved_seat_root,
+    _selected_source,
     _sudo_password_for_load,
 )
 
@@ -70,18 +71,6 @@ def _fail(exc: SeatLauncherError) -> None:
     raise typer.Exit(code=2) from exc
 
 
-def _selected_source(image: str | None, seat_root: Path) -> str:
-    """Honor explicit/configured sources and the existing seat before defaults."""
-
-    config = resolve_optional_config_for_cli(Path.cwd())
-    if image is not None:
-        return image
-    if config.seat.image is not None:
-        return config.seat.image
-    record = load_seat_record(seat_root)
-    return record.image_reference if record is not None else DEFAULT_SEAT_IMAGE
-
-
 def _confirm(message: str, *, yes: bool) -> None:
     """Keep default-no consent on stderr, including non-interactive refusal."""
 
@@ -95,7 +84,7 @@ def _prepare_seat_image(
 ) -> str:
     """Ask before any cold acquisition; verified warm starts remain offline."""
 
-    reference = _selected_source(image, seat_root)
+    reference = _selected_source(image, seat_root, DEFAULT_SEAT_IMAGE)
     try:
         cache = cache_for_seat(seat_root, reference, cache)
         cold = not load_selection(cache, parse_seat_image_reference(reference))
@@ -436,7 +425,7 @@ def update_image(
     try:
         seat_root = _resolved_seat_root(seat_root)
         image_cache = image_cache or _default_appliance_cache()
-        image = _selected_source(image, seat_root)
+        image = _selected_source(image, seat_root, DEFAULT_SEAT_IMAGE)
         _confirm(
             f"Download/verify {image}, reset this stopped seat and its access, "
             "and delete the superseded cached image?", yes=yes,

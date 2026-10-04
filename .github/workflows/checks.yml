@@ -68,6 +68,11 @@ jobs:
       - run: |
           coverage run -m pytest tests/ -q -k "not integration"
           coverage xml -o coverage.xml
+      # Property-based tests carry the `fuzz` marker, which `addopts` excludes
+      # from the default run above. Without this step no gate ran them, and two
+      # went stale behind contract changes (#1141, #1152) unnoticed (#1193).
+      - name: Property-based (fuzz) tests
+        run: python -m pytest tests/ -q -m fuzz -k "not integration"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: python-coverage
@@ -156,17 +161,15 @@ jobs:
         run: aptl lab init ci-lab
 
   raes-scenario-gate:
-    name: RAES scenario validation gate (advisory, Phase A)
+    name: RAES scenario validation gate
     runs-on: ubuntu-latest
     # SCN-010E / #322. The static validation gate parses the authoritative
     # techvault-operational SDL and spawns the `raes conformance backend` CLI,
     # so it is integration-marked and runs here rather than in the fast
-    # python-tests suite. Advisory in Phase A — `continue-on-error` surfaces
-    # failures on the PR without blocking merge; the Phase B cutover PR removes
-    # `continue-on-error` to make the gate blocking. The gate needs only the
+    # python-tests suite. Blocking since issue #1193 (the Phase B cutover): it
+    # passed consistently in its advisory Phase A. The gate needs only the
     # installed raes wheel (which bundles the contract corpus) and the
     # `raes` CLI — no separate corpus checkout.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -487,16 +490,28 @@ jobs:
             (cd "$dir" && npm ci --ignore-scripts --no-audit --no-fund --silent && npm audit --omit=dev --audit-level=high)
           done
 
+  # Trivy gates (ADR-026 amendment, issue #1193). Each scan job does two things:
+  #   1. Records every CRITICAL/HIGH/MEDIUM finding, including vulnerabilities
+  #      with no upstream fix yet, as SARIF: a short-retention artifact plus a
+  #      GitHub code-scanning upload, where an alert stays open until a scan no
+  #      longer reports it. That is how unfixed upstream problems stay tracked.
+  #   2. Fails the job on any finding that has an available fix (and, for IaC
+  #      and secrets, on any finding at all). `.trivyignore.yaml` holds the only
+  #      waivers, each scoped to exact paths or package versions with its
+  #      reason. Waivers apply to the gate only, never to the record, so a
+  #      waived finding stays tracked in code scanning.
+  # Code-scanning upload needs a token that can write security events, which
+  # fork and Dependabot pull requests do not get; their gate still runs.
   trivy-fs:
-    name: Trivy filesystem scan (advisory)
+    name: Trivy filesystem scan
     runs-on: ubuntu-latest
-    # Advisory — surfaces vulnerable Python/Node deps and embedded secrets
-    # found on disk. Output is a SARIF artifact; `security-events: write`
-    # is intentionally not requested (artifact-only per ADR-026).
-    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Record all findings (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -506,24 +521,47 @@ jobs:
           exit-code: '0'
           severity: CRITICAL,HIGH,MEDIUM
           limit-severities-for-sarif: 'true'
-      - name: Upload SARIF
+      - name: Upload SARIF artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-fs-sarif
           path: trivy-fs.sarif
           retention-days: 7
+      - name: Track findings in code scanning
+        if: >-
+          always() && github.actor != 'dependabot[bot]' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+      - name: Gate on fixable vulnerabilities and any secret
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret
+          format: table
+          exit-code: '1'
+          ignore-unfixed: 'true'
+          severity: CRITICAL,HIGH,MEDIUM
+          trivyignores: .trivyignore.yaml
+          skip-setup-trivy: 'true'
 
   trivy-iac:
-    name: Trivy IaC / config scan (advisory)
+    name: Trivy IaC / config scan
     runs-on: ubuntu-latest
-    # Advisory — surfaces Dockerfile, compose, and config misconfigs
-    # (USER root, missing healthchecks, etc.). Distinct from `trivy-fs`
-    # and `trivy-image` by design (ADR-026 § Boundaries).
-    continue-on-error: true
+    # Dockerfile, Compose, and config misconfigurations. Distinct from
+    # `trivy-fs` and `trivy-image` by design (ADR-026 § Boundaries).
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Record all findings (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
@@ -532,28 +570,48 @@ jobs:
           exit-code: '0'
           severity: CRITICAL,HIGH,MEDIUM
           limit-severities-for-sarif: 'true'
-      - name: Upload SARIF
+      - name: Upload SARIF artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-iac-sarif
           path: trivy-iac.sarif
           retention-days: 7
+      - name: Track findings in code scanning
+        if: >-
+          always() && github.actor != 'dependabot[bot]' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-iac.sarif
+          category: trivy-iac
+      - name: Gate on any misconfiguration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          severity: CRITICAL,HIGH,MEDIUM
+          trivyignores: .trivyignore.yaml
+          skip-setup-trivy: 'true'
 
   trivy-image:
-    name: Trivy image scan (advisory) — ${{ matrix.name }}
+    name: Trivy image scan — ${{ matrix.name }}
     runs-on: ubuntu-latest
-    # Advisory image scan per locally-built Dockerfile. Matrix is bounded
-    # to images defined in `web/` and `containers/`; upstream-image-only
-    # services (wazuh/, misp/, etc.) are out of scope, as are TechVault's
-    # base-container-materialized nodes (dns, fileshare, kali, victim,
-    # webapp, workstation) (issues #581, #1193) — they start from the generic
-    # base image and apply their SDL-declared state, with no product
-    # Dockerfile of their own to scan. ADR-026 calls
-    # out the cost of one-image-per-job. These advisory builds intentionally
-    # avoid buildx GHA layer cache because expired cache blob URLs can fail
-    # the job before Trivy runs.
-    continue-on-error: true
+    # One job per locally-built Dockerfile under `web/` and `containers/`.
+    # Upstream-image-only services (wazuh/, misp/, etc.) are out of scope, as
+    # are TechVault's base-container-materialized nodes (dns, fileshare, kali,
+    # victim, webapp, workstation) (issues #581, #1193) — they start from the
+    # generic base images scanned here and apply their SDL-declared state, with
+    # no product Dockerfile of their own. A derived image builds its parent
+    # first and names it by that exact build. ADR-026 calls out the cost of
+    # one-image-per-job. These builds intentionally avoid buildx GHA layer
+    # cache because expired cache blob URLs can fail the job before Trivy runs.
+    permissions:
+      contents: read
+      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -570,12 +628,27 @@ jobs:
           - name: generic-samba-ad-base
             dockerfile: containers/generic-samba-ad-base/Dockerfile
             context: ./containers/generic-samba-ad-base
+          - name: generic-samba-ad-wazuh-agent-base
+            dockerfile: containers/generic-samba-ad-wazuh-agent-base/Dockerfile
+            context: .
+            parent_dockerfile: containers/generic-samba-ad-base/Dockerfile
+            parent_context: ./containers/generic-samba-ad-base
           - name: generic-systemd-base
             dockerfile: containers/generic-systemd-base/Dockerfile
             context: ./containers/generic-systemd-base
+          - name: generic-systemd-wazuh-agent-base
+            dockerfile: containers/generic-systemd-wazuh-agent-base/Dockerfile
+            context: .
+            parent_dockerfile: containers/generic-systemd-base/Dockerfile
+            parent_context: ./containers/generic-systemd-base
           - name: generic-systemd-base-debian
             dockerfile: containers/generic-systemd-base-debian/Dockerfile
             context: .
+          - name: generic-systemd-wazuh-agent-base-debian
+            dockerfile: containers/generic-systemd-wazuh-agent-base-debian/Dockerfile
+            context: .
+            parent_dockerfile: containers/generic-systemd-base-debian/Dockerfile
+            parent_context: .
           - name: generic-systemd-node22-base
             dockerfile: containers/generic-systemd-node22-base/Dockerfile
             context: .
@@ -610,16 +683,43 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+      # The `docker` driver builds in the daemon's own image store, so a child
+      # build resolves the parent image built in the step before it.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          driver: docker
+      - name: Build parent image
+        if: matrix.parent_dockerfile != ''
+        id: parent
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.parent_context }}
+          file: ${{ matrix.parent_dockerfile }}
+          tags: aptl-scan/${{ matrix.name }}-parent:ci
+          load: true
+          push: false
+      - name: Pin the parent by image ID
+        if: matrix.parent_dockerfile != ''
+        id: pin
+        env:
+          PARENT_ID: ${{ steps.parent.outputs.imageid }}
+          PARENT_REPO: aptl-scan/${{ matrix.name }}-parent
+        run: |
+          set -euo pipefail
+          pin="${PARENT_REPO}:sha256-${PARENT_ID#sha256:}"
+          docker tag "${PARENT_REPO}:ci" "$pin"
+          echo "build-arg=APTL_PARENT_IMAGE=$pin" >> "$GITHUB_OUTPUT"
       - name: Build image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
+          build-args: ${{ steps.pin.outputs.build-arg }}
           tags: aptl-scan/${{ matrix.name }}:ci
           load: true
           push: false
-      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+      - name: Record all findings (SARIF)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
           image-ref: aptl-scan/${{ matrix.name }}:ci
@@ -629,22 +729,59 @@ jobs:
           exit-code: '0'
           severity: CRITICAL,HIGH,MEDIUM
           limit-severities-for-sarif: 'true'
-      - name: Upload SARIF
+      - name: Upload SARIF artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: trivy-image-${{ matrix.name }}-sarif
           path: trivy-image-${{ matrix.name }}.sarif
           retention-days: 7
+      - name: Track findings in code scanning
+        if: >-
+          always() && github.actor != 'dependabot[bot]' &&
+          (github.event_name != 'pull_request' ||
+          github.event.pull_request.head.repo.full_name == github.repository)
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: trivy-image-${{ matrix.name }}.sarif
+          category: trivy-image-${{ matrix.name }}
+      - name: Gate on fixable vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: aptl-scan/${{ matrix.name }}:ci
+          vuln-type: os,library
+          format: table
+          exit-code: '1'
+          ignore-unfixed: 'true'
+          severity: CRITICAL,HIGH,MEDIUM
+          trivyignores: .trivyignore.yaml
+          skip-setup-trivy: 'true'
+
+  trivy-image-gate:
+    name: Trivy image scan
+    # The single required context for the image matrix: it fails unless every
+    # matrix job succeeded, so a new image cannot be added without being gated.
+    if: always()
+    needs: [trivy-image]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every image scan to pass
+        env:
+          RESULT: ${{ needs.trivy-image.result }}
+        run: |
+          test "$RESULT" = success || {
+            echo "Trivy image scans did not all pass: $RESULT" >&2
+            exit 1
+          }
 
   osv-scanner:
-    name: OSV-scanner (uv.lock advisory)
+    name: OSV-scanner (uv.lock)
     runs-on: ubuntu-latest
-    # Advisory — covers the project-root `uv.lock` Python dependency
-    # graph. Complements the existing `dependency-audit` job (pip-audit /
+    # Blocking (issue #1193): covers the project-root `uv.lock` Python
+    # dependency graph. Complements the `dependency-audit` job (pip-audit /
     # npm audit); ADR-026 § Risks notes OSV is not wired as a wholesale
     # replacement for the ecosystem audits.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install osv-scanner (checksum-verified)
@@ -664,19 +801,10 @@ jobs:
           grep " ${asset}\$" osv-scanner_SHA256SUMS | sha256sum -c -
           sudo install -m 0755 "${asset}" /usr/local/bin/osv-scanner
       - name: Scan uv.lock
-        # OSV-scanner v2 exits 0 (no vulns), 1 (vulns found), or other
-        # codes for tool/CLI errors. We swallow exit 1 so advisory
-        # findings don't fail the step, but propagate other codes so a
-        # broken invocation can't silently produce no SARIF artifact.
-        run: |
-          set +e
-          osv-scanner scan -L uv.lock --format sarif --output-file osv-scanner.sarif
-          ec=$?
-          if [ "$ec" -eq 0 ] || [ "$ec" -eq 1 ]; then
-            exit 0
-          fi
-          echo "osv-scanner failed with exit code $ec" >&2
-          exit "$ec"
+        # OSV-scanner v2 exits 0 (no vulns), 1 (vulns found), or other codes
+        # for tool/CLI errors; any non-zero exit fails the job. The SARIF is
+        # written before the exit, so the artifact below still records it.
+        run: osv-scanner scan -L uv.lock --format sarif --output-file osv-scanner.sarif
       - name: Upload SARIF
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

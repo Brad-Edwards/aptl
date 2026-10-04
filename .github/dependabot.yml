@@ -69,10 +69,8 @@ updates:
     directories:
       - "/containers/appliance-egress-proxy"
       - "/containers/base"
-      - "/containers/docker-authority-proxy"
       - "/containers/generic-systemd-base"
       - "/containers/generic-systemd-base-debian"
-      - "/containers/generic-systemd-node22-base"
       - "/containers/generic-samba-ad-base"
       - "/containers/generic-wazuh-agent-base-debian"
       - "/containers/kali-capture"
@@ -92,3 +90,18 @@ updates:
       container-base-images:
         patterns:
           - "*"
+
+  # The node22 substrate is selected for nodes that declare Node.js 22, so a
+  # major-version bump would silently realize a different runtime than the SDL
+  # declares (issue #1193). Digest refreshes within Node 22 still arrive weekly.
+  - package-ecosystem: "docker"
+    directory: "/containers/generic-systemd-node22-base"
+    target-branch: "dev"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "build"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]

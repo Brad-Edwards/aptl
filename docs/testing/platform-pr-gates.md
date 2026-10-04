@@ -2,8 +2,9 @@
 
 Pull requests to `dev` require the existing **Pre-commit hooks**, **Python
 tests + coverage**, **MCP TypeScript tests + coverage**, **Dependency
-vulnerability scan**, and **Clean-install lab boot and teardown (DEP-008)**
-contexts. Other established required quality and governance checks remain in
+vulnerability scan**, **Clean-install lab boot and teardown (DEP-008)**,
+**Trivy filesystem scan**, **Trivy IaC / config scan**, **Trivy image scan**,
+**OSV-scanner (uv.lock)**, and **RAES scenario validation gate** contexts. Other established required quality and governance checks remain in
 the branch rule. The exact context names are recorded in
 `.github/branch-protection-baseline.json`; the live GitHub branch settings are
 the enforcement authority.
@@ -11,10 +12,17 @@ the enforcement authority.
 The dependency job fails on known Python findings in the generated CLI/runtime,
 API/web, and CI/build exports and on high or critical production dependency
 findings in the web and all MCP package locks. It also fails when a lock,
-install, or scanner fails. Trivy filesystem, image, and IaC scans and the OSV
-scan remain advisory because they cover mixed platform and intentionally
-vulnerable target assets. ADR-026 records the boundary and the format for any
+install, or scanner fails. ADR-026 records the boundary and the format for any
 temporary platform exception. There are currently no such exceptions.
+
+The Trivy filesystem, IaC, and image scans fail on any CRITICAL, HIGH, or
+MEDIUM vulnerability that has an available fix, on any secret, and on any IaC
+misconfiguration. Each scan also records every finding, including
+vulnerabilities that have no upstream fix yet, in GitHub code scanning, where an
+alert stays open until a scan stops reporting it. `.trivyignore.yaml` holds the
+only waivers, each scoped to exact Dockerfiles with its reason. OSV-scanner
+fails on any `uv.lock` finding. The ADR-026 amendment for issue #1193 records
+the policy.
 
 The clean-install job builds a wheel, installs it in an empty virtual
 environment, materializes a fresh project, and starts only the product-neutral

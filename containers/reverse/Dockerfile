@@ -1,16 +1,22 @@
 # Reverse engineering container built on shared Ubuntu 26.04 base
 # Build context must be ./containers/ so both base/ and reverse/ are accessible
-FROM ubuntu:26.04@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78
+FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
 # ---- Shared base layer (from containers/base/Dockerfile.ubuntu) ----
 
-RUN apt-get update && \
-    apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
     rsyslog \
+    logrotate \
     openssh-server \
+    dbus \
+    libpam-systemd \
+    libnss-systemd \
+    netbase \
+    tzdata \
     sudo \
     systemd \
     systemd-sysv \
@@ -87,7 +93,7 @@ RUN chmod 755 /opt/purple-team/scripts/setup-reverse-tools.sh
 COPY --chmod=644 reverse/reverse-tools-install.service /etc/systemd/system/
 RUN systemctl enable reverse-tools-install.service
 
-EXPOSE 22 514
+EXPOSE 514
 
 VOLUME ["/var/log", "/home"]
 

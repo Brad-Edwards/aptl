@@ -60,12 +60,19 @@ build_image() {
   local context=$3
   local dockerfile=$4
   local base_mode=${5:-remote}
+  local parent_name=${6:-}
   local build=(docker build --provenance=false)
   if test "$base_mode" = remote; then
     build+=(--pull)
   elif test "$base_mode" != local; then
     echo 'invalid container base mode' >&2
     exit 2
+  fi
+  # A derived image names its parent by the parent's immutable staging tag,
+  # never a mutable local tag (issue #1193): that tag is never replaced once
+  # pushed, so the child inherits exactly the parent this run built.
+  if test -n "$parent_name"; then
+    build+=(--build-arg "APTL_PARENT_IMAGE=${namespace}/${parent_name}:${RELEASE_TAG}")
   fi
   if docker manifest inspect "${namespace}/${name}:${RELEASE_TAG}" >/dev/null 2>&1; then
     echo "refusing to replace existing GHCR tag: ${name}:${RELEASE_TAG}" >&2
@@ -95,13 +102,13 @@ build_image generic-systemd-base-debian aptl/generic-systemd-base-debian:latest 
 
 build_image generic-samba-ad-wazuh-agent-base \
   aptl/generic-samba-ad-wazuh-agent-base:latest . \
-  containers/generic-samba-ad-wazuh-agent-base/Dockerfile local
+  containers/generic-samba-ad-wazuh-agent-base/Dockerfile local generic-samba-ad-base
 build_image generic-systemd-wazuh-agent-base \
   aptl/generic-systemd-wazuh-agent-base:latest . \
-  containers/generic-systemd-wazuh-agent-base/Dockerfile local
+  containers/generic-systemd-wazuh-agent-base/Dockerfile local generic-systemd-base
 build_image generic-systemd-wazuh-agent-base-debian \
   aptl/generic-systemd-wazuh-agent-base-debian:latest . \
-  containers/generic-systemd-wazuh-agent-base-debian/Dockerfile local
+  containers/generic-systemd-wazuh-agent-base-debian/Dockerfile local generic-systemd-base-debian
 build_image generic-systemd-node22-base aptl/generic-systemd-node22-base:latest \
   . containers/generic-systemd-node22-base/Dockerfile
 build_image generic-wazuh-agent-base-debian aptl/generic-wazuh-agent-base-debian:latest \

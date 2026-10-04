@@ -1815,11 +1815,9 @@ tests/test_docs_publishing.py	tests-follow-owner	Retain structural coverage for 
 tools/run-targeted-tests.sh	build-governance	Keep local verification targeted while CI owns whole-tree gates
 docs/architecture/issue-1162-nested-virt-seat-preflight.md	build-governance	Keep source and artifact evidence with delivery governance
 scripts/appliance/seat-build-record.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
-src/aptl/appliance/guest_web.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
 src/aptl/appliance/seat/aptl-seat.pub	optional-delivery	Keep seat image trust and local delivery with the delivery owner
 src/aptl/appliance/seat/image_trust.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
 src/aptl/appliance/seat/image_update.py	optional-delivery	Keep seat image trust and local delivery with the delivery owner
-tests/test_appliance_guest_web.py	test-governance	Migrate regression coverage with the behavior it verifies
 tests/test_seat_image_consent.py	test-governance	Migrate regression coverage with the behavior it verifies
 tests/test_seat_image_trust.py	test-governance	Migrate regression coverage with the behavior it verifies
 tests/test_seat_image_update.py	test-governance	Migrate regression coverage with the behavior it verifies
@@ -1878,3 +1876,5 @@ docs/reviews/1194-seat-network-investigation.md	architecture-history	Preserve ma
 tests/test_compose_network_readback.py	tests-follow-owner	Retain declared network endpoint observation regressions with the deployment backend
 docs/architecture/issue-1193-base-container-terminology-preflight.md	architecture-history	Preserve base-container terminology decision and contract inventory
 docs/components/node-realization.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
+.trivyignore.yaml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
+tests/test_web_api_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

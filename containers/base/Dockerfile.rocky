@@ -11,6 +11,13 @@ ENV INSTALL_WAZUH=${INSTALL_WAZUH}
 ENV INSTALL_FALCO=${INSTALL_FALCO}
 ENV INSTALL_XSIAM=${INSTALL_XSIAM}
 
+# The mirrorlist has left image builds waiting on unavailable mirrors (the same
+# failure generic-systemd-base pins against). Use Rocky's own HTTPS repository
+# so the build has a bounded, deterministic source.
+RUN sed -i \
+        -e 's|^mirrorlist=|#mirrorlist=|' \
+        -e 's|^#baseurl=http://dl.rockylinux.org/|baseurl=https://dl.rockylinux.org/|' \
+        /etc/yum.repos.d/rocky.repo
 RUN dnf install -y epel-release && \
     dnf update -y && \
     dnf install -y \
@@ -72,7 +79,7 @@ COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
 RUN mkdir -p /etc/falco/config.d
 COPY base/falco_custom.yaml /etc/falco/config.d/
 
-EXPOSE 22 514
+EXPOSE 514
 
 VOLUME ["/var/log", "/home"]
 

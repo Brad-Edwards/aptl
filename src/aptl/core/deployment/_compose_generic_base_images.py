@@ -110,7 +110,7 @@ class ComposeGenericBaseImageMixin(object):
             failures = (
                 self._staged_base_image_present(image_ref)
                 if self._offline_staged
-                else self._build_generic_base_image(image_ref, build)
+                else self._build_generic_base_image(image_ref, build, dependency)
             )
         return failures
 
@@ -123,25 +123,43 @@ class ComposeGenericBaseImageMixin(object):
         return []
 
     def _build_generic_base_image(
-        self, image_ref: str, build: tuple[str, str] | None
+        self,
+        image_ref: str,
+        build: tuple[str, str] | None,
+        parent: str | None = None,
     ) -> list[str]:
-        """Build the image from the Dockerfile this release ships."""
+        """Build the image from the Dockerfile this release ships.
+
+        A derived image is built from a tag pinned to its parent's image ID,
+        never the parent's mutable tag, so it inherits exactly the parent this
+        call just built (issue #1193). The pin tag is removed afterwards.
+        """
 
         if build is None:
             return []
         dockerfile, build_context = build
+        build_args: list[str] = []
+        pin: str | None = None
+        if parent is not None:
+            pin, failure = self._pin_parent_image(parent)
+            if pin is None:
+                return [failure]
+            build_args = ["--build-arg", f"APTL_PARENT_IMAGE={pin}"]
         built = self._run(
             [
                 "docker",
                 "build",
                 "-t",
                 image_ref,
+                *build_args,
                 "-f",
                 str(self._project_dir / dockerfile),
                 str(self._project_dir / build_context),
             ],
             timeout=600,
         )
+        if pin is not None:
+            self._run(["docker", "image", "rm", pin], timeout=60)
         if built.returncode != 0:
             # Without the builder's own words this reads as "the image did not
             # build", which is true of a missing Dockerfile, an unreachable
@@ -150,3 +168,19 @@ class ComposeGenericBaseImageMixin(object):
             reason = detail[-1] if detail else "no builder output"
             return [f"failed to build generic base image {image_ref}: {reason}"]
         return []
+
+    def _pin_parent_image(self, parent: str) -> tuple[str | None, str]:
+        """Tag ``parent`` by its image ID and return that content-bound tag."""
+
+        inspected = self._run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", parent], timeout=30
+        )
+        image_id = (inspected.stdout or "").strip()
+        if inspected.returncode != 0 or not image_id.startswith("sha256:"):
+            return None, f"cannot read the image ID of parent base image {parent}"
+        repository = parent.rsplit(":", 1)[0]
+        pin = f"{repository}:sha256-{image_id.removeprefix('sha256:')}"
+        tagged = self._run(["docker", "tag", parent, pin], timeout=30)
+        if tagged.returncode != 0:
+            return None, f"cannot pin parent base image {parent} to {pin}"
+        return pin, ""

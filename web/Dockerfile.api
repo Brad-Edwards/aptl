@@ -1,9 +1,9 @@
-FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
+FROM python:3.14-slim@sha256:c3e521df8b2b498a7a682e7e18676771cb80c6b75b8699af886b2d554ce40151
 
 WORKDIR /app
 
 # Install Docker CLI via official APT repo (not curl|sh)
-RUN apt-get update && \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     apt-get install -y --no-install-recommends ca-certificates curl git gnupg && \
     install -m 0755 -d /etc/apt/keyrings && \
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc && \
@@ -33,9 +33,16 @@ COPY src/ src/
 COPY requirements/web.txt requirements/web.txt
 RUN pip install --no-cache-dir --require-hashes -r requirements/web.txt && \
     pip install --no-cache-dir -e . --no-deps --no-build-isolation && \
+    python -m pip uninstall --yes pip && \
     apt-get purge -y git && \
     apt-get autoremove -y && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Run unprivileged (issue #1193). The container reaches the daemon through the
+# bind-mounted Docker socket; Compose adds only that socket's owning group
+# (`group_add: APTL_DOCKER_SOCKET_GID`), so no process here runs as root.
+RUN useradd --system --uid 10001 --user-group --create-home --home-dir /home/aptl aptl
+USER 10001:10001
 
 EXPOSE 8400
 

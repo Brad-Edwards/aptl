@@ -25,7 +25,7 @@ RUN sed -i \
         -e 's|^mirrorlist=|#mirrorlist=|' \
         -e 's|^#baseurl=http://dl.rockylinux.org/|baseurl=https://dl.rockylinux.org/|' \
         /etc/yum.repos.d/rocky.repo
-RUN dnf -y install systemd systemd-sysv \
+RUN dnf -y upgrade --refresh && dnf -y install systemd systemd-sysv \
         openssh-server openssh-clients postgresql sudo rsyslog \
     && dnf clean all && \
     (cd /lib/systemd/system/sysinit.target.wants/; \

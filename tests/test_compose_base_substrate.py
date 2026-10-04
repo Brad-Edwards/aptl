@@ -275,6 +275,69 @@ class TestEnsureGenericBaseImage:
         )
         assert build_call.args[0][-1] == str(tmp_path)
 
+    def test_derived_base_is_built_from_the_exact_parent_just_built(self, tmp_path):
+        """A derived substrate never resolves its parent through a mutable tag.
+
+        The parent is built first, then the child is built from a tag derived
+        from the parent's image ID, so a ``:latest`` retag between the two
+        builds cannot change what the child inherits (issue #1193, Trivy
+        DS-0001). The temporary pin tag is removed afterwards.
+        """
+        backend = _backend(tmp_path)
+        parent_id = "sha256:" + "c" * 64
+        pin = "aptl/generic-systemd-base:sha256-" + "c" * 64
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return MagicMock(returncode=0, stdout=f"{parent_id}\n", stderr="")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.ensure_generic_base_image(
+                "aptl/generic-systemd-wazuh-agent-base:latest"
+            )
+
+        assert failures == []
+        argvs = [c.args[0] for c in mock_run.call_args_list]
+        builds = [a for a in argvs if a[:2] == ["docker", "build"]]
+        assert [b[3] for b in builds] == [
+            "aptl/generic-systemd-base:latest",
+            "aptl/generic-systemd-wazuh-agent-base:latest",
+        ]
+        assert "--build-arg" not in builds[0]
+        child = builds[1]
+        assert child[child.index("--build-arg") + 1] == f"APTL_PARENT_IMAGE={pin}"
+        assert ["docker", "tag", "aptl/generic-systemd-base:latest", pin] in argvs
+        assert argvs.index(["docker", "tag", "aptl/generic-systemd-base:latest", pin]) < (
+            argvs.index(child)
+        )
+        assert ["docker", "image", "rm", pin] in argvs
+
+    def test_derived_base_fails_closed_when_the_parent_id_is_unreadable(self, tmp_path):
+        backend = _backend(tmp_path)
+
+        def fake_run(cmd, **kwargs):
+            del kwargs
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return MagicMock(returncode=1, stdout="", stderr="No such image")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        with patch("subprocess.run", side_effect=fake_run) as mock_run:
+            failures = backend.ensure_generic_base_image(
+                "aptl/generic-systemd-wazuh-agent-base:latest"
+            )
+
+        assert failures
+        assert "aptl/generic-systemd-base:latest" in failures[0]
+        child_builds = [
+            c.args[0]
+            for c in mock_run.call_args_list
+            if c.args[0][:4]
+            == ["docker", "build", "-t", "aptl/generic-systemd-wazuh-agent-base:latest"]
+        ]
+        assert child_builds == []
+
     def test_builds_backend_selected_samba_provider_base(self, tmp_path):
         backend = _backend(tmp_path)
 

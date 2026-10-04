@@ -1,9 +1,9 @@
 # APTL backend substrate for an authored Active Directory identity authority.
 # Domain identity and accounts are supplied later from the admitted plan; this
 # image contains no scenario-specific realm, users, groups, or credentials.
-FROM ubuntu:26.04@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78
+FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
 
-RUN apt-get update \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         krb5-user \
         ldb-tools \

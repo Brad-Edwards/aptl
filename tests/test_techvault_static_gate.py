@@ -743,7 +743,12 @@ def test_check_provisioning_realization_handles_raise(monkeypatch):
 def test_check_provisioning_realization_rejects_planner_errors(monkeypatch, tmp_path):
     """The static gate must not interpret a plan RAES already rejected."""
 
-    scenario = SimpleNamespace(variables={})
+    scenario = SimpleNamespace(
+        variables={},
+        behavior_specifications={
+            "study": SimpleNamespace(participant_inject_deliveries={"turn": object()})
+        },
+    )
     availability = object()
     target = object()
     plan_error = SimpleNamespace(
@@ -765,7 +770,13 @@ def test_check_provisioning_realization_rejects_planner_errors(monkeypatch, tmp_
         lambda selected_scenario, backend, **kwargs: availability,
         raising=False,
     )
-    monkeypatch.setattr(gc, "create_aptl_runtime_target", lambda **_kwargs: target)
+    target_options = {}
+
+    def _create_target(**kwargs):
+        target_options.update(kwargs)
+        return target
+
+    monkeypatch.setattr(gc, "create_aptl_runtime_target", _create_target)
 
     def _plan_aptl_scenario(**kwargs):
         assert kwargs.pop("target") is target
@@ -792,6 +803,7 @@ def test_check_provisioning_realization_rejects_planner_errors(monkeypatch, tmp_
     assert details is None
     assert not check.passed
     assert not interpreted
+    assert target_options["options"].participant_inject_delivery is True
     assert planned["options"].artifact_availability is availability
     assert any(plan_error.code in diagnostic for diagnostic in check.diagnostics)
 
@@ -830,6 +842,7 @@ def test_backend_conformance_uses_hermetic_probe_scenario(monkeypatch, tmp_path)
 
     assert check.passed
     assert "name: aptl-conformance" in observed_options["reference_scenario"]
+    assert "owner: blue" in observed_options["reference_scenario"]
 
 
 def test_check_provisioning_realization_fails_on_profile_mismatch(tmp_path):

@@ -945,7 +945,7 @@ action_contracts:
 
 agents:
   benign-customer-agent:
-    entity: benign-customer
+    affiliations: [benign-customer]
     description: Benign participant that completes ordinary synthetic customer tasks.
     actions:
       - inspect-portal
@@ -981,7 +981,7 @@ agents:
       - green-support-view
 
   security-assessor-agent:
-    entity: security-assessor
+    affiliations: [security-assessor]
     description: Red participant that assesses only declared synthetic targets and choices.
     actions:
       - inspect-public-surface
@@ -1013,7 +1013,7 @@ agents:
       - red-objective-view
 
   security-analyst-agent:
-    entity: security-analyst
+    affiliations: [security-analyst]
     description: Blue participant that triages, investigates, and responds within assigned scope.
     actions:
       - list-assigned-alerts

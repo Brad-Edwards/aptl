@@ -2265,7 +2265,7 @@ def _workflow_and_evaluation_execution_plan():
               health: {proposition: health, role: postcondition, polarity: positive}
             objectives:
               validate:
-                entity: blue
+                owner: blue
                 success: {assertions: [health]}
             workflows:
               response:

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from aptl.core.config import AptlConfig
 
 
-# RAES 4.1's generic full-target probe leaves operating-system identity closed.
+# RAES' generic full-target probe leaves operating-system identity closed.
 # APTL is a Linux-only backend and necessarily realizes a Linux substrate, so
 # use the public conformance runner's backend-specific witness seam to make that
 # required identity explicit. The rest of the probe remains backend-neutral.
@@ -65,7 +65,7 @@ APTL_TARGET_CONFORMANCE_SCENARIO = dedent(
         role: postcondition
     objectives:
       validate:
-        entity: blue
+        owner: blue
         success: {assertions: [health]}
     workflows:
       response:

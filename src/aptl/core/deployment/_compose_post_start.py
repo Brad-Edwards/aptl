@@ -69,7 +69,7 @@ class ComposeRealizationPostStartMixin(ComposeRuntimeOrchestrationObservationMix
 
         result: LabResult | None = None
         steps = (
-            lambda: _failure_result(self._reconcile_realization_networks(realization)),
+            lambda: self._reconcile_declared_networks(realization),
             lambda: _failure_result(self._await_realized_service_health(realization)),
             lambda: _failure_result(self._realize_traffic_mirrors(realization)),
             lambda: _failure_result(

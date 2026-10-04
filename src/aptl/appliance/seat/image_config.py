@@ -53,14 +53,19 @@ class SeatImageConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    schema_version: Literal["aptl.seat-image/v1"]
+    schema_version: Literal["aptl.seat-image/v1", "aptl.seat-image/v2"]
     resources: HostPrerequisites
     boundary: ApplianceBoundaryPolicy
     binding: SeatImageBinding
     description: str | None = Field(default=None, max_length=200)
+    desktop_privilege_contract: Literal["aptl.desktop-privileges/v1"] | None = None
 
     @model_validator(mode="after")
     def validate_publications(self) -> SeatImageConfig:
+        if (self.schema_version == "aptl.seat-image/v2") != (
+            self.desktop_privilege_contract == "aptl.desktop-privileges/v1"
+        ):
+            raise ValueError("image privilege contract does not match schema version")
         # The seat exists to project the guest's endpoints to the host; an
         # image that publishes none cannot be reached and must not launch.
         audiences = [item.audience for item in self.boundary.guest_publications]

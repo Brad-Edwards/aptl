@@ -274,6 +274,30 @@ def test_desktop_vm_has_unrestricted_outbound_nat_and_one_private_forward(tmp_pa
     assert netdev.count("hostfwd=") == 1
 
 
+def test_admin_channel_is_private_and_never_contains_the_password(tmp_path: Path) -> None:
+    socket_path = tmp_path / "private/privilege.sock"
+    spec = VmLaunchSpec(
+        overlay_path=tmp_path / "overlay.qcow2",
+        launch_mount=tmp_path / "launch",
+        vcpus=2,
+        memory_mib=512,
+        privilege_socket=socket_path,
+        include_privilege_channel=True,
+    )
+    argv = build_qemu_argv(spec)
+    assert f"socket,id=aptl-privileges,path={socket_path},server=on,wait=off" in argv
+    assert "virtserialport,chardev=aptl-privileges,name=org.aptl.privileges" in argv
+    assert "password" not in " ".join(argv)
+    assert "aptl-privileges" not in " ".join(build_qemu_argv(
+        VmLaunchSpec(
+            overlay_path=tmp_path / "overlay.qcow2",
+            launch_mount=tmp_path / "launch",
+            vcpus=2,
+            memory_mib=512,
+        )
+    ))
+
+
 def test_qemu_argv_uses_private_management_socket(tmp_path: Path) -> None:
     launch_mount = tmp_path / "launch"
     launch_mount.mkdir()

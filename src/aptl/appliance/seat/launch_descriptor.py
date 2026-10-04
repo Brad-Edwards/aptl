@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 import rfc8785
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
 from aptl.utils.strict_json import loads_strict, model_validate_json_strict
@@ -38,7 +38,7 @@ class SeatLaunchDescriptor(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    schema_version: Literal["aptl.appliance-launch/v2"]
+    schema_version: Literal["aptl.appliance-launch/v2", "aptl.appliance-launch/v3"]
     image_reference: str = Field(min_length=1, max_length=512)
     image_digest: str = Field(pattern=_SHA256)
     image_config_digest: str = Field(pattern=_SHA256)
@@ -48,6 +48,15 @@ class SeatLaunchDescriptor(BaseModel):
     participant_routes_digest: str = Field(pattern=_SHA256)
     host_mcp_contract: Literal["aptl.restricted-ssh-mcp/v1"] | None = None
     host_observation_id: str = Field(min_length=1, max_length=128)
+    desktop_mode: Literal["administrative", "event"] | None = None
+
+    @model_validator(mode="after")
+    def validate_desktop_mode(self) -> SeatLaunchDescriptor:
+        if (self.schema_version == "aptl.appliance-launch/v3") != (
+            self.desktop_mode is not None
+        ):
+            raise ValueError("launch desktop mode does not match schema version")
+        return self
 
 
 def canonical_launch_bytes(descriptor: SeatLaunchDescriptor) -> bytes:

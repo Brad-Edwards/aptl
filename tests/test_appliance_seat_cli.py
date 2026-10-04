@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -60,11 +61,22 @@ def test_seat_help_lists_supported_commands() -> None:
     assert "stage" in result.stdout
     assert "reset" in result.stdout
     assert "recover" in result.stdout
+    assert "rescue" in result.stdout
     assert "open-kiosk" in result.stdout
     assert "update" in result.stdout
     assert "images" in result.stdout
     # There is nothing to install: a start pulls what it needs.
     assert "install" not in result.stdout
+
+
+def test_rescue_routes_to_stopped_overlay_maintenance(tmp_path: Path) -> None:
+    with patch("aptl.cli.seat.rescue_seat_overlay") as maintenance:
+        result = runner.invoke(app, [
+            "seat", "rescue", "--seat-root", str(tmp_path / "seat"),
+        ])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == {"rescued": True}
+    maintenance.assert_called_once_with((tmp_path / "seat").resolve())
 
 
 def test_seat_status_emits_bounded_json(tmp_path: Path) -> None:
@@ -120,6 +132,16 @@ def test_seat_stage_success_emits_json() -> None:
 
     assert result.exit_code == 0
     assert '"staged":true' in result.stdout.replace(" ", "")
+
+
+def test_stage_forwards_event_mode_without_a_password() -> None:
+    record = _seat_record().model_copy(update={"lifecycle_state": "staged"})
+    with patch("aptl.cli.seat.stage_seat", return_value=record) as stage:
+        result = runner.invoke(app, [
+            "seat", "stage", *_common_seat_args(), "--desktop-mode", "event",
+        ])
+    assert result.exit_code == 0, result.output
+    assert stage.call_args.kwargs["desktop_mode"] == "event"
 
 
 def test_seat_stage_resolves_relative_root(tmp_path: Path, monkeypatch) -> None:
@@ -186,6 +208,84 @@ def test_seat_start_success_emits_json() -> None:
 
     assert result.exit_code == 0
     assert '"started":true' in result.stdout.replace(" ", "")
+
+
+def test_event_start_has_no_sudo_password() -> None:
+    with (
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
+    ):
+        result = runner.invoke(app, [
+            "seat", "start", *_common_seat_args(), "--desktop-mode", "event",
+        ])
+    assert result.exit_code == 0, result.output
+    options = start.call_args.kwargs["options"]
+    assert options.desktop_mode == "event"
+    assert options.sudo_password is None
+
+
+def test_admin_start_accepts_explicit_empty_private_file(tmp_path: Path) -> None:
+    source = tmp_path / "password"
+    source.write_bytes(b"")
+    source.chmod(0o600)
+    with (
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
+    ):
+        result = runner.invoke(app, [
+            "seat", "start", "--seat-root", str(tmp_path / "seat"),
+            "--desktop-mode", "administrative",
+            "--sudo-password-file", str(source),
+        ])
+    assert result.exit_code == 0, result.output
+    options = start.call_args.kwargs["options"]
+    assert options.sudo_password == ""
+    assert options.desktop_mode == "administrative"
+
+
+def test_admin_start_refuses_missing_noninteractive_password(tmp_path: Path) -> None:
+    with patch("aptl.cli.seat._prepare_seat_image") as acquire:
+        result = runner.invoke(app, [
+            "seat", "start", "--seat-root", str(tmp_path / "seat"),
+            "--desktop-mode", "administrative",
+        ])
+    assert result.exit_code == 2
+    assert "missing-sudo-password" in result.output
+    acquire.assert_not_called()
+
+
+def test_admin_warm_start_reuses_overlay_without_reasking(tmp_path: Path) -> None:
+    root = tmp_path / "seat"
+    overlay = root / "instances/seat-01.qcow2"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_bytes(b"overlay")
+    record = _seat_record().model_copy(update={"lifecycle_state": "staged"})
+    with (
+        patch("aptl.cli.seat.load_seat_record", return_value=record),
+        patch("aptl.cli.seat._current_desktop_mode", return_value="administrative"),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
+    ):
+        result = runner.invoke(app, ["seat", "start", "--seat-root", str(root)])
+    assert result.exit_code == 0, result.output
+    assert start.call_args.kwargs["options"].sudo_password is None
+
+
+def test_admin_failed_start_keeps_existing_overlay_password(tmp_path: Path) -> None:
+    root = tmp_path / "seat"
+    overlay = root / "instances/seat-01.qcow2"
+    overlay.parent.mkdir(parents=True)
+    overlay.write_bytes(b"overlay")
+    record = _seat_record().model_copy(update={"lifecycle_state": "recoverable-failure"})
+    with (
+        patch("aptl.cli.seat.load_seat_record", return_value=record),
+        patch("aptl.cli.seat._current_desktop_mode", return_value="administrative"),
+        patch("aptl.cli.seat.image_requires_host_access", return_value=False),
+        patch("aptl.cli.seat.start_seat", return_value=_seat_record()) as start,
+    ):
+        result = runner.invoke(app, ["seat", "start", "--seat-root", str(root)])
+    assert result.exit_code == 0, result.output
+    assert start.call_args.kwargs["options"].sudo_password is None
 
 
 def test_seat_start_needs_no_arguments_at_all(tmp_path: Path) -> None:

@@ -1,7 +1,7 @@
 # APTL backend substrate for nodes that require Node.js 22 and systemd-managed
 # services.  The product/runtime state remains materialized from the admitted
 # scenario; this image supplies only the selected language + init/SSH substrate.
-FROM node:25-trixie@sha256:b6cf8d20ee78aa10f0a6b98242e26d547869801abd6bc3f7094b0a54301dee02
+FROM node:26-trixie@sha256:a723b54c35a76e947095a20a67d39585bb09c862e6b1adeb8a9f518f95e34fb0
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         systemd systemd-sysv dbus gnupg openssh-server \

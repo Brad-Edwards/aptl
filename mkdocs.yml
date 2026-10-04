@@ -99,6 +99,7 @@ nav:
     - "Issue #821 In-Appliance Participant Workbench Preflight": architecture/issue-821-participant-workbench-preflight.md
     - "Issue #823 Versioned Disposable Lab Appliance Preflight": architecture/issue-823-versioned-disposable-appliance-preflight.md
     - "Issue #1022 Appliance Seat Delivery Preflight": architecture/issue-1022-appliance-seat-delivery-preflight.md
+    - "Issue #1186 Seat Privilege Preflight": architecture/issue-1186-seat-privilege-preflight.md
     - "Issue #845 RAES Hard-Rename Preflight": architecture/issue-845-raes-hard-rename-preflight.md
     - "Issue #934 APTL-To-LilRAE Rename Boundary Preflight": architecture/issue-934-rename-boundary-preflight.md
     - "Issue #592 Scenario-Pack Terminology Preflight": architecture/issue-592-scenario-pack-terminology-preflight.md

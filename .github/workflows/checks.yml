@@ -317,6 +317,8 @@ jobs:
             --host-ip 127.0.0.1 \
             --host-port 32022 \
             --endpoint-banner-prefix SSH- \
+            --network-name smoke-net \
+            --network-alias smoke-box \
             --workflow-address orchestration.workflow.smoke-control
       - name: Stop the lab and remove its volumes
         if: always()

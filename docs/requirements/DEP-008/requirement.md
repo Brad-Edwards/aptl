@@ -21,6 +21,8 @@ PyPI publication (#651, #656) installs the `aptl` CLI but not the lab assets, so
 
 ## Traceability
 
+- TESTS → TEST `scripts/ci/assert_boot_realization.py` (Installed-wheel startup requires the declared network endpoint, address and DNS alias)
+- TESTS → TEST `tests/test_boot_realization_gate.py` (Fail-closed installed-wheel startup observation contracts)
 - DOCUMENTS → GITHUB_ISSUE `659` (aptl-labs on PyPI still requires a full git clone to run the lab)
 - IMPLEMENTS → CODE_FILE `hatch_build.py` (Wheel build hook: bundle git-tracked lab assets into aptl/_labdata)
 - IMPLEMENTS → CODE_FILE `src/aptl/_asset_manifest.py` (Shared dependency-free lab-asset manifest (build hook + runtime))

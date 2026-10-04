@@ -697,8 +697,8 @@ services:
   # bindings.py TARGET_SURFACES), so unlike kali-ssh-proxy this proxy's own
   # publish stays on all interfaces, not loopback (issue #581). Targets the
   # container name, not webapp's declared static IP: webapp is realized
-  # generically (ADR-048), and an image-free node's declared docker-
-  # compose.yml ipv4_address is reference data only, never actually applied
+  # generically (ADR-048), and a base-container-materialized node's declared
+  # docker-compose.yml ipv4_address is reference data only, never actually applied
   # to the running container's network attachment.
   mailserver:
     profiles: ["mail"]

@@ -37,7 +37,7 @@ checks observe an effect in the running lab rather than a declaration.
 | `account-placement` | Boot gate observes the declared local user and group. Focused: `tests/test_deployment_backend.py`, `tests/test_account_provider.py`. Directory and domain account features stay outside the boot |
 | `service` | Boot gate, live (`UnitFileState`, `ActiveState`, `Result` read from the service manager) on the apt/Debian systemd substrate. Focused: `tests/test_raes_materializer.py` pins substrate selection per package family, `tests/test_raes_runtime_observation.py` the observation cases |
 | `resource-allocation` | Focused only: `tests/test_raes_runtime_environment.py`, `tests/test_compose_resource_ownership.py`. The boot gate makes no claim |
-| `image` | Focused only: `tests/test_docker_image_identity.py`, `tests/test_raes_docker_materializer.py`. The boot scenario is image-free, so the boot gate makes no claim |
+| `image` | Focused only: `tests/test_docker_image_identity.py`, `tests/test_raes_docker_materializer.py`. Every boot scenario node is [base-container-materialized](../components/node-realization.md) and has no node image, so the boot gate makes no claim |
 | `architecture` | Focused only: `tests/test_raes_observation.py`. The boot gate makes no claim |
 | `acl` | Focused only: `tests/test_raes_acl_realization.py`. The boot gate makes no claim |
 | `feature-binding` | Disclosed `unsupported`. There is no positive claim to cover |

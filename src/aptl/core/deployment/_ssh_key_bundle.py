@@ -176,7 +176,7 @@ def _generate_keypairs(by_name: _OutputsByName, staging_root: Path) -> str | Non
             # Idempotent: a key already generated in this staging root is reused
             # rather than regenerated. ssh-keygen refuses to overwrite an existing
             # file non-interactively, so realizing the bundle twice (once to place
-            # it into an image-free consumer, once for the compose consumers) must
+            # it into a base-container consumer, once for the compose consumers) must
             # not re-run keygen on a key that is already present.
             continue
         error = _run_ssh_keygen(

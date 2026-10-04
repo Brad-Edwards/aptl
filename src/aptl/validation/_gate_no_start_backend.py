@@ -95,7 +95,7 @@ class _NoStartBackend(object):
         self._network_names: list[str] = []
         self._content_root: TemporaryDirectory[str] | None = None
         self._content_paths: dict[str, Path] = {}
-        self._image_free_destinations: dict[str, str] = {}
+        self._literal_destinations: dict[str, str] = {}
 
     @staticmethod
     def qualify_runtime_materialization(
@@ -146,10 +146,10 @@ class _NoStartBackend(object):
         boundary reads that filesystem state back. This keeps the offline
         simulation non-secret and non-vacuous without starting Docker.
 
-        Image-free content (ADR-048, empty ``volume_suffix``) is read back by
+        Literal-destination content (ADR-048, empty ``volume_suffix``) is read back by
         the observation layer via ``container_exec`` rather than
         ``observe_content_type``, so its destination path is additionally
-        recorded under ``_image_free_destinations`` for ``container_exec`` to
+        recorded under ``_literal_destinations`` for ``container_exec`` to
         answer against.
         """
 
@@ -158,7 +158,7 @@ class _NoStartBackend(object):
         self._content_root = TemporaryDirectory(prefix="aptl-static-conformance-")
         root = Path(self._content_root.name)
         self._content_paths = {}
-        self._image_free_destinations = {}
+        self._literal_destinations = {}
         for index, item in enumerate(content):
             address = getattr(item, "address", None)
             source_kind = getattr(item, "source_kind", None)
@@ -178,7 +178,7 @@ class _NoStartBackend(object):
             volume_suffix = getattr(item, "volume_suffix", None)
             if not volume_suffix and isinstance(dest_relpath, str):
                 destination = "/" + dest_relpath.lstrip("/")
-                self._image_free_destinations[destination] = kind
+                self._literal_destinations[destination] = kind
 
     def container_exec(
         self, name: str, cmd: list[str], *, timeout: int | None = None
@@ -198,7 +198,7 @@ class _NoStartBackend(object):
                 stdout='ID="ubuntu"\nVERSION_ID="22.04"\n',
                 stderr="",
             )
-        kind = self._image_free_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
+        kind = self._literal_destinations.get(cmd[-1]) if len(cmd) >= 2 else None
         matched = bool(cmd) and (
             (cmd[0:2] == ["test", "-d"] and kind == "directory")
             or (cmd[0:2] == ["test", "-f"] and kind == "file")

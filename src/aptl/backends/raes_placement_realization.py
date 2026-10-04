@@ -22,8 +22,8 @@ from raes_contracts.planning import PlannedResource
 from aptl.backends.raes_account_realization import resolve_account_placement
 from aptl.backends.raes_content_realization import resolve_content_placement
 from aptl.backends.raes_diagnostics import diagnostic
-from aptl.backends.raes_image_free_content_realization import (
-    resolve_image_free_content_placement,
+from aptl.backends.raes_literal_content_realization import (
+    resolve_literal_content_placement,
 )
 from aptl.backends.raes_profiles import normalize_identifier
 from aptl.backends.raes_realization_model import (
@@ -190,13 +190,13 @@ def _realize_placement_resource(
             and target_node.os
             and (target_node.runtime is not None or target_node.image is not None)
         ):
-            # Any realized node — an image-free node the materializer places
+            # Any realized node — a base-container-materialized node the materializer places
             # content into, or an image (compose) node whose content is bound in
             # (issue #875) — takes its content at the authored literal
             # destination. Only the legacy named-volume path below still needs a
             # registered backing mount; an image node that declares content but
             # no other runtime must not fall through to it and be rejected.
-            resolved_content, diagnostics = resolve_image_free_content_placement(
+            resolved_content, diagnostics = resolve_literal_content_placement(
                 resource, payload, target_address
             )
         else:

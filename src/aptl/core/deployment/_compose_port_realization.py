@@ -138,7 +138,7 @@ def write_port_override(
     caller adds no override file and the checked-in compose stack is untouched.
     """
 
-    # Only an image-backed node becomes a Compose service. An image-free node
+    # Only an image-backed node becomes a Compose service. A base-container node
     # publishes its ports through its own ``docker run -p`` in the generic
     # materializer, and a node with no image is not a Compose service at all;
     # emitting a ports-only service with no image makes ``docker compose config``

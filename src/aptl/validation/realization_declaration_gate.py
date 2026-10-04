@@ -1,4 +1,7 @@
-"""Static image-free realization gate (ADR-048, #581 P7).
+"""Static realization-declaration gate (ADR-048, #581 P7).
+
+Renamed from ``imagefree_gate`` by issue #1193: the gate checks that every
+node's realization is declared, not that nodes avoid container images.
 
 Asserts that a deployment realization is fully declared: every OS-bearing node
 resolves either through the generic materializer (declared `runtime:`) or
@@ -23,7 +26,7 @@ from aptl.core.deployment.realization import (
 )
 
 
-def image_free_violations(realization: DeploymentRealizationSpec) -> list[str]:
+def realization_declaration_violations(realization: DeploymentRealizationSpec) -> list[str]:
     """Return one message per realization-contract violation, empty when clean."""
 
     violations: list[str] = []
@@ -91,19 +94,19 @@ def _runtime_coherence_violations(node: DeploymentNodeRealization) -> list[str]:
     return []
 
 
-def assert_image_free(realization: DeploymentRealizationSpec) -> None:
-    """Raise ``ImageFreeGateError`` when the realization violates the contract."""
+def assert_realization_declared(realization: DeploymentRealizationSpec) -> None:
+    """Raise ``RealizationDeclarationGateError`` when the realization violates the contract."""
 
-    violations = image_free_violations(realization)
+    violations = realization_declaration_violations(realization)
     if violations:
-        raise ImageFreeGateError(violations)
+        raise RealizationDeclarationGateError(violations)
 
 
-class ImageFreeGateError(AssertionError):
-    """Raised when a realization is not a clean image-free realization."""
+class RealizationDeclarationGateError(AssertionError):
+    """Raised when a realization leaves a node's realization undeclared."""
 
     def __init__(self, violations: list[str]) -> None:
         self.violations = list(violations)
         super().__init__(
-            "image-free gate failed:\n  - " + "\n  - ".join(self.violations)
+            "realization declaration gate failed:\n  - " + "\n  - ".join(self.violations)
         )

@@ -546,9 +546,10 @@ jobs:
     # Advisory image scan per locally-built Dockerfile. Matrix is bounded
     # to images defined in `web/` and `containers/`; upstream-image-only
     # services (wazuh/, misp/, etc.) are out of scope, as are TechVault's
-    # image-free nodes (dns, fileshare, kali, victim, webapp, workstation)
-    # (issue #581) — they realize onto the generic base substrate from the
-    # SDL, with no product Dockerfile of their own to scan. ADR-026 calls
+    # base-container-materialized nodes (dns, fileshare, kali, victim,
+    # webapp, workstation) (issues #581, #1193) — they start from the generic
+    # base image and apply their SDL-declared state, with no product
+    # Dockerfile of their own to scan. ADR-026 calls
     # out the cost of one-image-per-job. These advisory builds intentionally
     # avoid buildx GHA layer cache because expired cache blob URLs can fail
     # the job before Trivy runs.

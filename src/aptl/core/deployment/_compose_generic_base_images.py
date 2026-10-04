@@ -1,4 +1,4 @@
-"""Building the generic base images an image-free node is realized onto.
+"""Building the generic base images a base-container-materialized node starts from.
 
 ADR-048 realizes a node onto a generic base-OS container, never an appliance
 image. The service-manager base images are built from Dockerfiles this

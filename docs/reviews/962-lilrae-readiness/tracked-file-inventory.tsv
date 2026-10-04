@@ -889,7 +889,7 @@ src/aptl/backends/raes_evaluator.py	core-candidate	Migrate only after public-imp
 src/aptl/backends/raes_evidence.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_evidence_acquisition.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_execution_helpers.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/backends/raes_image_free_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/backends/raes_literal_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/backends/raes_manifest.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/backends/raes_materializer.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1025,7 +1025,7 @@ src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate 
 src/aptl/core/deployment/_compose_direct_network.py	backend-substrate	Post-baseline direct network ownership mechanism; retain with deployment authority
 src/aptl/core/deployment/_compose_generic_base_images.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
-src/aptl/core/deployment/_compose_image_free_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/deployment/_compose_base_container_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_lifecycle.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_mixed_realization.py	backend-substrate	Post-baseline mixed-realization compatibility mechanism; retire only after declared parity
@@ -1254,7 +1254,7 @@ src/aptl/validation/_live_gate_telemetry.py	split-verification	Keep generic conf
 src/aptl/validation/_live_gate_variation.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/_scenario_verification_contract.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/curated_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
-src/aptl/validation/imagefree_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
+src/aptl/validation/realization_declaration_gate.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/mcp_protocol.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_live_proof.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
 src/aptl/validation/participant_mcp_smoke.py	split-verification	Keep generic conformance/verification interface; externalize TechVault/research qualification
@@ -1475,8 +1475,8 @@ tests/test_host_mcp_boundary.py	backend-owned-runtime	Constrain the temporary pl
 tests/test_host_ports.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_hosted_seat_helper.py	tests-follow-owner	Retain hosted provisioning regression coverage
 tests/test_hostenv.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_imagefree_admission_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
-tests/test_imagefree_gate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_base_container_admission_integration.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_realization_declaration_gate_contract.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_in_process_agents.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_kali_capture_compose.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_kali_capture_writer.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
@@ -1876,3 +1876,5 @@ src/aptl/cli/seat_inputs.py	optional-delivery	Keep seat CLI input validation wit
 docs/architecture/issue-1194-shipped-seat-network-preflight.md	architecture-history	Preserve shipped seat network investigation scope and runtime ownership decisions
 docs/reviews/1194-seat-network-investigation.md	architecture-history	Preserve matched seat network evidence and documented historical limits
 tests/test_compose_network_readback.py	tests-follow-owner	Retain declared network endpoint observation regressions with the deployment backend
+docs/architecture/issue-1193-base-container-terminology-preflight.md	architecture-history	Preserve base-container terminology decision and contract inventory
+docs/components/node-realization.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs

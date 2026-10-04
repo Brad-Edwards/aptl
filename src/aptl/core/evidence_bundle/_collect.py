@@ -11,6 +11,7 @@ artifacts sharing a bundle path are dropped and disclosed.
 from __future__ import annotations
 
 import json
+from importlib import metadata
 from pathlib import Path
 
 from raes_contracts.contracts import ExperimentEvidenceRecordModel
@@ -34,7 +35,7 @@ from aptl.utils import pathsafe
 _MEDIA_JSON = "application/json"
 _MEDIA_OCTET = "application/octet-stream"
 _EVIDENCE_LEDGER_DIR = "evidence/records"
-_TRANSCRIPT_REGISTRATION = "aptl.collector.redteam-session-transcript"
+_PAYLOAD_VALIDATOR_GROUP = "aptl.evidence_payload"
 
 # Known backend-evidence roots: (run-relative source, bundle path, role,
 # contract id, whether absence is a recorded limitation).
@@ -274,8 +275,8 @@ def _collect_blob(
         )
         return
 
-    transcript_pin = _pinned_transcript_record(run_dir, record, limits)
-    if transcript_pin is None:
+    registration_id = _pinned_registration(run_dir, record, limits)
+    if not registration_id:
         limitations.append(
             ClosureLimitation(
                 codes.CAPTURE_PLAN_UNAVAILABLE,
@@ -283,25 +284,22 @@ def _collect_blob(
                 record.capture_spec_ref.ref_id,
             )
         )
-    if transcript_pin:
-        try:
-            from aptl_techvault.evidence.techvault_transcript import (
-                validate_retained_transcript,
-            )
-
-            _, _, body = read_source(
-                run_dir, blob_uri, max_bytes=limits.max_member_bytes
-            )
-            validate_retained_transcript(json.loads(body))
-        except (SourceMissing, SourceRejected, ValueError):
-            limitations.append(
-                ClosureLimitation(
-                    codes.INVALID_TRANSCRIPT,
-                    "pinned transcript fails retained payload validation",
-                    blob_uri,
+    else:
+        validators = [
+            entry
+            for entry in metadata.entry_points(group=_PAYLOAD_VALIDATOR_GROUP)
+            if entry.name == registration_id
+        ]
+        if validators:
+            if not _validate_adapter_blob(validators, run_dir, blob_uri, limits):
+                limitations.append(
+                    ClosureLimitation(
+                        codes.INVALID_TRANSCRIPT,
+                        "pinned adapter payload fails semantic validation",
+                        blob_uri,
+                    )
                 )
-            )
-            return
+                return
 
     entries.append(
         ClosureEntry(
@@ -319,10 +317,31 @@ def _collect_blob(
     )
 
 
-def _pinned_transcript_record(
+def _validate_adapter_blob(
+    validators: list[metadata.EntryPoint],
+    run_dir: Path,
+    blob_uri: str,
+    limits: BundleLimits,
+) -> bool:
+    """Call one installed adapter's semantic validator on bounded retained bytes."""
+    if len(validators) != 1:
+        return False
+    try:
+        validator = validators[0].load()
+        if not callable(validator):
+            return False
+        _, _, body = read_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
+        validator(json.loads(body))
+    except Exception:
+        # Installed adapter failures cannot turn qualification into success.
+        return False
+    return True
+
+
+def _pinned_registration(
     run_dir: Path, record: ExperimentEvidenceRecordModel, limits: BundleLimits
-) -> bool | None:
-    """Use the admitted capture plan, not blob self-description, for adapter identity."""
+) -> str | None:
+    """Resolve the record's registration from its admitted capture plan."""
     plan_id = record.capture_spec_ref.ref_id
     try:
         _, _, body = read_source(
@@ -343,13 +362,12 @@ def _pinned_transcript_record(
         for binding in plan["bindings"]
     ):
         return None
-    return any(
-        isinstance(binding, dict)
-        and binding.get("registration_id") == _TRANSCRIPT_REGISTRATION
-        and isinstance(binding.get("demand"), dict)
-        and binding["demand"].get("demand_id") == record.capture_requirement_ref
+    matching = [
+        binding["registration_id"]
         for binding in plan["bindings"]
-    )
+        if binding["demand"]["demand_id"] == record.capture_requirement_ref
+    ]
+    return matching[0] if len(matching) == 1 else None
 
 
 def coalesce(

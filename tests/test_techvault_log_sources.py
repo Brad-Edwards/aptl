@@ -167,6 +167,9 @@ def test_postgres_provider_rejects_missing_or_ambiguous_authored_path(sources):
     [
         "17 main 5432 online postgres\n18 other 5432 online postgres\n",
         "17 ../other 5432 online postgres\n",
+        "17 .. 5432 online postgres\n",
+        "17 -main 5432 online postgres\n",
+        ".hidden main 5432 online postgres\n",
         "17 main;echo 5432 online postgres\n",
         "17\n",
     ],

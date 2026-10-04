@@ -289,3 +289,50 @@ def test_generated_compose_uses_the_realized_membership_not_a_name_table() -> No
 
     assert service["profiles"] == ["enterprise"]
     assert service["labels"]["aptl.node.address"] == "provision.node.thehive"
+
+
+def test_deployment_attachments_carry_the_admitted_network_cidr() -> None:
+    """Post-start providers read the declared CIDR, not a copied constant."""
+    from aptl.backends.raes_realization_model import (
+        AptlRealization,
+        NetworkRealization,
+        NodeRealization,
+    )
+
+    node = NodeRealization(
+        address="provision.node.db",
+        name="db",
+        aliases=(),
+        profiles=(),
+        backend_services=("db",),
+        container_name="aptl-db",
+        services=(),
+        networks=("internal-net", "undeclared-net"),
+        static_addresses=("172.20.2.11",),
+        static_address_assignments=(("internal-net", "172.20.2.11"),),
+    )
+    realization = AptlRealization(
+        profiles=frozenset(),
+        nodes=(node,),
+        networks=(
+            NetworkRealization(
+                address="provision.network.internal-net",
+                name="internal-net",
+                cidr="172.20.2.0/24",
+                gateway="172.20.2.1",
+                internal=True,
+            ),
+        ),
+        placements=(),
+        diagnostics=(),
+    )
+
+    (deployed,) = realization.deployment_spec([]).nodes
+
+    assert [
+        (item.network, item.ipv4_address, item.cidr)
+        for item in deployed.network_attachments
+    ] == [
+        ("internal-net", "172.20.2.11", "172.20.2.0/24"),
+        ("undeclared-net", None, None),
+    ]

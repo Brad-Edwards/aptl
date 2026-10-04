@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -80,6 +80,8 @@ class RunRecordInputs:
     detection_content_digest: str
     tool_versions: dict[str, str]
     evidence_references: list[dict[str, str]]
+    # Value-free choices the scenario adapter made where the pack is open.
+    scenario_runtime_selections: list[dict[str, str]] = field(default_factory=list)
 
 
 def runtime_snapshot_record_payload(snapshot: RuntimeSnapshot) -> dict[str, Any]:
@@ -148,6 +150,7 @@ def build_reproducibility_record(inputs: RunRecordInputs) -> dict[str, Any]:
         "backend_evidence": {
             "selected_profiles": inputs.selected_profiles,
             "pack_interaction": inputs.pack_interaction_evidence,
+            "scenario_runtime_selections": inputs.scenario_runtime_selections,
             "range_snapshot": inputs.range_snapshot_dict,
             "config_digests": inputs.config_digests,
             "container_image_digests": inputs.container_image_digests,

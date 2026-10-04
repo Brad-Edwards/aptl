@@ -246,15 +246,17 @@ def _sqli_result(
         _sqli_projection("suricata", trigger, suricata_event),
         _sqli_projection("wazuh", trigger, wazuh_event),
     )
-    chunks = tuple(
-        json.dumps(row, sort_keys=True, separators=(",", ":")).encode() + b"\n"
-        for row in rows
-    )
+    document = {
+        "schema_version": "aptl-techvault-sqli-correlation/v1",
+        "records": list(rows),
+    }
     return SourceResult(
         status=CollectorStatus.OK,
         records=list(rows),
-        chunks=chunks,
-        media_type="application/x-ndjson",
+        chunks=(
+            json.dumps(document, sort_keys=True, separators=(",", ":")).encode(),
+        ),
+        media_type="application/json",
         source_min_time=str(suricata_event["timestamp"]),
         source_max_time=str(wazuh_event["timestamp"]),
         observer_effect="one fixed POST /login containing UNION SELECT",

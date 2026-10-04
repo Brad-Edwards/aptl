@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import getpass
 import json
-import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -12,6 +11,7 @@ import typer
 from pydantic import ValidationError
 
 from aptl.appliance.seat.context import StartSeatOptions
+from aptl.appliance.seat.maintenance import rescue_seat_overlay
 from aptl.appliance.seat.access import SeatAccessEnrollment, ensure_transport_identity
 from aptl.appliance.seat.errors import SeatLauncherError
 from aptl.appliance.seat.retained_image import cache_for_seat
@@ -39,10 +39,17 @@ from aptl.appliance.seat.lifecycle import (
     stop_seat,
 )
 from aptl.appliance.seat.persistence import load_seat_record
-from aptl.appliance.seat.paths import default_seat_root
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.profiles import WorkbenchConfigurationError
 from aptl.cli._common import resolve_optional_config_for_cli
+from aptl.cli.seat_inputs import (
+    _current_desktop_mode,
+    _default_appliance_cache,
+    _parse_mappings,
+    _resolved_seat_root,
+    _selected_source,
+    _sudo_password_for_load,
+)
 
 app = typer.Typer(help="Operate one disposable appliance seat on a physical host.")
 
@@ -64,65 +71,6 @@ def _fail(exc: SeatLauncherError) -> None:
     raise typer.Exit(code=2) from exc
 
 
-def _parse_mappings(values: list[str] | None) -> tuple[BoundaryEndpoint, ...] | None:
-    """Parse repeated audience,protocol,outer,port,guest,port mappings."""
-
-    if not values:
-        return None
-    mappings: list[BoundaryEndpoint] = []
-    try:
-        for value in values:
-            parts = value.split(",")
-            if len(parts) != 6:
-                raise ValueError("mapping requires six comma-separated fields")
-            audience, protocol, address, port, guest_address, guest_port = parts
-            mappings.append(
-                BoundaryEndpoint(
-                    audience=audience,
-                    protocol=protocol,
-                    address=address,
-                    port=int(port),
-                    guest_address=guest_address,
-                    guest_port=int(guest_port),
-                )
-            )
-    except (TypeError, ValueError, ValidationError) as exc:
-        raise SeatLauncherError(
-            "invalid-mapping",
-            "mapping must be audience,protocol,outer-address,outer-port,guest-address,guest-port",
-        ) from exc
-    return tuple(mappings)
-
-
-def _resolved_seat_root(seat_root: Path | None) -> Path:
-    """Resolve an explicit root or the current user's private default."""
-
-    return (seat_root if seat_root is not None else default_seat_root()).resolve()
-
-
-def _default_appliance_cache() -> Path:
-    """Return the current user's XDG-compatible appliance cache."""
-
-    configured = os.environ.get("XDG_CACHE_HOME")
-    if configured:
-        candidate = Path(configured)
-        if candidate.is_absolute():
-            return candidate / "aptl" / "appliance"
-    return Path.home() / ".cache" / "aptl" / "appliance"
-
-
-def _selected_source(image: str | None, seat_root: Path) -> str:
-    """Honor explicit/configured sources and the existing seat before defaults."""
-
-    config = resolve_optional_config_for_cli(Path.cwd())
-    if image is not None:
-        return image
-    if config.seat.image is not None:
-        return config.seat.image
-    record = load_seat_record(seat_root)
-    return record.image_reference if record is not None else DEFAULT_SEAT_IMAGE
-
-
 def _confirm(message: str, *, yes: bool) -> None:
     """Keep default-no consent on stderr, including non-interactive refusal."""
 
@@ -136,7 +84,7 @@ def _prepare_seat_image(
 ) -> str:
     """Ask before any cold acquisition; verified warm starts remain offline."""
 
-    reference = _selected_source(image, seat_root)
+    reference = _selected_source(image, seat_root, DEFAULT_SEAT_IMAGE)
     try:
         cache = cache_for_seat(seat_root, reference, cache)
         cold = not load_selection(cache, parse_seat_image_reference(reference))
@@ -163,6 +111,7 @@ def stage(
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
     mapping: list[str] | None = typer.Option(None, "--mapping"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
 ) -> None:
     """Resolve the seat image and persist a staged seat record."""
 
@@ -179,6 +128,7 @@ def stage(
             image_reference=image,
             image_cache_dir=image_cache,
             mappings=mappings,
+            desktop_mode=desktop_mode,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -192,6 +142,7 @@ def _access_options(
     access_identity_file: Path | None = None, access_project_dir: Path | None = None,
     access_profile: str = "red", access_client: list[str] | None = None,
     access_hours: int = 8,
+    desktop_mode: str | None = None, sudo_password: str | None = None,
 ) -> StartSeatOptions:
     """Enroll the same automatic or explicit caller for start and recovery."""
 
@@ -248,6 +199,7 @@ def _access_options(
         mappings=mappings, access_enrollment=enrollment,
         access_identity_file=access_identity_file, access_project_dir=access_project_dir,
         access_clients=clients, check_for_image_update=False,
+        desktop_mode=desktop_mode, sudo_password=sudo_password,
     )
 
 
@@ -268,11 +220,23 @@ def start(
     access_client: list[str] | None = typer.Option(None, "--access-client"),
     access_hours: int = typer.Option(8, "--access-hours", min=1, max=24),
     no_check: bool = typer.Option(False, "--no-check"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
+    sudo_password_file: Path | None = typer.Option(None, "--sudo-password-file"),
 ) -> None:
     """Start the seat VM and validate host exposure."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
+        existing = load_seat_record(seat_root)
+        existing_mode = _current_desktop_mode(seat_root) if existing is not None else None
+        effective_mode = desktop_mode or existing_mode
+        first_load = (
+            existing is None
+            or not (seat_root / existing.overlay_path).exists()
+        )
+        sudo_password = _sudo_password_for_load(
+            effective_mode, sudo_password_file, first_load=first_load
+        )
         image_cache = image_cache or _default_appliance_cache()
         mappings = _parse_mappings(mapping)
         image = _prepare_seat_image(
@@ -289,6 +253,7 @@ def start(
                 access_identity_file=access_identity_file,
                 access_project_dir=access_project_dir, access_profile=access_profile,
                 access_client=access_client, access_hours=access_hours,
+                desktop_mode=desktop_mode, sudo_password=sudo_password,
             ),
         )
     except WorkbenchConfigurationError as exc:
@@ -312,6 +277,19 @@ def stop(seat_root: Path | None = typer.Option(None, "--seat-root")) -> None:
     _emit({"stopped": True, "seat": record.model_dump(mode="json")})
 
 
+@app.command("rescue")
+def rescue(seat_root: Path = typer.Option(..., "--seat-root")) -> None:
+    """Open a stopped seat overlay for host-admin guest-root maintenance."""
+
+    try:
+        rescue_seat_overlay(_resolved_seat_root(seat_root))
+    except (OSError, SeatLauncherError) as exc:
+        _fail(exc if isinstance(exc, SeatLauncherError) else SeatLauncherError(
+            "failed-rescue", "seat rescue did not complete"
+        ))
+    _emit({"rescued": True})
+
+
 @app.command("reset")
 def reset(
     seat_root: Path | None = typer.Option(None, "--seat-root"),
@@ -320,6 +298,7 @@ def reset(
     public_key: Path | None = typer.Option(None, "--public-key"),
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
 ) -> None:
     """Destroy overlay state and restage the seat."""
 
@@ -334,6 +313,7 @@ def reset(
             seat_id=seat_id,
             image_reference=image,
             image_cache_dir=image_cache,
+            desktop_mode=desktop_mode,
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -348,11 +328,18 @@ def recover(
     public_key: Path | None = typer.Option(None, "--public-key"),
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
+    sudo_password_file: Path | None = typer.Option(None, "--sudo-password-file"),
 ) -> None:
     """Instructor recovery: reset and start the seat."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
+        sudo_password = _sudo_password_for_load(
+            desktop_mode or _current_desktop_mode(seat_root),
+            sudo_password_file,
+            first_load=True,
+        )
         image_cache = image_cache or _default_appliance_cache()
         image = _prepare_seat_image(
             image, seat_root, image_cache, yes=yes, public_key=public_key
@@ -362,7 +349,10 @@ def recover(
             seat_id=seat_id,
             image_reference=image,
             image_cache_dir=image_cache,
-            options=_access_options(seat_root, seat_id, image, image_cache),
+            options=_access_options(
+                seat_root, seat_id, image, image_cache,
+                desktop_mode=desktop_mode, sudo_password=sudo_password,
+            ),
         )
     except SeatLauncherError as exc:
         _fail(exc)
@@ -428,13 +418,14 @@ def update_image(
     image_cache: Path | None = typer.Option(None, "--image-cache"),
     yes: bool = typer.Option(False, "--yes", "-y"),
     to: str | None = typer.Option(None, "--to"),
+    desktop_mode: str | None = typer.Option(None, "--desktop-mode"),
 ) -> None:
     """Verify a replacement, reset the stopped seat, and retire its old image."""
 
     try:
         seat_root = _resolved_seat_root(seat_root)
         image_cache = image_cache or _default_appliance_cache()
-        image = _selected_source(image, seat_root)
+        image = _selected_source(image, seat_root, DEFAULT_SEAT_IMAGE)
         _confirm(
             f"Download/verify {image}, reset this stopped seat and its access, "
             "and delete the superseded cached image?", yes=yes,
@@ -445,6 +436,7 @@ def update_image(
         selection, removed = update_seat_image(
             seat_root, image_reference=image, image_cache_dir=image_cache,
             to_digest=to,
+            desktop_mode=desktop_mode,
         )
     except SeatImageError as exc:
         _fail(SeatLauncherError("image-unavailable", str(exc)))

@@ -19,6 +19,7 @@ from raes import SDLError, instantiate_scenario, parse_sdl_file
 from raes.module_registry import LOCKFILE_NAME
 from raes.scenario import Scenario
 
+from aptl.backends import raes_participant_delivery as participant_delivery
 from aptl.backends.raes import (
     RuntimeTargetOptions,
     create_aptl_runtime_target,
@@ -284,6 +285,9 @@ def _static_provisioning_realization(
             artifact_availability=availability,
             capture_plan=capture_plan,
             capture_selection=capture_selection,
+            participant_inject_delivery=participant_delivery.has_participant_inject_deliveries(
+                static_scenario
+            ),
         ),
     )
     execution_plan = plan_aptl_scenario(

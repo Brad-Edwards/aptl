@@ -10,8 +10,12 @@ specifications, exact logical-time windows, and four delivery-evidence
 requirements. The scenario declares Claude Code through the realization
 profile `participant-implementation-manifest:claude-code`.
 
-The exact admitted pack set digest is
+The diagnostic run admitted the earlier pack set digest
 `sha256:94dc0236f3e2d4c62db782040acd73b1739ba0bf12adec580289a916fbfcce5a`.
+The released 0.1.1 study pack has set digest
+`sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357`.
+Run `run_20261004T012853Z` admitted that released identity through the normal
+lab lifecycle.
 The study pack remains `built`; that lifecycle state makes no claim that an
 attempt produced golden proof.
 
@@ -41,13 +45,43 @@ window, control transition, or evidence binding is missing or unsupported.
 
 ## Reproduce the run
 
-1. Install builds containing the env pack, the matching APTL adapter, and a
-   RAES runtime that accepts participant-inject delivery addresses as temporal
-   subjects. Record their distribution versions and source revisions.
+As of October 3, 2026, the upstream release candidates are available on PyPI:
+[RAES 6.0.1](https://pypi.org/project/raes/6.0.1/) and
+[env-packs 6.2.0](https://pypi.org/project/raes-env-packs/6.2.0/).
+The latter requires RAES 6.0.1 and includes the TechVault study correction from
+[env-packs PR #402](https://github.com/OpenRAE/env-packs/pull/402).
+[RAES #1401](https://github.com/OpenRAE/rae/issues/1401) is closed.
+The release-availability blocker described in the September 28 progress
+record has therefore cleared.
+
+This branch pins RAES 6.0.1 and env-packs 6.2.0 and binds the regenerated 0.1.1
+pack identities. The October 4 run below verifies the installed participant
+and clean lab lifecycle. It remains an unsealed lab-start archive because the
+lab-start path does not own an admitted experiment terminal context; that
+limitation is preserved in the exported bundle.
+
+Parallel delivery work also affects reproducibility:
+[APTL #1186](https://github.com/Brad-Edwards/aptl/issues/1186) covers persistent
+guest sudo provisioning and the optional host tailnet relay;
+[APTL #1194](https://github.com/Brad-Edwards/aptl/issues/1194) investigates the
+shipped seat's need for manual Docker network correction. A future seat-based
+qualification must record the selected image digest, embedded software
+revision, Docker daemon/context, and observed network attachments. A source
+fix alone does not prove that an existing seat contains it. Preserve occupied
+seats and their sessions; the issue 601 status update does not alter either
+parallel branch, worktree, or live seat.
+
+1. Install pinned, published builds containing the corrected env pack, the
+   matching APTL adapter, and a RAES runtime that accepts participant-inject
+   delivery addresses as temporal subjects. Record their distribution versions,
+   lockfile identity, and qualified pack digest.
 2. Sign into the host Claude Code CLI using the participant operator's own
    account. Provider authentication remains in that CLI's host session and is
    not copied into SDL, `aptl.json`, the generated MCP files, or the run
-   archive.
+   archive. Set `experiment.participant_models.claude` to an immutable model
+   identifier; Vertex identifiers may use the `@YYYYMMDD` suffix. When the
+   authenticated CLI uses Vertex, provide its region through the host's
+   `CLOUD_ML_REGION` environment variable.
 3. Set `scenario.identity` to `techvault-participant-study` and
    `scenario.source` to `env-pack` in `aptl.json`. Keep the existing deployment
    and container selection.
@@ -66,9 +100,55 @@ window, control transition, or evidence binding is missing or unsupported.
    when the attempt reaches the applicable terminal state. Report absent seals,
    capture loss, participant deviations, and unsupported conclusions as such.
 
+A clean completion record requires a successful volume-reset stop, the four
+delivery records, the native evidence and control/crossing records, the
+terminal run provenance record, and a verified sealed bundle. The start result
+alone does not establish the terminal archive.
+
 ## Evidence and claim limits
 
+### Published-component lifecycle run
+
+Run `run_20261004T012853Z` used committed branch revision `3d0e8c8f`, the
+published RAES 6.0.1 and env-packs 6.2.0
+distributions, study pack 0.1.1 at set digest
+`sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357`,
+Docker Engine 29.5.0, Docker Compose 5.1.3, and the authenticated host Claude
+Code CLI with model `claude-sonnet-5`. The ordinary
+`aptl lab start --clean --yes --scenario techvault-participant-study` command
+returned `Lab is ready`; the subsequent `aptl lab stop -v -y` returned
+`Lab stopped successfully` and removed the range.
+
+The retained archive establishes:
+
+- four delivered injects in SDL order at logical ticks 1, 3, 5, and 7;
+- five required native evidence records, four participant-delivery records,
+  and a transcript-finalization record;
+- eight accepted participant-control occurrences and sixteen API-423 crossing
+  occurrences;
+- a terminal participant-study clock coordinate of tick 7, microstep 0;
+- distinct red and blue role-scoped MCP configurations with continuity inside
+  each participant's start/stop pair; and
+- a successful clean start and volume-removing stop without manual service or
+  network repair.
+
+The exported 25-member evidence bundle verified with root identity
+`sha256:82929cd1d895de3ef05d06254f96faf5223cf68436ccdea0114f0add9a1c674f`.
+It reports two limitations: `provenance/run-provenance.json` is absent and no
+verified archive seal is available. The bundle is therefore an independently
+integrity-verified, unsealed engineering artifact. It does not satisfy the
+terminal experiment-seal condition above and does not establish participant
+correctness, detector quality, or a scientific outcome.
+
 ### Four-inject qualification run
+
+The later `run_20260927T190733Z` delivered four injects, nine evidence records,
+eight control occurrences, and sixteen crossing occurrences through a local
+engineering setup. That setup used temporary dependency and configuration
+changes plus manual Wazuh baseline recovery. Its 23-member exported bundle
+verified byte integrity but was unsealed and lacked
+`provenance/run-provenance.json`. It is diagnostic evidence only and does not
+qualify issue 601 against published contracts.
 
 Run `run_20260925T153251Z` completed through the ordinary `aptl lab start`
 path with Claude Code 2.1.282, the authenticated host CLI, and the immutable
@@ -108,15 +188,15 @@ run therefore makes no successful terminal-transcript or archival-seal claim.
 
 ### Research and product coordination
 
-This run supplies the APTL-side engineering evidence requested by
+The October 4 run supplies the APTL-side engineering evidence requested by
 [APTL #558](https://github.com/Brad-Edwards/aptl/issues/558). Its run identity,
 pack digest, backend and participant realization, ordered delivery evidence,
 native evaluator evidence, topology/run manifest, redaction behavior, and
-limitations are recorded here and under `runs/run_20260925T153251Z/` in the
+limitations are recorded here and under `runs/run_20261004T012853Z/` in the
 executing workspace. The run also extends the real participant action surface
-proved by [APTL #554](https://github.com/Brad-Edwards/aptl/issues/554). The
-local run directory remains an unsealed qualification artifact and is not a
-published research bundle.
+proved by [APTL #554](https://github.com/Brad-Edwards/aptl/issues/554). The local
+run directory remains an unsealed engineering artifact and is not a published
+research bundle.
 
 [Hub #15](https://github.com/OpenRAE/hub/issues/15) defines APTL as the advanced
 TechVault experience on the LilRAE personal/local backend. The pack identity,

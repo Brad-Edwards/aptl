@@ -147,7 +147,7 @@ def test_host_access_waits_a_bounded_time_for_the_guest(tmp_path: Path) -> None:
     assert 0 < timeout <= options.readiness_timeout_seconds
 
 
-def _resolved_image(tmp_path: Path, policy=None):
+def _resolved_image(tmp_path: Path, policy=None, *, desktop_modes: bool = False):
     """Build a resolved seat image with a real disk file on disk."""
 
     from aptl.appliance.seat.image import SeatImageReference
@@ -164,7 +164,9 @@ def _resolved_image(tmp_path: Path, policy=None):
     disk.write_bytes(b"qcow2")
     config = SeatImageConfig.model_validate(
         {
-            "schema_version": "aptl.seat-image/v1",
+            "schema_version": "aptl.seat-image/v2" if desktop_modes else "aptl.seat-image/v1",
+            **({"desktop_privilege_contract": "aptl.desktop-privileges/v1"}
+               if desktop_modes else {}),
             "resources": {
                 "architecture": "x86_64",
                 "vcpus": 8,
@@ -372,6 +374,47 @@ def test_stage_persists_seat_record(tmp_path: Path) -> None:
     # The launcher materializes the exact policy bytes the gate binds to.
     assert (seat_root / "launch" / "boundary-policy.json").exists()
     assert load_seat_record(seat_root) == record
+
+
+def test_new_image_requires_mode_before_persisting_any_seat_state(tmp_path: Path) -> None:
+    seat_root = tmp_path / "seat"
+    image = _resolved_image(tmp_path, desktop_modes=True)
+    with patch("aptl.appliance.seat.lifecycle._load_seat_image", return_value=image):
+        with pytest.raises(SeatLauncherError) as exc:
+            stage_seat(
+                seat_root, seat_id="seat-01",
+                image_reference="ghcr.io/owner/seat:latest",
+                image_cache_dir=tmp_path / "image-cache",
+            )
+    assert exc.value.code == "invalid-desktop-mode"
+    assert not (seat_root / "seat-state.json").exists()
+    assert not (seat_root / "launch/appliance-launch.json").exists()
+
+
+def test_event_mode_is_bound_to_immutable_launch_descriptor(tmp_path: Path) -> None:
+    from aptl.appliance.seat.launch_descriptor import SeatLaunchDescriptor
+    from aptl.utils.strict_json import model_validate_json_strict
+
+    seat_root = tmp_path / "seat"
+    image = _resolved_image(tmp_path, desktop_modes=True)
+    with (
+        patch("aptl.appliance.seat.lifecycle._load_seat_image", return_value=image),
+        patch("aptl.appliance.seat.lifecycle.require_host_prerequisites"),
+        patch("aptl.appliance.seat.lifecycle.retain_image"),
+    ):
+        record = stage_seat(
+            seat_root, seat_id="seat-01",
+            image_reference="ghcr.io/owner/seat:latest",
+            image_cache_dir=tmp_path / "image-cache",
+            desktop_mode="event",
+        )
+    descriptor = model_validate_json_strict(
+        SeatLaunchDescriptor, (seat_root / "launch/appliance-launch.json").read_bytes()
+    )
+    assert descriptor.schema_version == "aptl.appliance-launch/v3"
+    assert descriptor.desktop_mode == "event"
+    assert record.launch_descriptor_digest.startswith("sha256:")
+    assert status_seat(seat_root).desktop_mode == "event"
 
 
 def test_stage_persists_explicit_outer_mapping(tmp_path: Path) -> None:

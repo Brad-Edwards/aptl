@@ -78,7 +78,7 @@ _EVALUATION_SCENARIO = dedent(
         loss_disclosure: required
     objectives:
       validate:
-        entity: blue
+        owner: blue
         success: {assertions: [health]}
     workflows:
       response:

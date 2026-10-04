@@ -50,8 +50,10 @@ def test_startup_catalog_contains_only_acquired_pack_selectors():
 
     catalog = load_scenario_catalog(PROJECT_ROOT)
 
-    assert [entry.id for entry in catalog.scenarios] == ["techvault"]
-    assert catalog.pack_identity.pack_id == "techvault"
+    assert [entry.id for entry in catalog.scenarios] == [
+        "techvault-participant-study"
+    ]
+    assert catalog.pack_identity.pack_id == "techvault-participant-study"
     assert not hasattr(catalog.scenarios[0], "path")
 
 

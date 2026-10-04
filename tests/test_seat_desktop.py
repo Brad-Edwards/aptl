@@ -148,8 +148,17 @@ def test_guacamole_connection_uses_overlay_password_without_web_login() -> None:
     assert "host.docker.internal" in sql
     assert "3389" in sql
     assert "participant" in sql
-    assert "a" * 64 in sql
+    assert ("a" * 64).encode().hex() in sql
     assert "guacadmin" not in sql
+
+
+def test_guacamole_password_is_encoded_as_sql_data() -> None:
+    desktop = _desktop_module()
+    password = "quote'\\backslash ☃"
+    sql = desktop.connection_sql(password)
+    assert password not in sql
+    assert password.encode().hex() in sql
+    assert "convert_from(decode(" in sql
 
 
 def test_gateway_strips_client_identity_before_injecting_seat_identity() -> None:
@@ -191,7 +200,7 @@ def test_desktop_prepare_creates_private_stable_overlay_credentials(
         second = desktop.prepare()
 
     assert first == second
-    assert first["rdp"] in (desktop.RUNTIME / "initdb/002-seat.sql").read_text()
+    assert first["rdp"].encode().hex() in (desktop.RUNTIME / "initdb/002-seat.sql").read_text()
     assert first["rdp"] not in (source / "guac-schema.sql").read_text()
     assert json.loads((desktop.RUNTIME / "credentials.json").read_text()) == first
     assert stat.S_IMODE((desktop.RUNTIME / "credentials.json").stat().st_mode) == 0o600

@@ -12,6 +12,7 @@ from aptl.backends.scenario_startup import (
     ENTRY_POINT_GROUP,
     ScenarioStartupProviderError,
     ScenarioStartupPlan,
+    StartupHookContext,
     _safe_relative_script,
     observe_scenario_runtime_concerns,
     run_scenario_runtime,
@@ -62,7 +63,7 @@ def _bundle(*, digest: str = TECHVAULT_PACK_SET_DIGEST) -> ScenarioBundle:
         root=pack_root,
         sdl_path=pack_root / "sdl/techvault.sdl.yaml",
         source_kind=ScenarioSourceKind.ENV_PACK,
-        pack_identity=PackIdentity("techvault", "0.1.0", digest),
+        pack_identity=PackIdentity("techvault", "0.1.1", digest),
     )
 
 
@@ -106,7 +107,7 @@ def _startup_spec(
         nodes=nodes,
         networks=(),
         images=images,
-        pack_identity=PackIdentity("techvault", "0.1.0", digest),
+        pack_identity=PackIdentity("techvault", "0.1.1", digest),
     )
 
 

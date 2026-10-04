@@ -29,7 +29,7 @@ from aptl.utils.pathsafe import PathContainmentError
 def _capture_selection(runtime_adapter: object | None = None):
     selection = resolve_scenario_capture(
         ScenarioCaptureContext(
-            PackIdentity("techvault", "0.1.0", TECHVAULT_PACK_SET_DIGEST),
+            PackIdentity("techvault", "0.1.1", TECHVAULT_PACK_SET_DIGEST),
             BackendIdentity("aptl", "0.1.0", "full-remote-control-plane"),
         )
     )
@@ -43,13 +43,7 @@ def _capture_selection(runtime_adapter: object | None = None):
 
 
 def _binding(registration_id: str, requirement_id: str) -> CaptureBinding:
-    media_type = (
-        "text/plain"
-        if registration_id.endswith(("rule-readiness", "session-transcript"))
-        else "application/x-ndjson"
-        if registration_id.endswith("wazuh-sqli")
-        else "application/json"
-    )
+    media_type = "application/json"
     registration = next(
         (
             item

@@ -175,7 +175,7 @@ def _configure_network(
     if not _ok(
         backend,
         container,
-        ["pg_conftool", version, cluster, "set", "listen_addresses", "0.0.0.0"],
+        _psql("ALTER SYSTEM SET listen_addresses = '0.0.0.0'"),
     ):
         return False
     path = f"/etc/postgresql/{version}/{cluster}/pg_hba.conf"

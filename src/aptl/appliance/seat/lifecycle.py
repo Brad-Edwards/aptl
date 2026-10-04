@@ -43,6 +43,7 @@ from aptl.appliance.seat.launch_descriptor import (
     SeatLaunchDescriptor,
     canonical_launch_bytes,
 )
+from aptl.utils.strict_json import model_validate_json_strict
 from aptl.appliance.seat.locking import serialized_seat_mutation
 from aptl.appliance.seat.models import SeatRecord, SeatStatusProjection
 from aptl.appliance.seat.overlay import create_seat_overlay
@@ -62,6 +63,7 @@ from aptl.appliance.seat.observation import (
 from aptl.appliance.seat.overlay_cleanup import remove_overlay_artifacts
 from aptl.appliance.seat.namespace import private_desktop
 from aptl.appliance.seat.paths import contained_path, validate_seat_id
+from aptl.appliance.seat.privileges import deliver_sudo_password, validate_sudo_password
 from aptl.appliance.seat.persistence import load_seat_record, persist_seat_record
 from aptl.appliance.seat.prereqs import require_host_prerequisites
 from aptl.appliance.seat.readiness import (
@@ -88,6 +90,8 @@ from aptl.core.appliance_boundary_inventory import (
 
 SEAT_RECORD_SCHEMA = "aptl.seat-record/v2"
 SEAT_NOT_STAGED = "seat is not staged"
+SELECT_DESKTOP_MODE = "select administrative or event desktop mode"
+UNSUPPORTED_DESKTOP_MODE = "selected image does not support desktop modes"
 ACCESS_REQUEST_NAME = "access-request.json"
 # How long a real guest may take to offer host access after boot is not
 # measured here, and the previous 120s applied only to pre-qualified
@@ -352,6 +356,7 @@ def stage_seat(
     generation: int = 1,
     replace_image: bool = False,
     prereq_overrides: dict[str, object] | None = None,
+    desktop_mode: str | None = None,
 ) -> SeatRecord:
     """Resolve the image, verify host prereqs, and publish a staged record."""
 
@@ -362,6 +367,15 @@ def stage_seat(
         image_cache_dir=image_cache_dir,
     )
     image = _load_seat_image(paths, use_retained=not replace_image)
+    if image.config.desktop_privilege_contract is not None:
+        if desktop_mode not in {"administrative", "event"}:
+            raise SeatLauncherError(
+                "invalid-desktop-mode", SELECT_DESKTOP_MODE
+            )
+    elif desktop_mode is not None:
+        raise SeatLauncherError(
+            "unsupported-desktop-mode", UNSUPPORTED_DESKTOP_MODE
+        )
     require_host_prerequisites(
         image.config.resources,
         seat_root=seat_root,
@@ -392,7 +406,8 @@ def stage_seat(
         paths.boundary_policy, rfc8785.dumps(image.policy.model_dump(mode="json"))
     )
     _write_launch_descriptor(
-        paths.launch_descriptor, image, host_observation_id=bundle.observation_id
+        paths.launch_descriptor, image, host_observation_id=bundle.observation_id,
+        desktop_mode=desktop_mode,
     )
     digest = _launch_descriptor_digest(paths.launch_descriptor)
     record = SeatRecord(
@@ -415,7 +430,8 @@ def stage_seat(
 
 
 def _write_launch_descriptor(
-    destination: Path, image: ResolvedSeatImage, *, host_observation_id: str
+    destination: Path, image: ResolvedSeatImage, *, host_observation_id: str,
+    desktop_mode: str | None = None,
 ) -> None:
     """Write the create-once launch projection for one generation."""
 
@@ -423,8 +439,13 @@ def _write_launch_descriptor(
         raise SeatLauncherError(
             "corrupt-seat-state", "launch descriptor already exists for this generation"
         )
+    supported = image.config.desktop_privilege_contract is not None
+    if supported and desktop_mode not in {"administrative", "event"}:
+        raise SeatLauncherError("invalid-desktop-mode", SELECT_DESKTOP_MODE)
+    if not supported and desktop_mode is not None:
+        raise SeatLauncherError("unsupported-desktop-mode", UNSUPPORTED_DESKTOP_MODE)
     descriptor = SeatLaunchDescriptor(
-        schema_version="aptl.appliance-launch/v2",
+        schema_version="aptl.appliance-launch/v3" if supported else "aptl.appliance-launch/v2",
         image_reference=str(image.selection.reference),
         image_digest=image.selection.digest,
         image_config_digest=image.config_digest,
@@ -434,6 +455,7 @@ def _write_launch_descriptor(
         participant_routes_digest=image.config.binding.raes_plan_digest,
         host_mcp_contract=image.policy.host_mcp_contract,
         host_observation_id=host_observation_id,
+        desktop_mode=desktop_mode,
     )
     _atomic_write(destination, canonical_launch_bytes(descriptor))
 
@@ -699,6 +721,60 @@ def _forbidden_reachability_passed(
     return passed
 
 
+def _selected_desktop_mode(
+    paths: SeatPaths, record: SeatRecord, options: StartSeatOptions,
+) -> str | None:
+    """Read the immutable mode and reject a conflicting start request."""
+
+    if paths.launch_descriptor.is_file():
+        selected = model_validate_json_strict(
+            SeatLaunchDescriptor, paths.launch_descriptor.read_bytes()
+        ).desktop_mode
+    elif record.schema_version == "aptl.seat-record/v1":
+        selected = None
+    else:
+        raise SeatLauncherError("corrupt-seat-state", "seat launch descriptor is missing")
+    if options.desktop_mode is not None and options.desktop_mode != selected:
+        raise SeatLauncherError(
+            "desktop-mode-mismatch", "reset the seat to change desktop mode"
+        )
+    if selected != "administrative" and options.sudo_password is not None:
+        raise SeatLauncherError(
+            "invalid-sudo-password", "sudo password requires administrative mode"
+        )
+    if options.sudo_password is not None:
+        validate_sudo_password(options.sudo_password)
+    return selected
+
+
+def _deliver_administrative_input(
+    mode: str | None, socket_path: Path, options: StartSeatOptions,
+    record: SeatRecord, seat_root: Path, tracked_pid: int,
+) -> None:
+    """Apply a chosen admin password through the private VM channel."""
+
+    if mode != "administrative":
+        return
+    deliver_sudo_password(
+        socket_path,
+        password=options.sudo_password,
+        instance_id=record.instance_id,
+        descriptor_digest=record.launch_descriptor_digest,
+        process_alive=lambda: read_vm_pid(seat_root) == tracked_pid,
+    )
+
+
+def _require_image_mode_contract(
+    image: ResolvedSeatImage, mode: str | None,
+) -> None:
+    """Require an exact match between signed support and launch selection."""
+
+    if (mode is not None) != (image.config.desktop_privilege_contract is not None):
+        raise SeatLauncherError(
+            "desktop-contract-mismatch", "selected image and launch mode differ"
+        )
+
+
 @serialized_seat_mutation
 def start_seat(
     seat_root: Path,
@@ -748,6 +824,7 @@ def start_seat(
             image_cache_dir=image_cache_dir,
             mappings=launch_options.mappings,
             prereq_overrides=launch_options.prereq_overrides,
+            desktop_mode=launch_options.desktop_mode,
         )
     elif (
         launch_options.mappings is not None
@@ -756,10 +833,12 @@ def start_seat(
         raise SeatLauncherError(
             "invalid-mapping", "staged seat mappings cannot be changed during start"
         )
+    selected = _selected_desktop_mode(paths, record, launch_options)
     image = _load_seat_image(
         paths,
         check=launch_options.check_for_image_update,
     )
+    _require_image_mode_contract(image, selected)
     if record.image_digest != image.selection.digest:
         # The staged generation is bound to the image it was staged from. A
         # different image is a new generation, which reset creates.
@@ -791,6 +870,11 @@ def start_seat(
             f"runtime/{seat_id}.access.sock",
             label="access socket",
         )
+        privilege_socket = contained_path(
+            paths.seat_root,
+            f"runtime/{seat_id}.privilege.sock",
+            label="privilege socket",
+        )
         challenge = publish_readiness_challenge(
             paths.launch_dir / "readiness-challenge.json",
             seat_id=record.seat_id,
@@ -807,6 +891,8 @@ def start_seat(
             readiness_socket=readiness_socket,
             access_socket=access_socket,
             include_access_channel=policy.host_mcp_contract is not None,
+            privilege_socket=privilege_socket,
+            include_privilege_channel=selected == "administrative",
             mappings=record.mappings,
         )
         private_network = private_desktop(record.mappings)
@@ -850,6 +936,10 @@ def start_seat(
             raise SeatLauncherError(
                 "failed-launch", "tracked VM exited before listener observation"
             )
+        _deliver_administrative_input(
+            selected, privilege_socket, launch_options, record,
+            seat_root, tracked_pid,
+        )
         observed = wait_for_loopback_listeners(
             record.mappings,
             probe=launch_options.listener_probe,
@@ -1004,12 +1094,36 @@ def reset_seat(
     image_reference: str,
     image_cache_dir: Path,
     replace_image: bool = False,
+    desktop_mode: str | None = None,
 ) -> SeatRecord:
     """Power off, destroy overlay state, and return to staged."""
 
     record = load_seat_record(seat_root)
     if record is None:
         raise SeatLauncherError("corrupt-seat-state", SEAT_NOT_STAGED)
+    descriptor_path = seat_root / "launch/appliance-launch.json"
+    if descriptor_path.is_file():
+        previous_mode = model_validate_json_strict(
+            SeatLaunchDescriptor, descriptor_path.read_bytes()
+        ).desktop_mode
+    elif record.schema_version == "aptl.seat-record/v1":
+        previous_mode = None
+    else:
+        raise SeatLauncherError("corrupt-seat-state", "seat launch descriptor is missing")
+    selected_mode = desktop_mode if desktop_mode is not None else previous_mode
+    if selected_mode is not None and selected_mode not in {"administrative", "event"}:
+        raise SeatLauncherError("invalid-desktop-mode", SELECT_DESKTOP_MODE)
+    if replace_image or desktop_mode is not None:
+        candidate_paths = _seat_paths(
+            seat_root, seat_id=seat_id, image_reference=image_reference,
+            image_cache_dir=image_cache_dir,
+        )
+        target_image = _load_seat_image(candidate_paths, use_retained=not replace_image)
+        supported = target_image.config.desktop_privilege_contract is not None
+        if supported and selected_mode is None:
+            raise SeatLauncherError("invalid-desktop-mode", SELECT_DESKTOP_MODE)
+        if not supported and selected_mode is not None:
+            raise SeatLauncherError("unsupported-desktop-mode", UNSUPPORTED_DESKTOP_MODE)
     invalidate_host_access(seat_root, reason="seat-reset")
     stop_vm(seat_root)
     paths = _seat_paths(
@@ -1045,6 +1159,7 @@ def reset_seat(
         mappings=record.mappings,
         generation=record.generation + 1,
         replace_image=replace_image,
+        desktop_mode=selected_mode,
     )
 
 
@@ -1064,6 +1179,7 @@ def recover_seat(
         seat_id=seat_id,
         image_reference=image_reference,
         image_cache_dir=image_cache_dir,
+        desktop_mode=options.desktop_mode if options else None,
     )
     return start_seat(
         seat_root,
@@ -1120,6 +1236,15 @@ def status_seat(seat_root: Path) -> SeatStatusProjection:
             host_observation_id="",
             diagnostics=("seat-not-staged",),
         )
+    descriptor_path = seat_root / "launch/appliance-launch.json"
+    desktop_mode = None
+    if descriptor_path.is_file():
+        try:
+            desktop_mode = model_validate_json_strict(
+                SeatLaunchDescriptor, descriptor_path.read_bytes()
+            ).desktop_mode
+        except (OSError, ValueError):
+            desktop_mode = None
     diagnostics: list[str] = []
     if record.lifecycle_state == "ready":
         if read_vm_pid(seat_root) is None:
@@ -1142,5 +1267,6 @@ def status_seat(seat_root: Path) -> SeatStatusProjection:
         image_digest=record.image_digest,
         launch_descriptor_digest=record.launch_descriptor_digest,
         host_observation_id=record.host_observation_id,
+        desktop_mode=desktop_mode,
         diagnostics=tuple(diagnostics),
     )

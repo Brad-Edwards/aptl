@@ -429,6 +429,9 @@ config/wazuh_indexer_ssl_certs/*
 # experiment evidence, including live-gate manifests. Never committed.
 /runs/
 
+# Local evidence bundle exports from `aptl runs export-bundle`.
+/exports/
+
 # Playwright MCP session cache
 .playwright-mcp/
 

@@ -673,7 +673,7 @@ outcome_interpretation_rules:
     - Runtime implementation identity is carried by downstream provenance, not SDL.
 agents:
   paper-agent:
-    entity: paper-participant
+    affiliations: [paper-participant]
     description: 'Authored participant whose bounded backend command is carried by scenario
       runtime binding content and selected by downstream participant implementation provenance.
 
@@ -759,7 +759,7 @@ behavior_specifications:
         - boundary-negative:tcp:{{ service_host:nodes.wazuh-manager.services.wazuh-api }}:{{ service_port:nodes.wazuh-manager.services.wazuh-api }}
 objectives:
   demonstrate-handoff:
-    agent: paper-agent
+    assigned_participant: paper-agent
     actions:
     - probe-customer-portal-login
     targets:

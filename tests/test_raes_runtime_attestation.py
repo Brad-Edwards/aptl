@@ -96,7 +96,7 @@ def test_study_copy_uses_same_projection_only_at_its_exact_digest(tmp_path: Path
     backend = _Backend(node.image.image_ref.rsplit("@", 1)[1])
     study = PackIdentity(
         "techvault-participant-study",
-        "0.1.0",
+        "0.1.1",
         TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST,
     )
 

@@ -1863,6 +1863,16 @@ tests/test_seat_launch_descriptor.py	tests-follow-owner	Retain VM seat regressio
 src/aptl/appliance/seat/private_vm.py	optional-delivery	Keep rootless VM network startup with the appliance owner
 src/aptl_techvault/database.py	scenario-integration	Keep TechVault database realization with the scenario adapter
 tests/test_techvault_database.py	tests-follow-owner	Retain TechVault database regression coverage with the scenario owner
+appliance/guest/seat-privilege-qualification.py	optional-delivery	Keep live seat privilege qualification with the appliance owner
+appliance/guest/seat-privileges.py	optional-delivery	Keep guest desktop privilege application with the appliance owner
+docs/architecture/issue-1186-seat-privilege-preflight.md	architecture-history	Preserve issue 1186 seat privilege decisions and guardrails
+scripts/appliance/qualify-seat-privileges.sh	optional-delivery	Keep signed seat privilege qualification with the delivery owner
+src/aptl/appliance/seat/maintenance.py	optional-delivery	Keep stopped seat overlay maintenance with the appliance owner
+src/aptl/appliance/seat/privileges.py	optional-delivery	Keep private seat privilege input with the appliance owner
+tests/test_seat_maintenance.py	tests-follow-owner	Retain host administrator rescue regression coverage with the appliance owner
+tests/test_seat_privilege_qualification.py	tests-follow-owner	Retain live seat privilege probe regression coverage with the appliance owner
+tests/test_seat_privileges.py	tests-follow-owner	Retain guest privilege boundary regression coverage with the appliance owner
+src/aptl/cli/seat_inputs.py	optional-delivery	Keep seat CLI input validation with the appliance owner
 docs/architecture/issue-1194-shipped-seat-network-preflight.md	architecture-history	Preserve shipped seat network investigation scope and runtime ownership decisions
 docs/reviews/1194-seat-network-investigation.md	architecture-history	Preserve matched seat network evidence and documented historical limits
 tests/test_compose_network_readback.py	tests-follow-owner	Retain declared network endpoint observation regressions with the deployment backend

@@ -9,6 +9,12 @@ umask 077
 test -r /run/aptl-launch/appliance-launch.json
 test -r /run/aptl-launch/boundary-policy.json
 test -r /opt/aptl/offline/oci-images.tar
+guest_python=/usr/bin/python3
+guest_path=/opt/aptl/app:/opt/aptl/python
+
+# Apply the descriptor-bound account choice before xrdp or the browser desktop
+# can accept a participant login. The root lab service retains Docker access.
+PYTHONPATH="$guest_path" "$guest_python" /opt/aptl/desktop/seat-privileges.py
 
 install -d -m 0700 /var/lib/aptl/overlay
 images_loaded=/var/lib/aptl/overlay/images-loaded
@@ -27,8 +33,6 @@ fi
 rm -f /home/aptl/.config/aptl/run-ready
 /usr/local/bin/start-seat-desktop
 
-guest_python=/usr/bin/python3
-guest_path=/opt/aptl/app:/opt/aptl/python
 PYTHONPATH="$guest_path" "$guest_python" -m aptl.appliance.guest_services proxy &
 proxy_pid=$!
 cleanup() {

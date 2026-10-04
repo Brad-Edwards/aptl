@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Self
 
@@ -31,6 +31,8 @@ class StartSeatOptions:
     access_project_dir: Path | None = None
     access_clients: tuple[str, ...] = ()
     check_for_image_update: bool = False
+    desktop_mode: str | None = None
+    sudo_password: str | None = field(default=None, repr=False)
 
     def with_mappings(self, mappings: tuple[BoundaryEndpoint, ...]) -> Self:
         """Clone options with allocator-selected mappings and reservation disabled."""
@@ -50,6 +52,8 @@ class StartSeatOptions:
             access_project_dir=self.access_project_dir,
             access_clients=self.access_clients,
             check_for_image_update=self.check_for_image_update,
+            desktop_mode=self.desktop_mode,
+            sudo_password=self.sudo_password,
         )
 
 

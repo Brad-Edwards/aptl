@@ -727,15 +727,15 @@ pyyaml==6.0.3 \
     #   raes
     #   raes-env-packs
     #   uvicorn
-raes==5.0.0 \
-    --hash=sha256:4baa4f7addb1c6ed624ee6eeed961e41937a10512dccad86f8345f94d2389840 \
-    --hash=sha256:6e36a11dcc05ba1dc4024b8ce927ddb68721b3658730517c9211fd7d7e88489f
+raes==6.0.1 \
+    --hash=sha256:3e97f42d42564acc1740757157ffd35a8c6373487845e987a314da54388a06c0 \
+    --hash=sha256:8ab156fb1b9c1f0b467c08d98c0695403224ad3c6f2b7835e30b570f8741e67f
     # via
     #   aptl-labs
     #   raes-env-packs
-raes-env-packs==6.1.0 \
-    --hash=sha256:cc5fe7d6f82def05485abdb72097dfb5897646034c0333ba98838c14e13a824e \
-    --hash=sha256:ef058159229a060ebe538526d319c09e0619e079256f4ce63743c128724f42fd
+raes-env-packs==6.2.0 \
+    --hash=sha256:47565e4b77297ef8c908aaad063c213777fd3a96a0fc488c2c0133573f91654c \
+    --hash=sha256:833f9160dc2ccb0958d2be635c0a901312efbd447888cade6de074b13fe756f5
     # via aptl-labs
 referencing==0.37.0 \
     --hash=sha256:381329a9f99628c9069361716891d34ad94af76e461dcb0335825aecc7692231 \
@@ -897,9 +897,9 @@ six==1.17.0 \
     --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274 \
     --hash=sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81
     # via asttokens
-sse-starlette==3.4.6 \
-    --hash=sha256:56217ab4c9a9f9c5db7b21e08732d3e7c2b807f45231ad23de0551a24c4a41f6 \
-    --hash=sha256:725f8a1bd6d26ae1b2c9610c0ef5065dfdd496f3988d28adcf8c4b49dc25c627
+sse-starlette==3.0.3 \
+    --hash=sha256:88cfb08747e16200ea990c8ca876b03910a23b547ab3bd764c0d8eb81019b971 \
+    --hash=sha256:af5bf5a6f3933df1d9c7f8539633dc8444ca6a97ab2e2a7cd3b6e431ac03a431
     # via
     #   aptl-labs
     #   mcp
@@ -910,7 +910,6 @@ starlette==1.6.0 \
     # via
     #   fastapi
     #   mcp
-    #   sse-starlette
 trove-classifiers==2026.6.1.19 \
     --hash=sha256:ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3 \
     --hash=sha256:c5132b4b61a829d11cfbd2d72e97f20a45ed6edb95e45c5efdeb5e00836b2745

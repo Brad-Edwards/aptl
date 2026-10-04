@@ -83,13 +83,13 @@ def test_suricata_readiness_emits_exact_sids_and_no_paths_or_rule_bodies():
     source = SuricataRuleReadinessSource(lambda _start, _end: _readiness_payload())
 
     result = source.fetch(_START, _END)
-    text = b"".join(result.chunks).decode()
+    document = json.loads(b"".join(result.chunks))
 
     assert result.status is CollectorStatus.OK
-    assert result.media_type == "text/plain"
-    assert text.count("local_sid=") == 16
-    assert "alert http" not in text
-    assert "/etc/" not in text
+    assert result.media_type == "application/json"
+    assert len(document["local_sids"]) == 16
+    assert "alert http" not in str(document)
+    assert "/etc/" not in str(document)
 
 
 def test_suricata_readiness_rejects_missing_or_extra_sid():
@@ -146,10 +146,10 @@ def test_sqli_source_requires_exact_correlated_suricata_and_wazuh_pair():
     )
 
     result = source.fetch(_START, _END)
-    rows = [json.loads(line) for line in b"".join(result.chunks).splitlines()]
+    rows = json.loads(b"".join(result.chunks))["records"]
 
     assert result.status is CollectorStatus.OK
-    assert result.media_type == "application/x-ndjson"
+    assert result.media_type == "application/json"
     assert [row["source"] for row in rows] == ["suricata", "wazuh"]
     assert {row["flow_id"] for row in rows} == {"4242"}
     assert result.observer_effect == "one fixed POST /login containing UNION SELECT"
@@ -187,11 +187,11 @@ def test_transcript_source_requires_every_ledger_session_and_valid_chain():
     source = RedteamSessionTranscriptSource(lambda: ["session-1"], lambda: [_session()])
 
     result = source.fetch(_START, _END)
-    text = b"".join(result.chunks).decode()
+    document = json.loads(b"".join(result.chunks))
 
     assert result.status is CollectorStatus.OK
-    assert "[1:input:" in text
-    assert "[2:output:" in text
+    assert document["sessions"][0]["frames"][0]["direction"] == "input"
+    assert document["sessions"][0]["frames"][1]["direction"] == "output"
     assert result.source_pipeline["session_count"] == 1
 
 

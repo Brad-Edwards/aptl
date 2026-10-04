@@ -42,8 +42,6 @@ class _Backend:
         output = ""
         if command == ["pg_lsclusters", "--no-header"]:
             output = "17 main 5432 online postgres\n"
-        elif command[:2] == ["pg_conftool", "17"]:
-            self.listener = True
         elif command[:3] == ["runuser", "-u", "postgres"]:
             if "createuser" in command:
                 self.role = True
@@ -68,6 +66,8 @@ class _Backend:
                     output = "6\n" if self.seeded else "0\n"
                 elif "SHOW listen_addresses" in statement:
                     output = "0.0.0.0\n" if self.listener else "localhost\n"
+                elif "ALTER SYSTEM SET listen_addresses" in statement:
+                    self.listener = True
         elif name == "aptl-webapp" and command[:2] == ["python3", "-c"]:
             if not self.web_connects:
                 return SimpleNamespace(returncode=1, stdout="")
@@ -90,6 +90,20 @@ def test_database_realization_uses_pack_sql_and_is_idempotent(tmp_path):
 
     assert realize_database(backend, nodes) == []
     assert backend.seeded
+    assert (
+        "aptl-db",
+        [
+            "runuser",
+            "-u",
+            "postgres",
+            "--",
+            "psql",
+            "-d",
+            "postgres",
+            "-Atqc",
+            "ALTER SYSTEM SET listen_addresses = '0.0.0.0'",
+        ],
+    ) in backend.commands
     assert any(
         command[:2] == ["sh", "-c"]
         and "host techvault techvault 172.20.2.0/24 trust" in command[2]

@@ -3,7 +3,7 @@
         "provider": "docker-compose"
     },
     "scenario": {
-        "identity": "techvault",
+        "identity": "techvault-participant-study",
         "source": "env-pack"
     },
     "containers": {
@@ -23,7 +23,7 @@
     },
     "experiment": {
         "participant_models": {
-            "claude": "claude-sonnet-4-5-20250929",
+            "claude": "claude-sonnet-5",
             "codex": "gpt-5-nano-2025-08-07"
         },
         "participant_credential_sources": {

@@ -4701,3 +4701,32 @@ def test_large_apply_details_compact_without_losing_added_apparatus():
         "record_count": 2,
     }
     assert bounded["realization"]["nodes"][0]["address"] == "provision.node.kali"
+
+
+def test_runtime_selection_evidence_reports_the_admitted_provider() -> None:
+    from types import SimpleNamespace
+
+    from aptl.backends.raes_execution_helpers import runtime_selection_evidence
+    from aptl.backends.scenario_startup import (
+        ScenarioRuntimeSelection,
+        ScenarioStartupSelection,
+    )
+
+    provider = SimpleNamespace(
+        runtime_selections=(
+            ScenarioRuntimeSelection("db", "database-client-authentication", "x"),
+        )
+    )
+    selection = ScenarioStartupSelection(identity=None, provider=provider, plan=None)
+
+    assert runtime_selection_evidence(
+        SimpleNamespace(provisioner=SimpleNamespace(startup_selection=selection))
+    ) == [
+        {
+            "node": "db",
+            "subject": "database-client-authentication",
+            "choice": "x",
+            "reference": "",
+        }
+    ]
+    assert runtime_selection_evidence(SimpleNamespace(provisioner=None)) == []

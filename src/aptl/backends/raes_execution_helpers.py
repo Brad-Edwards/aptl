@@ -6,6 +6,7 @@ from raes_processor.models import ExecutionPlan
 from raes_runtime.registry import RuntimeTarget
 
 from aptl.backends.raes_provisioner import AptlProvisioner
+from aptl.backends.scenario_startup import scenario_runtime_selection_details
 
 
 def evaluation_results(
@@ -36,3 +37,10 @@ def interpret_realization(
         profiles = provisioner.selected_profiles(realization)
         pack_interaction_evidence = realization.pack_interaction_evidence(profiles)
     return details, profiles, pack_interaction_evidence
+
+
+def runtime_selection_evidence(target: RuntimeTarget) -> list[dict[str, str]]:
+    """Report the admitted startup provider's open-scope runtime selections."""
+
+    selection = getattr(target.provisioner, "startup_selection", None)
+    return scenario_runtime_selection_details(selection)

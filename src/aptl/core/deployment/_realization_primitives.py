@@ -74,6 +74,9 @@ class DeploymentNetworkAttachment:
 
     network: str
     ipv4_address: str | None = None
+    # The admitted network's declared CIDR, so post-start providers can scope
+    # native policy to the declared network instead of a copied constant.
+    cidr: str | None = None
 
 
 __all__ = (

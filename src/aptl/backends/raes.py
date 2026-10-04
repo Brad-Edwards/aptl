@@ -44,6 +44,7 @@ from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_execution_helpers import (
     evaluation_results as collect_evaluation_results,
     interpret_realization,
+    runtime_selection_evidence,
 )
 from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
 from aptl.backends.raes_runtime_orchestration import (
@@ -422,27 +423,22 @@ def _run_execution_plan(
         run_store=run_store,
         run_id=run_id,
     )
-    if failure is not None:
-        return AcesStartOutcome(
-            lab_result=failure,
-            final_snapshot=snapshot,
-            realization_details=realization_details,
-            selected_profiles=selected_profiles,
-            scenario_path=scenario_path,
-            pack_interaction_evidence=pack_interaction_evidence,
-            retryable=retryable,
-            runtime_manager=runtime_manager,
-        )
+    started = LabResult(
+        success=True,
+        message=f"Lab started through RAES runtime target '{APTL_RAES_TARGET_NAME}'",
+    )
+    # Runtime selections are reported only once the provider applied them.
     return AcesStartOutcome(
-        lab_result=LabResult(
-            success=True,
-            message=f"Lab started through RAES runtime target '{APTL_RAES_TARGET_NAME}'",
-        ),
+        lab_result=started if failure is None else failure,
         final_snapshot=snapshot,
         realization_details=realization_details,
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
         pack_interaction_evidence=pack_interaction_evidence,
+        scenario_runtime_selections=(
+            runtime_selection_evidence(target) if failure is None else []
+        ),
+        retryable=retryable,
         runtime_manager=runtime_manager,
     )
 

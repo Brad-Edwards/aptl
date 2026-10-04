@@ -262,59 +262,91 @@ def validate_retained_transcript(
     entries = payload["transcript_entries"]
     if expected_entries is not None and len(entries) != expected_entries:
         raise ValueError("retained transcript count disagrees with source")
-    if expected_entries is not None and expected_entries > 0 and not entries:
-        raise ValueError("retained transcript collection is empty")
     frame_count = 0
     refs: set[str] = set()
     for entry in entries:
-        if not isinstance(entry, dict) or set(entry) != {
-            "terminal_ref",
-            "started_at",
-            "finished_at",
-            "close_reason",
-            "source_chain_digest",
-            "frames",
-        }:
-            raise ValueError("retained transcript entry is invalid")
-        if any(is_sensitive_key(key) for key in entry):
-            raise ValueError("retained transcript has a sensitive structural key")
-        ref = entry["terminal_ref"]
-        if not isinstance(ref, str) or not _REF_PATTERN.fullmatch(ref) or ref in refs:
-            raise ValueError("retained terminal reference is invalid")
-        refs.add(ref)
-        if (
-            not isinstance(entry["source_chain_digest"], str)
-            or not _DIGEST_PATTERN.fullmatch(entry["source_chain_digest"])
-            or not isinstance(entry["close_reason"], str)
-            or entry["close_reason"]
-            not in {"clean-exit", "remote-eof", "signal", "forced-teardown"}
-            or not isinstance(entry["started_at"], str)
-            or not isinstance(entry["finished_at"], str)
-            or not _inside_window(
-                entry["started_at"], entry["started_at"], entry["finished_at"]
-            )
-            or not isinstance(entry["frames"], list)
-        ):
-            raise ValueError("retained transcript metadata is invalid")
-        for index, frame in enumerate(entry["frames"], 1):
-            if (
-                not isinstance(frame, dict)
-                or set(frame) != {"sequence", "timestamp", "direction", "data"}
-                or any(is_sensitive_key(key) for key in frame)
-                or type(frame["sequence"]) is not int
-                or frame["sequence"] != index
-                or not isinstance(frame["direction"], str)
-                or frame["direction"] not in {"input", "output"}
-                or not isinstance(frame["timestamp"], str)
-                or not isinstance(frame["data"], str)
-                or not _inside_window(
-                    frame["timestamp"], entry["started_at"], entry["finished_at"]
-                )
-            ):
-                raise ValueError("retained transcript frame is invalid")
+        frames = _validate_retained_entry(entry, refs)
+        for index, frame in enumerate(frames, 1):
+            _validate_retained_frame(frame, index, entry)
             frame_count += 1
     if expected_frames is not None and frame_count != expected_frames:
         raise ValueError("retained frame count disagrees with source")
+
+
+def _validate_retained_entry(entry: object, refs: set[str]) -> list[object]:
+    """Check one entry's exact safe fields and unique derived identity."""
+    if not isinstance(entry, dict) or set(entry) != {
+        "terminal_ref",
+        "started_at",
+        "finished_at",
+        "close_reason",
+        "source_chain_digest",
+        "frames",
+    }:
+        raise ValueError("retained transcript entry is invalid")
+    if any(is_sensitive_key(key) for key in entry):
+        raise ValueError("retained transcript has a sensitive structural key")
+    ref = entry["terminal_ref"]
+    if not isinstance(ref, str) or not _REF_PATTERN.fullmatch(ref) or ref in refs:
+        raise ValueError("retained terminal reference is invalid")
+    refs.add(ref)
+    if not _valid_retained_metadata(entry):
+        raise ValueError("retained transcript metadata is invalid")
+    return entry["frames"]
+
+
+def _valid_retained_metadata(entry: dict[str, object]) -> bool:
+    """Check custody digest, completion reason, timestamps, and frame shape."""
+    digest = entry["source_chain_digest"]
+    reason = entry["close_reason"]
+    start = entry["started_at"]
+    end = entry["finished_at"]
+    return all(
+        (
+            isinstance(digest, str) and bool(_DIGEST_PATTERN.fullmatch(digest)),
+            isinstance(reason, str)
+            and reason in {"clean-exit", "remote-eof", "signal", "forced-teardown"},
+            isinstance(start, str),
+            isinstance(end, str),
+            isinstance(entry["frames"], list),
+            isinstance(start, str)
+            and isinstance(end, str)
+            and _inside_window(start, start, end),
+        )
+    )
+
+
+def _validate_retained_frame(
+    frame: object, index: int, entry: dict[str, object]
+) -> None:
+    """Check one ordered frame without interpreting its redacted data as source."""
+    if (
+        not isinstance(frame, dict)
+        or set(frame) != {"sequence", "timestamp", "direction", "data"}
+        or any(is_sensitive_key(key) for key in frame)
+    ):
+        raise ValueError("retained transcript frame is invalid")
+    if not _valid_retained_frame_values(frame, index, entry):
+        raise ValueError("retained transcript frame is invalid")
+
+
+def _valid_retained_frame_values(
+    frame: dict[str, object], index: int, entry: dict[str, object]
+) -> bool:
+    """Check frame order, direction, text shape, and session-relative time."""
+    direction = frame["direction"]
+    timestamp = frame["timestamp"]
+    return all(
+        (
+            type(frame["sequence"]) is int,
+            frame["sequence"] == index,
+            isinstance(direction, str) and direction in {"input", "output"},
+            isinstance(timestamp, str),
+            isinstance(frame["data"], str),
+            isinstance(timestamp, str)
+            and _inside_window(timestamp, entry["started_at"], entry["finished_at"]),
+        )
+    )
 
 
 def _inside_window(value: object, start_iso: str, end_iso: str) -> bool:

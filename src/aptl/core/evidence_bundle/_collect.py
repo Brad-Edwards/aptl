@@ -251,18 +251,10 @@ def _collect_blob(
 ) -> None:
     """Verify and append the record's referenced blob, or disclose its absence."""
     blob_uri = record.raw_content.content_uri
-    try:
-        digest, size = hash_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
-    except SourceMissing:
-        limitations.append(
-            ClosureLimitation(codes.MISSING_SOURCE, "referenced blob absent", blob_uri)
-        )
+    hashed = _hash_referenced_blob(run_dir, blob_uri, limits, limitations)
+    if hashed is None:
         return
-    except SourceRejected as exc:
-        limitations.append(
-            ClosureLimitation(codes.REJECTED_SOURCE, exc.detail, blob_uri)
-        )
-        return
+    digest, size = hashed
 
     declared = record.raw_content.content_checksum.value
     if declared and digest != f"sha256:{declared}":
@@ -317,6 +309,27 @@ def _collect_blob(
     )
 
 
+def _hash_referenced_blob(
+    run_dir: Path,
+    blob_uri: str,
+    limits: BundleLimits,
+    limitations: list[ClosureLimitation],
+) -> tuple[str, int] | None:
+    """Hash a referenced blob and disclose bounded-read failures."""
+    result: tuple[str, int] | None = None
+    try:
+        result = hash_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
+    except SourceMissing:
+        limitations.append(
+            ClosureLimitation(codes.MISSING_SOURCE, "referenced blob absent", blob_uri)
+        )
+    except SourceRejected as exc:
+        limitations.append(
+            ClosureLimitation(codes.REJECTED_SOURCE, exc.detail, blob_uri)
+        )
+    return result
+
+
 def _validate_adapter_blob(
     validators: list[metadata.EntryPoint],
     run_dir: Path,
@@ -329,7 +342,7 @@ def _validate_adapter_blob(
     try:
         validator = validators[0].load()
         if not callable(validator):
-            return False
+            raise TypeError("adapter validator is not callable")
         _, _, body = read_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
         validator(json.loads(body))
     except Exception:
@@ -352,14 +365,16 @@ def _pinned_registration(
         plan = json.loads(body)
     except (SourceMissing, SourceRejected, ValueError):
         return None
-    if not isinstance(plan, dict) or not isinstance(plan.get("bindings"), list):
-        return None
-    if any(
-        not isinstance(binding, dict)
-        or not isinstance(binding.get("registration_id"), str)
-        or not isinstance(binding.get("demand"), dict)
-        or not isinstance(binding["demand"].get("demand_id"), str)
-        for binding in plan["bindings"]
+    if (
+        not isinstance(plan, dict)
+        or not isinstance(plan.get("bindings"), list)
+        or any(
+            not isinstance(binding, dict)
+            or not isinstance(binding.get("registration_id"), str)
+            or not isinstance(binding.get("demand"), dict)
+            or not isinstance(binding["demand"].get("demand_id"), str)
+            for binding in plan["bindings"]
+        )
     ):
         return None
     matching = [

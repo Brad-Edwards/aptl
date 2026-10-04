@@ -14,7 +14,7 @@ The diagnostic run admitted the earlier pack set digest
 `sha256:94dc0236f3e2d4c62db782040acd73b1739ba0bf12adec580289a916fbfcce5a`.
 The released 0.1.1 study pack has set digest
 `sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357`.
-Run `run_20261004T010018Z` admitted that released identity through the normal
+Run `run_20261004T012853Z` admitted that released identity through the normal
 lab lifecycle.
 The study pack remains `built`; that lifecycle state makes no claim that an
 attempt produced golden proof.
@@ -109,7 +109,8 @@ alone does not establish the terminal archive.
 
 ### Published-component lifecycle run
 
-Run `run_20261004T010018Z` used the published RAES 6.0.1 and env-packs 6.2.0
+Run `run_20261004T012853Z` used committed branch revision `3d0e8c8f`, the
+published RAES 6.0.1 and env-packs 6.2.0
 distributions, study pack 0.1.1 at set digest
 `sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357`,
 Docker Engine 29.5.0, Docker Compose 5.1.3, and the authenticated host Claude
@@ -132,7 +133,7 @@ The retained archive establishes:
   network repair.
 
 The exported 25-member evidence bundle verified with root identity
-`sha256:45c0514d95e12a205621a8d4f7f41fbccc699c01407360ef79a0a73c93b284f3`.
+`sha256:82929cd1d895de3ef05d06254f96faf5223cf68436ccdea0114f0add9a1c674f`.
 It reports two limitations: `provenance/run-provenance.json` is absent and no
 verified archive seal is available. The bundle is therefore an independently
 integrity-verified, unsealed engineering artifact. It does not satisfy the
@@ -191,7 +192,7 @@ The October 4 run supplies the APTL-side engineering evidence requested by
 [APTL #558](https://github.com/Brad-Edwards/aptl/issues/558). Its run identity,
 pack digest, backend and participant realization, ordered delivery evidence,
 native evaluator evidence, topology/run manifest, redaction behavior, and
-limitations are recorded here and under `runs/run_20261004T010018Z/` in the
+limitations are recorded here and under `runs/run_20261004T012853Z/` in the
 executing workspace. The run also extends the real participant action surface
 proved by [APTL #554](https://github.com/Brad-Edwards/aptl/issues/554). The local
 run directory remains an unsealed engineering artifact and is not a published

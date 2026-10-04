@@ -18,10 +18,7 @@ from aptl.cli._common import resolve_optional_config_for_cli
 from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.utils.strict_json import model_validate_json_strict
 
-DEFAULT_SEAT_IMAGE = "ghcr.io/brad-edwards/aptl-seat:latest"
-
-
-def _selected_source(image: str | None, seat_root: Path) -> str:
+def _selected_source(image: str | None, seat_root: Path, default_image: str) -> str:
     """Honor explicit/configured sources and the existing seat before defaults."""
 
     config = resolve_optional_config_for_cli(Path.cwd())
@@ -30,7 +27,7 @@ def _selected_source(image: str | None, seat_root: Path) -> str:
     if config.seat.image is not None:
         return config.seat.image
     record = load_seat_record(seat_root)
-    return record.image_reference if record is not None else DEFAULT_SEAT_IMAGE
+    return record.image_reference if record is not None else default_image
 
 
 def _parse_mappings(values: list[str] | None) -> tuple[BoundaryEndpoint, ...] | None:

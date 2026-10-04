@@ -43,7 +43,6 @@ from aptl.core.appliance_boundary_inventory import BoundaryEndpoint
 from aptl.workbench.profiles import WorkbenchConfigurationError
 from aptl.cli._common import resolve_optional_config_for_cli
 from aptl.cli.seat_inputs import (
-    DEFAULT_SEAT_IMAGE,
     _current_desktop_mode,
     _default_appliance_cache,
     _parse_mappings,
@@ -53,6 +52,11 @@ from aptl.cli.seat_inputs import (
 )
 
 app = typer.Typer(help="Operate one disposable appliance seat on a physical host.")
+
+# The published seat image. A user who does not want it points --image
+# somewhere else; nothing else about the seat changes.
+DEFAULT_SEAT_IMAGE = "ghcr.io/brad-edwards/aptl-seat:latest"
+
 
 def _emit(payload: dict[str, object]) -> None:
     """Print one bounded JSON payload on stdout."""
@@ -80,7 +84,7 @@ def _prepare_seat_image(
 ) -> str:
     """Ask before any cold acquisition; verified warm starts remain offline."""
 
-    reference = _selected_source(image, seat_root)
+    reference = _selected_source(image, seat_root, DEFAULT_SEAT_IMAGE)
     try:
         cache = cache_for_seat(seat_root, reference, cache)
         cold = not load_selection(cache, parse_seat_image_reference(reference))
@@ -421,7 +425,7 @@ def update_image(
     try:
         seat_root = _resolved_seat_root(seat_root)
         image_cache = image_cache or _default_appliance_cache()
-        image = _selected_source(image, seat_root)
+        image = _selected_source(image, seat_root, DEFAULT_SEAT_IMAGE)
         _confirm(
             f"Download/verify {image}, reset this stopped seat and its access, "
             "and delete the superseded cached image?", yes=yes,

@@ -13,7 +13,7 @@ import pytest
 from raes.parser import parse_sdl_file
 
 from aptl.core.deployment.errors import BackendTimeoutError
-from aptl_techvault import database
+from aptl_techvault import database, database_access
 from aptl_techvault.database import realize_database
 from aptl_techvault.startup import TechVaultStartupProvider
 from tests.helpers import techvault_scenario_path
@@ -95,19 +95,22 @@ class _Postgres:
 
     # The backend surface used by the adapter.
     def container_exec(self, name, command, *, timeout=None):
-        assert timeout is not None and timeout <= 120
+        assert timeout is not None
+        assert timeout <= 120
         self.calls.append((name, list(command)))
         return self._dispatch(name, list(command))
 
     def container_exec_with_input(self, name, command, payload, *, timeout=None):
-        assert timeout is not None and timeout <= 120
+        assert timeout is not None
+        assert timeout <= 120
         self.calls.append((name, list(command)))
         self.inputs.append((name, list(command), payload))
         if command[:2] == ["sh", "-s"]:
             return self._edit_hba(command, payload)
         if self._psql_target(command) == ("postgres", "stdin"):
             prefix = "ALTER ROLE techvault PASSWORD '"
-            assert payload.startswith(prefix) and payload.endswith("';\n")
+            assert payload.startswith(prefix)
+            assert payload.endswith("';\n")
             self.verifier = payload[len(prefix) : -3]
             return _ok()
         raise AssertionError(f"unexpected stdin command: {command}")
@@ -139,7 +142,8 @@ class _Postgres:
         if command[:4] == ["timeout", "-k", "5", "90"]:
             return self._seed(command[4:])
         assert command[:2] == ["psql", "-X"], command
-        assert command[2] == "-d" and command[4] == "-Atqc", command
+        assert command[2] == "-d", command
+        assert command[4] == "-Atqc", command
         return self._query(command[3], command[5])
 
     def _query(self, database_name, statement):
@@ -197,7 +201,8 @@ class _Postgres:
         return "\n".join(rows) + "\n"
 
     def _edit_hba(self, command, payload):
-        assert command[:3] == ["sh", "-s", "--"] and "set -eu" in payload
+        assert command[:3] == ["sh", "-s", "--"]
+        assert "set -eu" in payload
         path, rule, legacy = command[3:]
         assert path == _HBA
         before = list(self.hba)
@@ -330,7 +335,7 @@ def test_fresh_realization_requires_password_and_seeds_once(tmp_path):
     assert _RULE in backend.hba
     assert not any(line.endswith(" trust") for line in backend.hba)
     assert backend.listen == "0.0.0.0"
-    assert backend.verifier.startswith("SCRAM-SHA-256$4096:")
+    assert backend.verifier.startswith("SCRAM-SHA-256$100000:")
     assert backend.marker == _COMPLETE
     assert backend.restarts == 1
     seeds = [command for _, command in backend.calls if "-1" in command]
@@ -359,7 +364,8 @@ def test_restart_is_a_no_op_that_preserves_participant_data(tmp_path):
     assert realize_database(backend, nodes) == []
 
     assert backend.verifier == verifier  # no rotation
-    assert backend.restarts == restarts and backend.reloads == 0
+    assert backend.restarts == restarts
+    assert backend.reloads == 0
     assert not any("-1" in command for _, command in backend.calls)
     assert backend.tables == ("public.users",)
 
@@ -373,7 +379,8 @@ def test_previously_shipped_trust_rule_is_replaced_and_reloaded(tmp_path):
 
     assert realize_database(backend, nodes) == []
 
-    assert _LEGACY not in backend.hba and backend.hba.count(_RULE) == 1
+    assert _LEGACY not in backend.hba
+    assert backend.hba.count(_RULE) == 1
     assert backend.reloads == reloads + 1
 
 
@@ -512,19 +519,21 @@ def test_transport_exception_fails_closed(tmp_path):
         def container_exec(self, name, command, *, timeout=None):
             raise TimeoutError("exec timed out")
 
+    backend, nodes = _Broken(), _nodes(tmp_path)
+
     with pytest.raises(TimeoutError):
-        realize_database(_Broken(), _nodes(tmp_path))
+        realize_database(backend, nodes)
 
 
 def test_scram_verifier_matches_rfc5802_derivation():
     salt = bytes(range(16))
-    salted = hashlib.pbkdf2_hmac("sha256", b"pencil", salt, 4096)
+    salted = hashlib.pbkdf2_hmac("sha256", b"pencil", salt, 100_000)
     client_key = hmac.new(salted, b"Client Key", hashlib.sha256).digest()
     server_key = hmac.new(salted, b"Server Key", hashlib.sha256).digest()
     stored_key = hashlib.sha256(client_key).digest()
 
-    assert database._scram_verifier("pencil", salt=salt) == (
-        "SCRAM-SHA-256$4096:"
+    assert database_access._scram_verifier("pencil", salt=salt) == (
+        "SCRAM-SHA-256$100000:"
         + base64.b64encode(salt).decode()
         + "$"
         + base64.b64encode(stored_key).decode()

@@ -29,7 +29,7 @@ class LogSourceBackend(Protocol):
 SAMBA_AUDIT_LOG = "/var/log/samba/log.samba"
 SAMBA_MAIN_LOG = "/var/log/samba/log.smbd"
 SMBD_SERVICE = "smbd.service"
-_SAFE_CLUSTER = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_.-]*")
+_SAFE_CLUSTER = re.compile(r"\w[\w.-]*", re.ASCII)
 
 
 def _value(value: object) -> str:

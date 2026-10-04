@@ -133,27 +133,6 @@ def run_scenario_runtime(
     return invoke_runtime_provider(provider, identity, backend, nodes)
 
 
-def scenario_runtime_selection_details(
-    selection: ScenarioStartupSelection | None,
-) -> list[dict[str, str]]:
-    """Report the admitted provider's value-free open-scope selections.
-
-    A provider that declares none reports an empty list; a malformed
-    declaration is reported as one bounded entry rather than dropped, so a run
-    never claims it made no backend choice when it cannot say which.
-    """
-
-    from aptl.backends import scenario_startup as contract
-
-    provider = None if selection is None else selection.provider
-    declared = getattr(provider, "runtime_selections", ()) if provider else ()
-    if not isinstance(declared, tuple) or not all(
-        isinstance(item, contract.ScenarioRuntimeSelection) for item in declared
-    ):
-        return [{"error": "scenario runtime selections are malformed"}]
-    return [item.details() for item in declared]
-
-
 def observe_scenario_runtime_concerns(
     identity: PackIdentity | None,
     backend: object,
@@ -187,7 +166,6 @@ def observe_scenario_runtime_concerns(
 
 __all__ = [
     "observe_scenario_runtime_concerns",
-    "scenario_runtime_selection_details",
     "run_persisted_startup_reset",
     "run_scenario_runtime",
     "selected_runtime_provider",

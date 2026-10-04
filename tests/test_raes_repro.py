@@ -187,6 +187,22 @@ class TestReproRecord:
         assert record["backend_evidence"]["pack_interaction"] == evidence
         assert "pack_interaction" not in record["raes"]["realization"]
 
+    def test_scenario_runtime_selections_are_backend_evidence(self):
+        selections = [
+            {
+                "node": "db",
+                "subject": "database-client-authentication",
+                "choice": "scram-sha-256",
+                "reference": "OpenRAE/env-packs#411",
+            }
+        ]
+
+        record = _dummy_record(scenario_runtime_selections=selections)
+
+        assert record["backend_evidence"]["scenario_runtime_selections"] == selections
+        assert "scenario_runtime_selections" not in record["raes"]["realization"]
+        assert _dummy_record()["backend_evidence"]["scenario_runtime_selections"] == []
+
     def test_acquired_pack_record_uses_bounded_locator_not_staging_path(self, tmp_path):
         staged = tmp_path / ".aptl" / "staged-packs" / "random" / "techvault"
         scenario = staged / "sdl" / "techvault.sdl.yaml"

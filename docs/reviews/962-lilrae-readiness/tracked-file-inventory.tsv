@@ -1876,3 +1876,4 @@ src/aptl/cli/seat_inputs.py	optional-delivery	Keep seat CLI input validation wit
 docs/architecture/issue-1194-shipped-seat-network-preflight.md	architecture-history	Preserve shipped seat network investigation scope and runtime ownership decisions
 docs/reviews/1194-seat-network-investigation.md	architecture-history	Preserve matched seat network evidence and documented historical limits
 tests/test_compose_network_readback.py	tests-follow-owner	Retain declared network endpoint observation regressions with the deployment backend
+docs/architecture/issue-1183-techvault-postgresql-startup-preflight.md	architecture-history	Preserve issue 1183 TechVault database realization, client-authentication, and initialization guardrails

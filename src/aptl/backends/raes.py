@@ -44,6 +44,7 @@ from aptl.backends.raes_diagnostics import render_raes_diagnostics
 from aptl.backends.raes_execution_helpers import (
     evaluation_results as collect_evaluation_results,
     interpret_realization,
+    runtime_selection_evidence,
 )
 from aptl.backends.raes_artifact_availability import artifact_availability_for_scenario
 from aptl.backends.raes_runtime_orchestration import (
@@ -443,6 +444,7 @@ def _run_execution_plan(
         selected_profiles=selected_profiles,
         scenario_path=scenario_path,
         pack_interaction_evidence=pack_interaction_evidence,
+        scenario_runtime_selections=runtime_selection_evidence(target),
         runtime_manager=runtime_manager,
     )
 

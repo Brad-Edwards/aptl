@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from aptl.core.runstore import RunStorageBackend
     from aptl.core.scenario_bundle import ScenarioBundle
 
+
 @dataclass(frozen=True)
 class AdmittedScenarioStart:
     """One admitted scenario execution, shared by pre-mutation steps and apply.
@@ -66,6 +67,7 @@ class AcesStartOutcome:
     scenario_path: Path | None
     manifest_payload: dict[str, Any] = field(default_factory=dict)
     pack_interaction_evidence: dict[str, Any] = field(default_factory=dict)
+    scenario_runtime_selections: list[dict[str, str]] = field(default_factory=list)
     retryable: bool = False
     capture_plan: CapturePlan | None = None
     runtime_manager: RuntimeManager | None = None

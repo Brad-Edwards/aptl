@@ -95,6 +95,31 @@ class McpServerCredentials:
 
 
 @dataclass(frozen=True)
+class ScenarioRuntimeSelection:
+    """One value-free choice a runtime provider makes where the pack is open.
+
+    Reported beside the realization so a run says what the backend chose,
+    separately from what the scenario authored. ``reference`` points at the
+    upstream declaration gap, when there is one.
+    """
+
+    node: str
+    subject: str
+    choice: str
+    reference: str = ""
+
+    def details(self) -> dict[str, str]:
+        """Return the bounded report entry for this selection."""
+
+        return {
+            "node": self.node,
+            "subject": self.subject,
+            "choice": self.choice,
+            "reference": self.reference,
+        }
+
+
+@dataclass(frozen=True)
 class ScenarioStartupPlan:
     """Validated scenario-specific work executed by the generic lifecycle."""
 
@@ -449,6 +474,7 @@ from aptl.backends._scenario_startup_runtime import (
     observe_scenario_runtime_concerns,
     run_persisted_startup_reset,
     run_scenario_runtime,
+    scenario_runtime_selection_details,
     selected_runtime_provider,
 )
 
@@ -471,6 +497,7 @@ __all__ = [
     "EnvironmentAlias",
     "ScenarioEnvironmentFixture",
     "McpServerCredentials",
+    "ScenarioRuntimeSelection",
     "ScenarioStartupPlan",
     "ScenarioStartupSelection",
     "StartupProviderProvenance",
@@ -482,6 +509,7 @@ __all__ = [
     "resolve_scenario_startup",
     "select_scenario_startup",
     "run_scenario_runtime",
+    "scenario_runtime_selection_details",
     "selected_runtime_provider",
     "run_persisted_startup_reset",
     "observe_scenario_runtime_concerns",

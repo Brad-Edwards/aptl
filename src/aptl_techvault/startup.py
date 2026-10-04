@@ -7,6 +7,7 @@ from aptl.backends.scenario_startup import (
     ContainerEnvironmentBinding,
     EnvironmentAlias,
     McpServerCredentials,
+    ScenarioRuntimeSelection,
     ScenarioStartupPlan,
     StartupCapability,
     StartupHook,
@@ -201,6 +202,20 @@ class TechVaultStartupProvider:
     supported_pack_id = "techvault"
     supported_pack_versions = ("0.1.1",)
     supported_pack_set_digests = (TECHVAULT_PACK_SET_DIGEST,)
+    # The pack leaves customer-database client authentication open; this is the
+    # posture realize_database() applies and verifies (see that module).
+    runtime_selections = (
+        ScenarioRuntimeSelection(
+            node="db",
+            subject="database-client-authentication",
+            choice=(
+                "scram-sha-256 password for the declared application role and "
+                "database, from the network the database and portal share; "
+                "credential matches the authored portal client"
+            ),
+            reference="OpenRAE/env-packs#411",
+        ),
+    )
 
     @staticmethod
     def prepare_stack_environment(context: StartupHookContext) -> object:

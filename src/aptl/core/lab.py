@@ -2988,6 +2988,9 @@ def _write_run_record(ctx: _LabStartContext) -> None:
         pack_interaction_evidence=_safe_dict(
             getattr(outcome, "pack_interaction_evidence", {})
         ),
+        scenario_runtime_selections=_safe_list(
+            getattr(outcome, "scenario_runtime_selections", [])
+        ),
         scenario_path=getattr(outcome, "scenario_path", None),
         scenario_display_name=_scenario_display_name(
             getattr(outcome, "scenario_path", None)

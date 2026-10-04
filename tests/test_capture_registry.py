@@ -488,19 +488,22 @@ class TestProjectionIsOrderCanonical:
 
     def test_set_valued_axes_are_sorted_in_the_projection(self):
         registration = _covering_registration(
-            media_types=frozenset({"application/json", "text/plain"}),
+            media_types=frozenset({"application/json", "application/jsonl"}),
             integrity_modes=frozenset({"sha256-digest", "blake3-digest"}),
             required_artifact_roles=frozenset({"observation", "report"}),
         )
         binding = _bind_reference(
             registration,
-            expected_media_types=["text/plain", "application/json"],
+            expected_media_types=["application/jsonl", "application/json"],
             integrity_requirements=["sha256-digest", "blake3-digest"],
             required_artifact_roles=["report", "observation"],
         )
         assert binding is not None
         projection = binding.binding_projection()
-        assert projection["expected_media_types"] == ["application/json", "text/plain"]
+        assert projection["expected_media_types"] == [
+            "application/json",
+            "application/jsonl",
+        ]
         assert projection["integrity_requirements"] == [
             "blake3-digest",
             "sha256-digest",
@@ -509,13 +512,15 @@ class TestProjectionIsOrderCanonical:
 
     def test_authored_axis_order_does_not_change_the_projection(self):
         registration = _covering_registration(
-            media_types=frozenset({"application/json", "text/plain"})
+            media_types=frozenset({"application/json", "application/jsonl"})
         )
         forward = _bind_reference(
-            registration, expected_media_types=["application/json", "text/plain"]
+            registration,
+            expected_media_types=["application/json", "application/jsonl"],
         )
         reverse = _bind_reference(
-            registration, expected_media_types=["text/plain", "application/json"]
+            registration,
+            expected_media_types=["application/jsonl", "application/json"],
         )
         assert forward is not None
         assert reverse is not None

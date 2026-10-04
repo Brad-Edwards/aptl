@@ -71,9 +71,11 @@ def test_repository_catalog_projects_validated_pack_identity():
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
 
-    assert [entry.id for entry in catalog.scenarios] == ["techvault"]
-    assert catalog.pack_identity.pack_id == "techvault"
-    assert catalog.pack_identity.pack_version == "0.1.0"
+    assert [entry.id for entry in catalog.scenarios] == [
+        "techvault-participant-study"
+    ]
+    assert catalog.pack_identity.pack_id == "techvault-participant-study"
+    assert catalog.pack_identity.pack_version == "0.1.1"
     assert catalog.pack_identity.set_digest.startswith("sha256:")
     assert catalog.maturity == "built"
     assert not hasattr(catalog.scenarios[0], "path")
@@ -152,10 +154,12 @@ def test_resolve_acquired_scenario_returns_same_validated_bundle():
 
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
-    resolved = resolve_acquired_scenario(project_root, "techvault", catalog=catalog)
+    resolved = resolve_acquired_scenario(
+        project_root, "techvault-participant-study", catalog=catalog
+    )
 
-    assert resolved.entry.id == "techvault"
-    assert resolved.scenario.name == "techvault"
+    assert resolved.entry.id == "techvault-participant-study"
+    assert resolved.scenario.name == "techvault-participant-study"
     assert resolved.bundle is catalog.bundle
 
 

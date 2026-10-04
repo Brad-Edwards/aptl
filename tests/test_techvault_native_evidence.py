@@ -338,17 +338,23 @@ def test_cortex_owner_polls_until_thehive_connector_refreshes(tmp_path):
 def test_suricata_owner_joins_native_success_with_admitted_and_realized_identity(
     tmp_path,
 ):
+    import json
+
     result = (
         _owner(tmp_path)
         .sources()["aptl.collector.suricata-rule-readiness"]
         .fetch(_START, _END)
     )
     text = b"".join(result.chunks).decode()
+    payload = json.loads(text)
 
     assert result.status is CollectorStatus.OK
-    assert "image_ref=jasonish/suricata@sha256:" in text
-    assert "content_identity.suricata-local-rules=" in text
-    assert text.count("local_sid=") == 16
+    assert payload["image_ref"].startswith("jasonish/suricata@sha256:")
+    assert payload["content_identities"]["suricata-local-rules"].startswith(
+        "techvault-suricata-local-rules@sha256:"
+    )
+    assert payload["local_rule_count"] == 16
+    assert len(payload["local_sids"]) == 16
     assert "/etc/" not in text
 
 

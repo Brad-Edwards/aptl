@@ -273,7 +273,10 @@ def ensure_credential(backend: DatabaseBackend, selected: DeclaredDatabase) -> N
     if missing != "t":
         raise RealizationFailure(FAILURE_OBJECTS)
     verifier = _scram_verifier(_portal_password(backend, selected))
-    argv = ["runuser", "-u", "postgres", "--", "psql", "-X", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-f", "-"]  # fmt: skip
+    argv = [
+        "runuser", "-u", "postgres", "--",
+        "psql", "-X", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-f", "-",
+    ]  # fmt: skip
     result = backend.container_exec_with_input(
         container,
         argv,

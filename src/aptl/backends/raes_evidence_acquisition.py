@@ -5,19 +5,12 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
-from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from aptl.core.correlation.clock import ClockProvider, SystemClockProvider
 from aptl.core.evidence.coordinator import AcquisitionResult, acquire_evidence
-from aptl.core.evidence.outcomes import (
-    AcquisitionDisposition,
-    CollectorStatus,
-    STATUS_DIAGNOSTIC_CODES,
-    capture_diagnostic,
-)
-from aptl.core.evidence_bundle._io import SourceMissing, SourceRejected, read_source
+from aptl.core.evidence.outcomes import AcquisitionDisposition
 from aptl.core.evidence.protocol import RunScope
 from aptl.core.experiment.capture_registry import CaptureBinding
 from aptl.core.runstore import LocalRunStore
@@ -29,6 +22,7 @@ from aptl.utils.pathsafe import (
     open_contained_nofollow,
     read_contained_nofollow,
 )
+from aptl.backends._raes_transcript_qualification import qualify_retained_transcript
 from aptl.backends.identity import BackendIdentity
 from aptl.backends.scenario_capture import (
     ResolvedScenarioCapture,
@@ -350,20 +344,10 @@ def finalize_active_transcript_authority(
         raise ValueError("transcript run store does not match configured run storage")
     capture_selection = _capture_selection_from_state(state)
     runtime_adapter = capture_selection.contribution.runtime_adapter
-    binding_loader = getattr(runtime_adapter, "binding_from_projection", None)
-    collector_factory = getattr(runtime_adapter, "finalized_transcript_collector", None)
-    if not callable(binding_loader) or not callable(collector_factory):
-        raise ValueError("capture adapter cannot finalize transcripts")
-    binding = binding_loader(state["binding"])
-    if not isinstance(binding, CaptureBinding):
-        raise ValueError("capture adapter returned an invalid binding")
-    transcript_id = capture_selection.contribution.transcript_registration_id
-    if transcript_id is None or binding.registration_id != transcript_id:
-        raise ValueError("capture adapter transcript identity mismatch")
-    plan_id = str(state["capture_plan_id"])
+    binding, collector_factory = _finalization_binding(capture_selection, state)
+    transcript_id = binding.registration_id
+    plan_id = binding.capture_spec_id
     run_id = str(state["run_id"])
-    if binding.capture_spec_id != plan_id:
-        raise ValueError("transcript binding plan identity mismatch")
     active_clock = clock or SystemClockProvider()
     payload, activated_at = _validated_activation_time(
         _export_transcript_payload(backend, store_base, run_id, binding),
@@ -385,7 +369,7 @@ def finalize_active_transcript_authority(
         clock=active_clock,
     )
     if result.disposition is AcquisitionDisposition.SEALED_READY:
-        result = _qualify_retained_transcript(
+        result = qualify_retained_transcript(
             result, runtime_adapter, payload, binding, store_base, run_id
         )
     if result.disposition is AcquisitionDisposition.SEALED_READY:
@@ -393,56 +377,26 @@ def finalize_active_transcript_authority(
     return result
 
 
-def _qualify_retained_transcript(
-    result: AcquisitionResult,
-    runtime_adapter: object,
-    payload: object,
-    binding: CaptureBinding,
-    store_base: Path,
-    run_id: str,
-) -> AcquisitionResult:
-    """Read back the retained blob and turn semantic failure into a typed outcome."""
-    validator = getattr(runtime_adapter, "validate_retained_transcript", None)
-    try:
-        if not callable(validator) or len(result.records) != 1:
-            raise ValueError("transcript validator unavailable")
-        record = result.records[0]
-        retained_digest, _, body = read_source(
-            LocalRunStore(store_base).get_run_path(run_id),
-            record.raw_content.content_uri,
-            max_bytes=binding.limits.max_bytes,
-        )
-        if retained_digest != f"sha256:{record.raw_content.content_checksum.value}":
-            raise ValueError("retained transcript checksum mismatch")
-        sessions = payload["sessions"]  # type: ignore[index]
-        validator(
-            json.loads(body),
-            expected_entries=len(payload["expected_session_ids"]),  # type: ignore[index]
-            expected_frames=sum(len(item["frames"]) for item in sessions),
-        )
-    except (KeyError, TypeError, ValueError, SourceMissing, SourceRejected):
-        return _invalid_retained_transcript_result(result)
-    return result
+def _finalization_binding(
+    capture_selection: ResolvedScenarioCapture,
+    state: Mapping[str, object],
+) -> tuple[CaptureBinding, object]:
+    """Load the persisted binding and check it against the adapter and plan."""
 
-
-def _invalid_retained_transcript_result(result: AcquisitionResult) -> AcquisitionResult:
-    """Report a fixed redacted failure without exposing transcript content."""
-    status = CollectorStatus.FINALIZATION_FAILURE
-    code = STATUS_DIAGNOSTIC_CODES[status]
-    return replace(
-        result,
-        disposition=AcquisitionDisposition.INVALIDATED,
-        reports=tuple(
-            replace(report, status=status, diagnostic_code=code)
-            for report in result.reports
-        ),
-        diagnostics=result.diagnostics
-        + (
-            capture_diagnostic(
-                code, "transcript", "retained transcript failed validation"
-            ),
-        ),
-    )
+    runtime_adapter = capture_selection.contribution.runtime_adapter
+    binding_loader = getattr(runtime_adapter, "binding_from_projection", None)
+    collector_factory = getattr(runtime_adapter, "finalized_transcript_collector", None)
+    if not callable(binding_loader) or not callable(collector_factory):
+        raise ValueError("capture adapter cannot finalize transcripts")
+    binding = binding_loader(state["binding"])
+    if not isinstance(binding, CaptureBinding):
+        raise ValueError("capture adapter returned an invalid binding")
+    transcript_id = capture_selection.contribution.transcript_registration_id
+    if transcript_id is None or binding.registration_id != transcript_id:
+        raise ValueError("capture adapter transcript identity mismatch")
+    if binding.capture_spec_id != str(state["capture_plan_id"]):
+        raise ValueError("transcript binding plan identity mismatch")
+    return binding, collector_factory
 
 
 def _capture_selection_from_state(

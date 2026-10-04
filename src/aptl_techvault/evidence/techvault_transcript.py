@@ -252,6 +252,16 @@ def validate_retained_transcript(
     from frame data after redaction. The evidence record checksums the retained
     bytes separately.
     """
+    entries = _retained_entries(payload)
+    if expected_entries is not None and len(entries) != expected_entries:
+        raise ValueError("retained transcript count disagrees with source")
+    frame_count = _validate_retained_entries(entries)
+    if expected_frames is not None and frame_count != expected_frames:
+        raise ValueError("retained frame count disagrees with source")
+
+
+def _retained_entries(payload: object) -> list[object]:
+    """Check the retained envelope and return its transcript entries."""
     if (
         not isinstance(payload, dict)
         or set(payload) != {"schema_version", "transcript_entries"}
@@ -259,9 +269,11 @@ def validate_retained_transcript(
         or not isinstance(payload["transcript_entries"], list)
     ):
         raise ValueError("retained transcript shape is invalid")
-    entries = payload["transcript_entries"]
-    if expected_entries is not None and len(entries) != expected_entries:
-        raise ValueError("retained transcript count disagrees with source")
+    return payload["transcript_entries"]
+
+
+def _validate_retained_entries(entries: list[object]) -> int:
+    """Validate every entry and its ordered frames; return the frame count."""
     frame_count = 0
     refs: set[str] = set()
     for entry in entries:
@@ -269,8 +281,7 @@ def validate_retained_transcript(
         for index, frame in enumerate(frames, 1):
             _validate_retained_frame(frame, index, entry)
             frame_count += 1
-    if expected_frames is not None and frame_count != expected_frames:
-        raise ValueError("retained frame count disagrees with source")
+    return frame_count
 
 
 def _validate_retained_entry(entry: object, refs: set[str]) -> list[object]:

@@ -9,6 +9,7 @@ reported as unsealed with an explicit limitation.
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,66 @@ def _by_role(closure, role: str):
 
 
 class TestReferenceDrivenClosure:
+    @pytest.mark.parametrize("plan_bytes", [None, b"not-json"])
+    def test_unavailable_capture_plan_discloses_unqualified_blob(
+        self, tmp_path: Path, plan_bytes: bytes | None
+    ) -> None:
+        run_dir = tmp_path / "run-1"
+        run_dir.mkdir()
+        fixtures.write_manifest(run_dir, run_id="run-1")
+        fixtures.write_evidence(
+            run_dir,
+            run_id="run-1",
+            capture_spec_id="capture-plan-missing",
+            blob_bytes=b'{"schema_version":"aptl-techvault-transcript/v1","sessions":"[REDACTED]"}',
+        )
+        if plan_bytes is not None:
+            plan_dir = run_dir / "evidence/capture-plans"
+            plan_dir.mkdir()
+            (plan_dir / "capture-plan-missing.json").write_bytes(plan_bytes)
+
+        closure = build_closure(run_dir, "run-1")
+
+        assert any(
+            limitation.code == "aptl.evidence-bundle.capture-plan-unavailable"
+            for limitation in closure.limitations
+        )
+
+    def test_pinned_transcript_with_collapsed_payload_is_disclosed(
+        self, tmp_path: Path
+    ) -> None:
+        run_dir = tmp_path / "run-1"
+        run_dir.mkdir()
+        fixtures.write_manifest(run_dir, run_id="run-1")
+        fixtures.write_evidence(
+            run_dir,
+            run_id="run-1",
+            blob_bytes=b'{"schema_version":"aptl-techvault-transcript/v1","sessions":"[REDACTED]"}',
+            requirement_id="transcript",
+            capture_spec_id="plan-1",
+        )
+        plan_dir = run_dir / "evidence/capture-plans"
+        plan_dir.mkdir()
+        (plan_dir / "plan-1.json").write_text(
+            json.dumps(
+                {
+                    "bindings": [
+                        {
+                            "registration_id": "aptl.collector.redteam-session-transcript",
+                            "demand": {"demand_id": "transcript"},
+                        }
+                    ],
+                }
+            )
+        )
+
+        closure = build_closure(run_dir, "run-1")
+
+        assert any(
+            limitation.code == "aptl.evidence-bundle.invalid-transcript"
+            for limitation in closure.limitations
+        )
+
     def test_includes_every_ready_to_seal_artifact(self, tmp_path: Path) -> None:
         run_dir = tmp_path / "run-1"
         fixtures.build_ready_to_seal_run(run_dir, run_id="run-1", evidence_count=2)

@@ -34,6 +34,7 @@ from aptl.utils import pathsafe
 _MEDIA_JSON = "application/json"
 _MEDIA_OCTET = "application/octet-stream"
 _EVIDENCE_LEDGER_DIR = "evidence/records"
+_TRANSCRIPT_REGISTRATION = "aptl.collector.redteam-session-transcript"
 
 # Known backend-evidence roots: (run-relative source, bundle path, role,
 # contract id, whether absence is a recorded limitation).
@@ -273,6 +274,35 @@ def _collect_blob(
         )
         return
 
+    transcript_pin = _pinned_transcript_record(run_dir, record, limits)
+    if transcript_pin is None:
+        limitations.append(
+            ClosureLimitation(
+                codes.CAPTURE_PLAN_UNAVAILABLE,
+                "capture plan unavailable; adapter semantics unqualified",
+                record.capture_spec_ref.ref_id,
+            )
+        )
+    if transcript_pin:
+        try:
+            from aptl_techvault.evidence.techvault_transcript import (
+                validate_retained_transcript,
+            )
+
+            _, _, body = read_source(
+                run_dir, blob_uri, max_bytes=limits.max_member_bytes
+            )
+            validate_retained_transcript(json.loads(body))
+        except (SourceMissing, SourceRejected, ValueError):
+            limitations.append(
+                ClosureLimitation(
+                    codes.INVALID_TRANSCRIPT,
+                    "pinned transcript fails retained payload validation",
+                    blob_uri,
+                )
+            )
+            return
+
     entries.append(
         ClosureEntry(
             bundle_path=f"evidence/blobs/{digest.split(':', 1)[1]}",
@@ -286,6 +316,39 @@ def _collect_blob(
             source_run_relpath=blob_uri,
             disclosures=disclosures,
         )
+    )
+
+
+def _pinned_transcript_record(
+    run_dir: Path, record: ExperimentEvidenceRecordModel, limits: BundleLimits
+) -> bool | None:
+    """Use the admitted capture plan, not blob self-description, for adapter identity."""
+    plan_id = record.capture_spec_ref.ref_id
+    try:
+        _, _, body = read_source(
+            run_dir,
+            f"evidence/capture-plans/{plan_id}.json",
+            max_bytes=limits.max_member_bytes,
+        )
+        plan = json.loads(body)
+    except (SourceMissing, SourceRejected, ValueError):
+        return None
+    if not isinstance(plan, dict) or not isinstance(plan.get("bindings"), list):
+        return None
+    if any(
+        not isinstance(binding, dict)
+        or not isinstance(binding.get("registration_id"), str)
+        or not isinstance(binding.get("demand"), dict)
+        or not isinstance(binding["demand"].get("demand_id"), str)
+        for binding in plan["bindings"]
+    ):
+        return None
+    return any(
+        isinstance(binding, dict)
+        and binding.get("registration_id") == _TRANSCRIPT_REGISTRATION
+        and isinstance(binding.get("demand"), dict)
+        and binding["demand"].get("demand_id") == record.capture_requirement_ref
+        for binding in plan["bindings"]
     )
 
 

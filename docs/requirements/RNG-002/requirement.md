@@ -3,10 +3,10 @@ id: RNG-002
 title: "Multi-Node and Cloud Deployment"
 status: DRAFT
 type: NON_FUNCTIONAL
-priority: COULD
+priority: WONT
 wave: 3
 created_at: 2026-03-21T07:50:13.382989Z
-updated_at: 2026-03-21T07:50:13.382989Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # RNG-002: Multi-Node and Cloud Deployment
@@ -17,7 +17,7 @@ The platform shall support deployment across multiple hosts and cloud environmen
 
 ## Rationale
 
-Single-host deployment limits scenario complexity, concurrent user count, and prevents realistic multi-segment network topologies. Academic ranges (KYPO, SPHERE) and military ranges (PCTE) all support multi-node deployment.
+WITHDRAWN 2026-10-05: Multi-host cloud deployment, concurrent users and production availability are LilRAE non-goals. See GitHub issue #480. --- Original rationale: Single-host deployment limits scenario complexity, concurrent user count, and prevents realistic multi-segment network topologies. Academic ranges (KYPO, SPHERE) and military ranges (PCTE) all support multi-node deployment.
 
 ## Traceability
 

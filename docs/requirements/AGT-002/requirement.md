@@ -3,10 +3,10 @@ id: AGT-002
 title: "ACES-Aligned Multi-Agent Coordination"
 status: DRAFT
 type: FUNCTIONAL
-priority: MUST
+priority: WONT
 wave: 2
 created_at: 2026-03-21T07:49:00.755641Z
-updated_at: 2026-06-22T01:20:43.682776Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # AGT-002: ACES-Aligned Multi-Agent Coordination
@@ -17,7 +17,7 @@ The platform shall support concurrent operation of multiple ACES-declared partic
 
 ## Rationale
 
-Purple-team research still requires simultaneous offense and defense, but the coordination model must be layered on ACES participant and runtime contracts. Moving this out of Wave 1 avoids treating broad multi-agent behavior as a prerequisite for the TechVault authoring cutover.
+WITHDRAWN 2026-10-05: No adopted scenario needs multi-participant coordination. RAES owns the semantics (ACT-612). Multi-role participant runs already work through #557. LilRAE participant control continues in #1216 and #1224. See GitHub issue #420. --- Original rationale: Purple-team research still requires simultaneous offense and defense, but the coordination model must be layered on ACES participant and runtime contracts. Moving this out of Wave 1 avoids treating broad multi-agent behavior as a prerequisite for the TechVault authoring cutover.
 
 ## Traceability
 

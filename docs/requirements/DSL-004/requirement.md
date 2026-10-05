@@ -3,10 +3,10 @@ id: DSL-004
 title: "Scenario Composition (Atomic to Campaigns)"
 status: DRAFT
 type: FUNCTIONAL
-priority: SHOULD
+priority: WONT
 wave: 2
 created_at: 2026-03-21T07:52:31.235076Z
-updated_at: 2026-03-21T07:52:31.235076Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # DSL-004: Scenario Composition (Atomic to Campaigns)
@@ -17,7 +17,7 @@ The scenario DSL shall support composition: combining atomic scenarios into camp
 
 ## Rationale
 
-Monolithic scenario files don't scale. Composition enables building complex campaigns from tested atomic units, sharing common patterns (for example, initial access, lateral movement) across different exercises.
+WITHDRAWN 2026-10-05: RAES owns scenario composition (rae#656). LilRAE realizes composed packs through #894 and #1239. See GitHub issue #433. --- Original rationale: Monolithic scenario files don't scale. Composition enables building complex campaigns from tested atomic units, sharing common patterns (for example, initial access, lateral movement) across different exercises.
 
 ## Traceability
 

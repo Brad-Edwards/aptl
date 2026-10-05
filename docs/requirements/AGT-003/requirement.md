@@ -3,10 +3,10 @@ id: AGT-003
 title: "Persistent Cross-Session Agent Memory"
 status: DRAFT
 type: FUNCTIONAL
-priority: SHOULD
+priority: WONT
 wave: 2
 created_at: 2026-03-21T07:49:04.733391Z
-updated_at: 2026-06-28T17:13:17.532880Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # AGT-003: Persistent Cross-Session Agent Memory
@@ -17,7 +17,7 @@ The platform shall provide persistent agent memory that survives across sessions
 
 ## Rationale
 
-PentAGI uses long-term memory for multi-session campaigns. Without persistence, each run starts from zero, preventing cumulative learning and realistic multi-day adversary simulation.
+WITHDRAWN 2026-10-05: No adopted scenario needs persistent participant memory. LilRAE participant control continues in #1216 and #1224. See GitHub issue #425. --- Original rationale: PentAGI uses long-term memory for multi-session campaigns. Without persistence, each run starts from zero, preventing cumulative learning and realistic multi-day adversary simulation.
 
 ## Traceability
 

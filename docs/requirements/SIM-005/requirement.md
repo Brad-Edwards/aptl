@@ -3,10 +3,10 @@ id: SIM-005
 title: "Pacing Control"
 status: DRAFT
 type: FUNCTIONAL
-priority: SHOULD
+priority: WONT
 wave: 2
 created_at: 2026-03-21T07:53:28.736599Z
-updated_at: 2026-06-28T17:13:12.331184Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # SIM-005: Pacing Control
@@ -17,7 +17,7 @@ The simulation engine shall support pacing control: configurable timing between 
 
 ## Rationale
 
-Real adversaries operate with dwell times of hours to months. Immediate sequential execution is unrealistic and doesn't test time-based detections. Pacing control enables modeling realistic adversary tempo.
+WITHDRAWN 2026-10-05: No scenario needs pacing control. A live emulated range cannot run faster than real time. The capability envelope (#1216) declares unsupported time controls. See GitHub issue #461. --- Original rationale: Real adversaries operate with dwell times of hours to months. Immediate sequential execution is unrealistic and doesn't test time-based detections. Pacing control enables modeling realistic adversary tempo.
 
 ## Traceability
 

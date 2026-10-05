@@ -65,7 +65,7 @@ RULE_CONVENTIONAL = "pr-title-conventional"
 RULE_SUBJECT_LOWERCASE = "pr-title-subject-lowercase"
 RULE_EMPTY = "pr-title-empty"
 
-PROMOTION_REPOSITORY = "Brad-Edwards/aptl"
+PROMOTION_REPOSITORY = "OpenRAE/lilrae"
 PROMOTION_BASE_REF = "main"
 PROMOTION_HEAD_REF = "dev"
 PROMOTION_PLATFORM_TITLE = "Dev"

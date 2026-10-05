@@ -128,7 +128,7 @@ Recommended bound: 60–300s. Shorter than 60s makes blue's drops too ephemeral 
 
 ## Default posture
 
-All `<active-response>` blocks ship `<disabled>yes</disabled>`. The starting posture is **off** by design—blue's job over iters is to enable and tune them per the detection rules they author. See [#251](https://github.com/Brad-Edwards/aptl/issues/251) for the full default-defensive-posture documentation.
+All `<active-response>` blocks ship `<disabled>yes</disabled>`. The starting posture is **off** by design—blue's job over iters is to enable and tune them per the detection rules they author. See [#251](https://github.com/OpenRAE/lilrae/issues/251) for the full default-defensive-posture documentation.
 
 ## `disable-account` manual procedure (AC#4 of #249)
 
@@ -174,7 +174,7 @@ All `<active-response>` blocks ship `<disabled>yes</disabled>`. The starting pos
 
 ## Related
 
-- [Issue #249](https://github.com/Brad-Edwards/aptl/issues/249): implementation issue.
-- [#252](https://github.com/Brad-Edwards/aptl/issues/252): orchestrator-side post-iter cleanup, complementary to the in-band whitelist.
-- [tests/test_wazuh_active_response.py](https://github.com/Brad-Edwards/aptl/blob/main/tests/test_wazuh_active_response.py): pytest assertions on the AR config + standalone script.
-- [scripts/test-wazuh-ar-whitelist.sh](https://github.com/Brad-Edwards/aptl/blob/main/scripts/test-wazuh-ar-whitelist.sh): manual E2E for the carve-out.
+- [Issue #249](https://github.com/OpenRAE/lilrae/issues/249): implementation issue.
+- [#252](https://github.com/OpenRAE/lilrae/issues/252): orchestrator-side post-iter cleanup, complementary to the in-band whitelist.
+- [tests/test_wazuh_active_response.py](https://github.com/OpenRAE/lilrae/blob/main/tests/test_wazuh_active_response.py): pytest assertions on the AR config + standalone script.
+- [scripts/test-wazuh-ar-whitelist.sh](https://github.com/OpenRAE/lilrae/blob/main/scripts/test-wazuh-ar-whitelist.sh): manual E2E for the carve-out.

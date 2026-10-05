@@ -1,9 +1,9 @@
 site_name: APTL - Advanced Purple Team Lab
 site_description: A local Docker-based purple team lab infrastructure with Wazuh SIEM, containerized victim machines, and AI-powered red team operations
 site_author: APTL Team
-site_url: https://brad-edwards.github.io/aptl/
-repo_url: https://github.com/Brad-Edwards/aptl
-repo_name: Brad-Edwards/aptl
+site_url: https://openrae.github.io/lilrae/
+repo_url: https://github.com/OpenRAE/lilrae
+repo_name: OpenRAE/lilrae
 
 theme:
   name: material
@@ -239,4 +239,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/Brad-Edwards/aptl
+      link: https://github.com/OpenRAE/lilrae

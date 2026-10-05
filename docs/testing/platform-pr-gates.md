@@ -51,4 +51,4 @@ hold it, and names the concerns this small boot deliberately does not claim.
 These checks support the **generic installed-wheel materialization and lab
 lifecycle profile on a GitHub-hosted Ubuntu runner with local Docker**. They do
 not qualify the full TechVault or LilRAE journey. Those qualifications are
-tracked in APTL #870 and #685, and OpenRAE/lilrae #4, #9, and #10.
+tracked in APTL #870 and #685, and OpenRAE/lilrae #1214, #1219, and #1220.

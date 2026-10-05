@@ -19,13 +19,13 @@ contributor documentation.
 | Criterion | Status | Evidence |
 | --- | --- | --- |
 | `description_good` | Met | [Documentation home](../index.md) explains what APTL does and its safety boundary. |
-| `interact` | Met | [Installation](../getting-started/installation.md), [support](https://github.com/Brad-Edwards/aptl/blob/main/SUPPORT.md), and [contribution](https://github.com/Brad-Edwards/aptl/blob/main/CONTRIBUTING.md) paths are linked from the project front door. |
-| `contribution` | Met | [CONTRIBUTING.md](https://github.com/Brad-Edwards/aptl/blob/main/CONTRIBUTING.md) describes the fork, branch, test, and pull-request process. |
-| `contribution_requirements` | Met | [Making changes](https://github.com/Brad-Edwards/aptl/blob/main/CONTRIBUTING.md#making-changes) states the acceptance requirements. |
+| `interact` | Met | [Installation](../getting-started/installation.md), [support](https://github.com/OpenRAE/lilrae/blob/main/SUPPORT.md), and [contribution](https://github.com/OpenRAE/lilrae/blob/main/CONTRIBUTING.md) paths are linked from the project front door. |
+| `contribution` | Met | [CONTRIBUTING.md](https://github.com/OpenRAE/lilrae/blob/main/CONTRIBUTING.md) describes the fork, branch, test, and pull-request process. |
+| `contribution_requirements` | Met | [Making changes](https://github.com/OpenRAE/lilrae/blob/main/CONTRIBUTING.md#making-changes) states the acceptance requirements. |
 | `documentation_basics` | Met | [Lab guide](../getting-started/index.md) covers prerequisites, installation, safe use, troubleshooting, and teardown. |
 | `documentation_interface` | Met | The [CLI](../reference/cli.md), [MCP](../reference/mcp.md), and [web](../reference/web.md) references describe the supported interfaces. |
-| `report_process` | Met | [SUPPORT.md](https://github.com/Brad-Edwards/aptl/blob/main/SUPPORT.md) explains how to submit useful bug reports and feedback. |
-| `vulnerability_report_process` | Met | [SECURITY.md](https://github.com/Brad-Edwards/aptl/security/policy) directs reporters to private vulnerability reporting. |
+| `report_process` | Met | [SUPPORT.md](https://github.com/OpenRAE/lilrae/blob/main/SUPPORT.md) explains how to submit useful bug reports and feedback. |
+| `vulnerability_report_process` | Met | [SECURITY.md](https://github.com/OpenRAE/lilrae/security/policy) directs reporters to private vulnerability reporting. |
 
 The repository-root `.bestpractices.json` proposes these answers to the badge
 application. That file deliberately does not propose facts that only the
@@ -56,7 +56,7 @@ visible and are not waived by a passing self-assessment.
 The two remaining publication actions require maintainer-owned web sessions:
 
 1. Sign in to the [OpenSSF badge application](https://www.bestpractices.dev/),
-   register `https://github.com/Brad-Edwards/aptl`, review the proposals from
+   register `https://github.com/OpenRAE/lilrae`, review the proposals from
    `.bestpractices.json`, personally confirm the response-history and security-
    knowledge attestations, and save the passing assessment.
 2. Add the numeric badge URL returned by OpenSSF to `README.md`. Do not use a

@@ -61,9 +61,9 @@ lab-start path does not own an admitted experiment terminal context; that
 limitation is preserved in the exported bundle.
 
 Parallel delivery work also affects reproducibility:
-[APTL #1186](https://github.com/Brad-Edwards/aptl/issues/1186) covers persistent
+[APTL #1186](https://github.com/OpenRAE/lilrae/issues/1186) covers persistent
 guest sudo provisioning and the optional host tailnet relay;
-[APTL #1194](https://github.com/Brad-Edwards/aptl/issues/1194) investigates the
+[APTL #1194](https://github.com/OpenRAE/lilrae/issues/1194) investigates the
 shipped seat's need for manual Docker network correction. A future seat-based
 qualification must record the selected image digest, embedded software
 revision, Docker daemon/context, and observed network attachments. A source
@@ -215,12 +215,12 @@ because it cannot qualify the adapter semantics.
 ### Research and product coordination
 
 The October 4 run supplies the APTL-side engineering evidence requested by
-[APTL #558](https://github.com/Brad-Edwards/aptl/issues/558). Its run identity,
+[APTL #558](https://github.com/OpenRAE/lilrae/issues/558). Its run identity,
 pack digest, backend and participant realization, ordered delivery evidence,
 native evaluator evidence, topology/run manifest, redaction behavior, and
 limitations are recorded here and under `runs/run_20261004T012853Z/` in the
 executing workspace. The run also extends the real participant action surface
-proved by [APTL #554](https://github.com/Brad-Edwards/aptl/issues/554). The local
+proved by [APTL #554](https://github.com/OpenRAE/lilrae/issues/554). The local
 run directory remains an unsealed engineering artifact and is not a published
 research bundle.
 
@@ -231,7 +231,7 @@ backend identity, and evidence limitations captured by this run are inputs to
 that walkthrough. This attempt used APTL's current backend implementation, so
 it does not establish Hub #15's released-LilRAE execution criterion.
 
-[LilRAE #11](https://github.com/OpenRAE/lilrae/issues/11) owns the future paired
+[LilRAE #1221](https://github.com/OpenRAE/lilrae/issues/1221) owns the future paired
 LilRAE and BigRAE invariant ledger. This APTL run contributes a candidate
 portable evidence shape and participant sequence. It is not one side of a
 LilRAE-versus-APTL comparison and makes no cross-backend equivalence,

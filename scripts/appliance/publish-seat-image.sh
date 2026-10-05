@@ -76,7 +76,7 @@ else
   # launcher reads, both by digest.
   (cd "$out" && oras push "${namespace}:${key_tag}" \
     --config "seat-image-config.json:${CONFIG_MEDIA_TYPE}" \
-    --annotation "org.opencontainers.image.source=https://github.com/${owner}/aptl" \
+    --annotation "org.opencontainers.image.source=https://github.com/${owner}/lilrae" \
     --annotation "org.opencontainers.image.version=${image_tag:-$key_tag}" \
     --annotation "org.opencontainers.image.revision=${source_commit}" \
     "seat-disk.qcow2:${DISK_MEDIA_TYPE}")

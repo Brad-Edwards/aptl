@@ -3,10 +3,10 @@ id: DSL-006
 title: "CACAO and Attack Flow Alignment"
 status: DRAFT
 type: INTERFACE
-priority: COULD
+priority: WONT
 wave: 3
 created_at: 2026-03-21T07:52:39.348426Z
-updated_at: 2026-03-21T07:52:39.348426Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # DSL-006: CACAO and Attack Flow Alignment
@@ -17,7 +17,7 @@ The scenario DSL shall align with industry standards: OASIS CACAO v2.0 concepts 
 
 ## Rationale
 
-Proprietary formats create ecosystem lock-in. CACAO v2.0 is the ratified OASIS standard for security playbooks. Attack Flow v3 is the STIX 2.1 extension for attack chain modeling. Alignment enables import/export and cross-tool interoperability.
+WITHDRAWN 2026-10-05: The upstream contract (rae#660) closed as not planned. A translation to SDL gives ordinary SDL, so the backend has no work. See GitHub issue #471. --- Original rationale: Proprietary formats create ecosystem lock-in. CACAO v2.0 is the ratified OASIS standard for security playbooks. Attack Flow v3 is the STIX 2.1 extension for attack chain modeling. Alignment enables import/export and cross-tool interoperability.
 
 ## Traceability
 

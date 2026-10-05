@@ -3,10 +3,10 @@ id: SIM-004
 title: "Campaign Pause, Resume, and Controlled Re-execution"
 status: DRAFT
 type: FUNCTIONAL
-priority: SHOULD
+priority: WONT
 wave: 3
 created_at: 2026-03-21T07:53:25.174643Z
-updated_at: 2026-07-11T02:30:30.746064Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # SIM-004: Campaign Pause, Resume, and Controlled Re-execution
@@ -17,7 +17,7 @@ APTL shall allow a campaign to stop admitting trials, pause at a safe trial boun
 
 ## Rationale
 
-Campaign-level control and auditable re-execution are achievable and useful. Container freezing or exact replay is backend-dependent and scientifically misleading unless all hidden state and external dependencies are controlled.
+WITHDRAWN 2026-10-05: The serial runner owns cancellation (#459) and resume after a restart (#437). Campaign re-execution and mid-trial checkpoints are not planned. See GitHub issue #499. --- Original rationale: Campaign-level control and auditable re-execution are achievable and useful. Container freezing or exact replay is backend-dependent and scientifically misleading unless all hidden state and external dependencies are controlled.
 
 ## Traceability
 

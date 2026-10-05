@@ -3,10 +3,10 @@ id: AGT-005
 title: "Autonomous Objective Pursuit"
 status: DRAFT
 type: FUNCTIONAL
-priority: COULD
+priority: WONT
 wave: 3
 created_at: 2026-03-21T07:49:11.494950Z
-updated_at: 2026-06-28T17:13:07.669521Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # AGT-005: Autonomous Objective Pursuit
@@ -17,7 +17,7 @@ The platform shall enable agents to autonomously evaluate and work toward scenar
 
 ## Rationale
 
-Objectives currently exist only for manual post-hoc evaluation (SCN-007). Wiring them into the agent loop enables autonomous goal-directed behavior, a prerequisite for benchmarking agent performance.
+WITHDRAWN 2026-10-05: Pursuit of objectives is a property of the participant, not of the backend. The backend part (run participants, record actions and outcomes) is complete through #557. See GitHub issue #463. --- Original rationale: Objectives currently exist only for manual post-hoc evaluation (SCN-007). Wiring them into the agent loop enables autonomous goal-directed behavior, a prerequisite for benchmarking agent performance.
 
 ## Traceability
 

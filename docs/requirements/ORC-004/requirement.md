@@ -3,10 +3,10 @@ id: ORC-004
 title: "Agent-to-Agent Communication and Shared Context"
 status: DRAFT
 type: FUNCTIONAL
-priority: SHOULD
+priority: WONT
 wave: 2
 created_at: 2026-03-21T07:51:24.830558Z
-updated_at: 2026-06-28T17:13:20.358846Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # ORC-004: Agent-to-Agent Communication and Shared Context
@@ -17,7 +17,7 @@ The platform shall provide a mechanism for multiple agents to communicate findin
 
 ## Rationale
 
-Multi-agent operation (AGT-002) requires inter-agent communication. Without shared context, agents duplicate work and cannot coordinate strategies across specializations.
+WITHDRAWN 2026-10-05: No adopted scenario needs shared participant context. See GitHub issue #450. --- Original rationale: Multi-agent operation (AGT-002) requires inter-agent communication. Without shared context, agents duplicate work and cannot coordinate strategies across specializations.
 
 ## Traceability
 

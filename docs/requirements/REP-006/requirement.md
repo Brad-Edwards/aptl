@@ -3,10 +3,10 @@ id: REP-006
 title: "Comparable Precondition Inspection Between Runs"
 status: DRAFT
 type: FUNCTIONAL
-priority: SHOULD
+priority: WONT
 wave: 3
 created_at: 2026-03-21T07:53:08.566586Z
-updated_at: 2026-07-11T02:30:30.938535Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # REP-006: Comparable Precondition Inspection Between Runs
@@ -17,7 +17,7 @@ APTL shall produce a machine-readable inspection of explicitly comparability-rel
 
 ## Rationale
 
-Researchers need to know what changed before interpreting differing results. A factual precondition inspection belongs at the instrument boundary; comparison semantics are owned by ACES and analytical conclusions are downstream.
+WITHDRAWN 2026-10-05: RAES owns cross-run comparison (rae#269, rae#270). See GitHub issue #496. --- Original rationale: Researchers need to know what changed before interpreting differing results. A factual precondition inspection belongs at the instrument boundary; comparison semantics are owned by ACES and analytical conclusions are downstream.
 
 ## Traceability
 

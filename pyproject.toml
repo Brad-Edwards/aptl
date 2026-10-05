@@ -129,6 +129,9 @@ build = [
 "techvault.aptl" = "aptl_techvault.capture:provider"
 "techvault-participant-study.aptl" = "aptl_techvault.study:capture"
 
+[project.entry-points."aptl.evidence_payload"]
+"aptl.collector.redteam-session-transcript" = "aptl_techvault.evidence.techvault_transcript:validate_retained_transcript"
+
 [project.entry-points."aptl.scenario_planning_compatibility"]
 "techvault.aptl" = "aptl_techvault.planning_compatibility:provider"
 "techvault-participant-study.aptl" = "aptl_techvault.study:planning_compatibility"

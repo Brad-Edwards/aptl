@@ -17,6 +17,10 @@ MISSING_SOURCE = f"{DOMAIN}.missing-source"
 REJECTED_SOURCE = f"{DOMAIN}.rejected-source"
 #: An evidence record failed RAES model validation.
 INVALID_RECORD = f"{DOMAIN}.invalid-record"
+#: A pinned adapter transcript blob fails its retained-payload semantic contract.
+INVALID_TRANSCRIPT = f"{DOMAIN}.invalid-transcript"
+#: The plan needed to identify a record's pinned adapter is unavailable.
+CAPTURE_PLAN_UNAVAILABLE = f"{DOMAIN}.capture-plan-unavailable"
 #: A requested projection could not be produced (e.g. optional lib missing).
 PROJECTION_UNAVAILABLE = f"{DOMAIN}.projection-unavailable"
 #: A requested projection is ineligible for these records (declared loss rule).
@@ -31,6 +35,8 @@ __all__ = [
     "MISSING_SOURCE",
     "REJECTED_SOURCE",
     "INVALID_RECORD",
+    "INVALID_TRANSCRIPT",
+    "CAPTURE_PLAN_UNAVAILABLE",
     "PROJECTION_UNAVAILABLE",
     "PROJECTION_INELIGIBLE",
     "METADATA_REDACTED",

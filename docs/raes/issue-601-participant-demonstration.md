@@ -186,6 +186,32 @@ scientific result. The subsequent `aptl lab stop` removed the lab but reported
 `aptl.scenario-evidence.required-transcript-finalization-failed`; the retained
 run therefore makes no successful terminal-transcript or archival-seal claim.
 
+### Retained transcript contract after issue #1201
+
+New TechVault transcript evidence uses `aptl-techvault-transcript/v2`. Its
+`transcript_entries` retain ordered frames, direction, timestamps, and close
+reason. Each entry has a `terminal_ref` derived from the broker session identity
+and validated custody digest; the raw session ID is not retained. The ordinary
+evidence redactor still removes secret-shaped values within frame `data`.
+The adapter scans joined terminal frames for credentials split across transport
+reads. When a joined scan detects a secret that individual frames missed, it
+withholds the affected direction's frame data; cross-direction ambiguity or
+oversized scan context withholds the session's frame data while retaining its
+structure and custody metadata.
+
+`source_chain_digest` names the digest of the original, unredacted broker frame
+chain, validated before projection. It cannot authenticate text after redaction.
+The evidence record's `raw_content.content_checksum` and blob URI digest instead
+identify the exact retained redacted bytes. Finalization validates the stored
+v2 blob against the admitted transcript and frame counts before it records a
+successful terminal outcome. Bundle closure checks the self-contained v2 shape
+for a record pinned to the transcript collector and reports
+`aptl.evidence-bundle.invalid-transcript` on failure. Portable bundle checksum
+verification checks bytes and inventory; it does not independently compare the
+transcript with the broker census. If the referenced capture plan is missing or
+malformed, bundle closure reports `aptl.evidence-bundle.capture-plan-unavailable`
+because it cannot qualify the adapter semantics.
+
 ### Research and product coordination
 
 The October 4 run supplies the APTL-side engineering evidence requested by

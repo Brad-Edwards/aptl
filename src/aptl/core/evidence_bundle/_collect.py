@@ -11,6 +11,7 @@ artifacts sharing a bundle path are dropped and disclosed.
 from __future__ import annotations
 
 import json
+from importlib import metadata
 from pathlib import Path
 
 from raes_contracts.contracts import ExperimentEvidenceRecordModel
@@ -34,6 +35,7 @@ from aptl.utils import pathsafe
 _MEDIA_JSON = "application/json"
 _MEDIA_OCTET = "application/octet-stream"
 _EVIDENCE_LEDGER_DIR = "evidence/records"
+_PAYLOAD_VALIDATOR_GROUP = "aptl.evidence_payload"
 
 # Known backend-evidence roots: (run-relative source, bundle path, role,
 # contract id, whether absence is a recorded limitation).
@@ -249,18 +251,10 @@ def _collect_blob(
 ) -> None:
     """Verify and append the record's referenced blob, or disclose its absence."""
     blob_uri = record.raw_content.content_uri
-    try:
-        digest, size = hash_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
-    except SourceMissing:
-        limitations.append(
-            ClosureLimitation(codes.MISSING_SOURCE, "referenced blob absent", blob_uri)
-        )
+    hashed = _hash_referenced_blob(run_dir, blob_uri, limits, limitations)
+    if hashed is None:
         return
-    except SourceRejected as exc:
-        limitations.append(
-            ClosureLimitation(codes.REJECTED_SOURCE, exc.detail, blob_uri)
-        )
-        return
+    digest, size = hashed
 
     declared = record.raw_content.content_checksum.value
     if declared and digest != f"sha256:{declared}":
@@ -272,6 +266,32 @@ def _collect_blob(
             )
         )
         return
+
+    registration_id = _pinned_registration(run_dir, record, limits)
+    if not registration_id:
+        limitations.append(
+            ClosureLimitation(
+                codes.CAPTURE_PLAN_UNAVAILABLE,
+                "capture plan unavailable; adapter semantics unqualified",
+                record.capture_spec_ref.ref_id,
+            )
+        )
+    else:
+        validators = [
+            entry
+            for entry in metadata.entry_points(group=_PAYLOAD_VALIDATOR_GROUP)
+            if entry.name == registration_id
+        ]
+        if validators:
+            if not _validate_adapter_blob(validators, run_dir, blob_uri, limits):
+                limitations.append(
+                    ClosureLimitation(
+                        codes.INVALID_TRANSCRIPT,
+                        "pinned adapter payload fails semantic validation",
+                        blob_uri,
+                    )
+                )
+                return
 
     entries.append(
         ClosureEntry(
@@ -287,6 +307,82 @@ def _collect_blob(
             disclosures=disclosures,
         )
     )
+
+
+def _hash_referenced_blob(
+    run_dir: Path,
+    blob_uri: str,
+    limits: BundleLimits,
+    limitations: list[ClosureLimitation],
+) -> tuple[str, int] | None:
+    """Hash a referenced blob and disclose bounded-read failures."""
+    result: tuple[str, int] | None = None
+    try:
+        result = hash_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
+    except SourceMissing:
+        limitations.append(
+            ClosureLimitation(codes.MISSING_SOURCE, "referenced blob absent", blob_uri)
+        )
+    except SourceRejected as exc:
+        limitations.append(
+            ClosureLimitation(codes.REJECTED_SOURCE, exc.detail, blob_uri)
+        )
+    return result
+
+
+def _validate_adapter_blob(
+    validators: list[metadata.EntryPoint],
+    run_dir: Path,
+    blob_uri: str,
+    limits: BundleLimits,
+) -> bool:
+    """Call one installed adapter's semantic validator on bounded retained bytes."""
+    if len(validators) != 1:
+        return False
+    try:
+        validator = validators[0].load()
+        if not callable(validator):
+            raise TypeError("adapter validator is not callable")
+        _, _, body = read_source(run_dir, blob_uri, max_bytes=limits.max_member_bytes)
+        validator(json.loads(body))
+    except Exception:
+        # Installed adapter failures cannot turn qualification into success.
+        return False
+    return True
+
+
+def _pinned_registration(
+    run_dir: Path, record: ExperimentEvidenceRecordModel, limits: BundleLimits
+) -> str | None:
+    """Resolve the record's registration from its admitted capture plan."""
+    plan_id = record.capture_spec_ref.ref_id
+    try:
+        _, _, body = read_source(
+            run_dir,
+            f"evidence/capture-plans/{plan_id}.json",
+            max_bytes=limits.max_member_bytes,
+        )
+        plan = json.loads(body)
+    except (SourceMissing, SourceRejected, ValueError):
+        return None
+    if (
+        not isinstance(plan, dict)
+        or not isinstance(plan.get("bindings"), list)
+        or any(
+            not isinstance(binding, dict)
+            or not isinstance(binding.get("registration_id"), str)
+            or not isinstance(binding.get("demand"), dict)
+            or not isinstance(binding["demand"].get("demand_id"), str)
+            for binding in plan["bindings"]
+        )
+    ):
+        return None
+    matching = [
+        binding["registration_id"]
+        for binding in plan["bindings"]
+        if binding["demand"]["demand_id"] == record.capture_requirement_ref
+    ]
+    return matching[0] if len(matching) == 1 else None
 
 
 def coalesce(

@@ -190,8 +190,13 @@ def test_transcript_source_requires_every_ledger_session_and_valid_chain():
     document = json.loads(b"".join(result.chunks))
 
     assert result.status is CollectorStatus.OK
-    assert document["sessions"][0]["frames"][0]["direction"] == "input"
-    assert document["sessions"][0]["frames"][1]["direction"] == "output"
+    assert document["schema_version"] == "aptl-techvault-transcript/v2"
+    entry = document["transcript_entries"][0]
+    assert entry["terminal_ref"].startswith("terminal-")
+    assert "session-1" not in json.dumps(document)
+    assert entry["source_chain_digest"] == transcript_chain_digest(_session().frames)
+    assert entry["frames"][0]["direction"] == "input"
+    assert entry["frames"][1]["direction"] == "output"
     assert result.source_pipeline["session_count"] == 1
 
 
@@ -210,3 +215,27 @@ def test_transcript_source_rejects_bypass_or_forged_chain():
 
     assert bypass.fetch(_START, _END).status is CollectorStatus.MID_RUN_LOSS
     assert tampered.fetch(_START, _END).status is CollectorStatus.MID_RUN_LOSS
+
+
+def test_transcript_source_withholds_cross_direction_secret_context():
+    frames = (
+        TranscriptFrame(1, _TRIGGERED, "input", b"password="),
+        TranscriptFrame(2, _FINISHED, "output", b"hunter2"),
+    )
+    session = TranscriptSession(
+        session_id="session-1",
+        started_at=_TRIGGERED,
+        finished_at=_FINISHED,
+        close_reason="clean-exit",
+        frames=frames,
+        final_chain_digest=transcript_chain_digest(frames),
+    )
+    result = RedteamSessionTranscriptSource(
+        lambda: ["session-1"], lambda: [session]
+    ).fetch(_START, _END)
+
+    assert result.status is CollectorStatus.OK
+    entry = json.loads(b"".join(result.chunks))["transcript_entries"][0]
+    assert [frame["data"] for frame in entry["frames"]] == [
+        "[REDACTED]", "[REDACTED]",
+    ]

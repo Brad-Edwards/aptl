@@ -103,7 +103,6 @@ def test_failed_update_admission_preserves_selection_and_overlay(tmp_path, monke
     assert overlay.read_bytes() == b"existing state"
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="Linux seat lifecycle")
 def _trusted_shared_cache(tmp_path, monkeypatch):
     """Return a shared cache with publisher trust and a seeder for admitted disks."""
     import hashlib
@@ -136,6 +135,7 @@ def _trusted_shared_cache(tmp_path, monkeypatch):
     return cache, seed
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux seat lifecycle")
 def test_updating_one_seat_retains_another_seats_offline_image(tmp_path, monkeypatch):
     from aptl.appliance.seat import image, lifecycle, image_update
     from tests.test_seat_image_trust import REFERENCE

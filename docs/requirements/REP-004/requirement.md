@@ -21,4 +21,4 @@ Without background traffic, attack traffic is the only traffic on the network, w
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#436` (DSL-009 — Run declared user-behavior profiles)
+- DOCUMENTS → GITHUB_ISSUE `#436` (DSL-009: Run declared user-behavior profiles)

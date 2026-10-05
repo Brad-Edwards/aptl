@@ -1,11 +1,11 @@
-"""Generic base-container start/copy for image-free node materialization.
+"""Generic base-container start/copy for base-container node materialization.
 
 Split out of ``docker_compose.py`` (module-length budget) as a mixin so the
 deployment backend stays under the size limit. ``ComposeBaseSubstrateMixin``
 is mixed into ``DockerComposeBackend``, which supplies ``_run`` and
 ``_project_name``.
 
-ADR-048: an image-free node is realized onto a generic base-OS container,
+ADR-048: a base-container-materialized node is realized onto a base-OS container,
 never an appliance image. These two operations are the Docker mechanics the
 generic materializer needs from a backend: start the base container with the
 declared init requirements, and copy checked-in project content into it.
@@ -316,7 +316,7 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             **dict(spec.environment_defaults),
             **self._project_dotenv(),
             **os.environ,
-            **getattr(self, "_image_free_generated_environment", {}).get(
+            **getattr(self, "_base_container_generated_environment", {}).get(
                 spec.node_address, {}
             ),
         }
@@ -474,7 +474,7 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             )
 
     def configure_base_container_networks(self, nodes: tuple[object, ...]) -> None:
-        """Bind image-free nodes to admitted networks before they are created."""
+        """Bind base-container-materialized nodes to admitted networks before creation."""
 
         strict = getattr(
             self, "_appliance_boundary", None

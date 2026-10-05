@@ -149,7 +149,7 @@ def artifact_consumers_mounted(
     artifact: DeploymentGeneratedArtifactRealization,
     node_containers: dict[str, str],
     source: Path,
-    image_free_addresses: frozenset[str],
+    non_compose_addresses: frozenset[str],
 ) -> bool:
     """Return whether every consumer received exactly its declared outputs."""
 
@@ -160,7 +160,7 @@ def artifact_consumers_mounted(
             consumer,
             node_containers,
             source,
-            consumer.target_address in image_free_addresses,
+            consumer.target_address in non_compose_addresses,
         )
         for consumer in artifact.consumers
     )
@@ -172,7 +172,7 @@ def _artifact_consumer_realized(
     consumer: DeploymentStatefulConsumer,
     node_containers: dict[str, str],
     source: Path,
-    image_free: bool,
+    non_compose: bool,
 ) -> bool:
     """Observe one artifact through its actual bind or file-placement mechanism."""
 
@@ -180,7 +180,7 @@ def _artifact_consumer_realized(
     if settled is None:
         return False
     container, info = settled
-    if image_free:
+    if non_compose:
         return _placed_outputs_present(backend, artifact, consumer, container)
     return all(
         mount_present(
@@ -245,13 +245,13 @@ def _placed_outputs_present(
     consumer: DeploymentStatefulConsumer,
     container: str,
 ) -> bool:
-    """Return whether an image-free consumer holds every selected output."""
+    """Return whether a non-Compose consumer holds every selected output as placed files."""
 
     by_name = {output.name: output for output in artifact.outputs}
     names = _consumer_output_names(artifact, consumer)
     if not names:
         log.warning(
-            "artifact %s places no output into image-free consumer %s",
+            "artifact %s places no output into non-Compose consumer %s",
             artifact.address,
             consumer.target_address,
         )
@@ -291,7 +291,7 @@ def _placed_output_present(
         return False
     if not placed:
         log.warning(
-            "artifact %s output missing from image-free consumer %s",
+            "artifact %s output missing from non-Compose consumer %s",
             artifact.address,
             consumer.target_address,
         )

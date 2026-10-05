@@ -122,7 +122,7 @@ class ComposeRealizationModelMixin:
         """Write a Compose override bind-mounting image nodes' declared content.
 
         Content bytes are resolved from the pack (``scenario_root``) and written
-        under ``realization_root``; image-free content is delivered by the
+        under ``realization_root``; base-container-materialized node content is delivered by the
         generic materializer, not here (issue #875).
         """
 

@@ -1,4 +1,4 @@
-"""Full-stack real-Docker test: image-free and image-based nodes together.
+"""Full-stack real-Docker test: base-container-materialized and image-backed nodes together.
 
 TechVault's real shape is permanently mixed: some nodes convert to the
 generic materializer (`runtime:`), others stay on a declared vendor
@@ -9,7 +9,7 @@ one `aptl lab start`, without either side conflicting with or silently
 skipping the other.
 
 Constructs the realization spec directly rather than through the RAES
-compiler (already proven separately, e.g. test_imagefree_admission_
+compiler (already proven separately, e.g. test_base_container_admission_
 integration.py) so this test isolates `realize()`'s own dispatch.
 
 Marked `integration`; skipped without Docker.
@@ -147,14 +147,14 @@ def test_realize_materializes_runtime_node_and_starts_image_node_together(tmp_pa
     # Routing is per-node, not a whole-spec flag (the flag was removed): the
     # runtime-only node is materialized, the image node stays a Compose service,
     # and because a Compose node remains the mixed path runs.
-    from aptl.core.deployment._compose_image_free_realization import (
-        _image_free_node_addresses,
+    from aptl.core.deployment._compose_base_container_realization import (
+        _base_container_node_addresses,
     )
     from aptl.core.deployment._compose_realization import _needs_compose
 
-    image_free = _image_free_node_addresses(spec)
-    assert free_node.address in image_free
-    assert image_node.address not in image_free
+    materialized = _base_container_node_addresses(spec)
+    assert free_node.address in materialized
+    assert image_node.address not in materialized
     assert _needs_compose(spec) is True
 
     try:

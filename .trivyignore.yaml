@@ -1,0 +1,114 @@
+# Trivy waivers (ADR-026 amendment, issue #1193). Every entry is scoped to exact
+# Dockerfiles or exact package versions and states why the finding cannot be
+# fixed there. A waiver never covers a whole rule, severity, or directory, and
+# never covers a vulnerability whose fix the image can take: the CI gates fail
+# on all of those. Misconfiguration waivers are permanent design decisions and
+# also apply to the IaC SARIF record; vulnerability waivers apply to the gates
+# only, so those findings stay tracked in code scanning.
+misconfigurations:
+  # DS-0002 "image user should not be root". Each image below starts a process
+  # that requires uid 0 inside the container by its own privilege model. None
+  # of them is granted extra capabilities beyond what that process needs, and
+  # images that can run unprivileged (web, web-api, misp-suricata-sync) set USER.
+  - id: DS-0002
+    paths:
+      - containers/base/Dockerfile.rocky
+      - containers/base/Dockerfile.ubuntu
+      - containers/generic-systemd-base/Dockerfile
+      - containers/generic-systemd-base-debian/Dockerfile
+      - containers/generic-systemd-node22-base/Dockerfile
+      - containers/generic-systemd-wazuh-agent-base/Dockerfile
+      - containers/generic-systemd-wazuh-agent-base-debian/Dockerfile
+      - containers/reverse/Dockerfile
+    statement: >-
+      systemd runs as PID 1 and must be uid 0 inside the container. These nodes
+      run with no added capabilities, a private cgroup namespace, and the
+      daemon's default seccomp and AppArmor profiles (issue #955).
+  - id: DS-0002
+    paths:
+      - containers/generic-wazuh-agent-base-debian/Dockerfile
+      - containers/generic-samba-ad-base/Dockerfile
+      - containers/generic-samba-ad-wazuh-agent-base/Dockerfile
+    statement: >-
+      Base-container substrates: the generic materializer applies each node's
+      declared packages, /etc files, identities, and services as root inside
+      the container (ADR-048). Samba AD DC additionally binds 53/88/389/445 and
+      owns its root-held domain database.
+  - id: DS-0002
+    paths:
+      - containers/kali-capture/Dockerfile
+    statement: >-
+      OpenSSH sshd privilege separation requires starting as root; Compose
+      grants only the CHOWN, DAC_OVERRIDE, NET_BIND_SERVICE, SETGID, SETUID,
+      and SYS_CHROOT capabilities it needs.
+  - id: DS-0002
+    paths:
+      - containers/suricata-wazuh-agent/Dockerfile
+    statement: >-
+      Suricata must open its packet capture as root before dropping to its own
+      user, and the co-located Wazuh agent runs as root by vendor design.
+  - id: DS-0002
+    paths:
+      - containers/network-boundary-helper/Dockerfile
+    statement: >-
+      Programs nftables inside container network namespaces, which needs
+      CAP_NET_ADMIN as uid 0; Docker does not grant ambient capabilities to a
+      non-root user.
+
+# Vulnerabilities in copies vendored inside a package manager. Trivy reports a
+# fix for the standalone library, but no release of the package manager that
+# vendors it ships that fix yet, so the image cannot take it. Each waiver pins
+# the exact vendored version: once pip or npm vendors a newer one, the waiver
+# stops matching and the gate checks it again. These still appear in the
+# recorded SARIF and in code scanning; the waiver relaxes only the gate.
+vulnerabilities:
+  # pip 26.2.1, the newest release and the version the lock pins, vendors these.
+  # The runtime venv in the Debian systemd base keeps pip because the
+  # materializer installs a node's declared pip packages with it.
+  - id: GHSA-6v7p-g79w-8964
+    purls: [pkg:pypi/msgpack@1.1.2]
+    statement: Vendored by pip 26.2.1 (pip/_vendor); no pip release vendors msgpack >= 1.2.1 yet.
+  - id: CVE-2025-47273
+    purls: [pkg:pypi/setuptools@70.3.0]
+    statement: Vendored by pip 26.2.1 (pip/_vendor); no pip release vendors setuptools >= 78.1.1 yet.
+  - id: CVE-2026-59890
+    purls: [pkg:pypi/setuptools@70.3.0]
+    statement: Vendored by pip 26.2.1 (pip/_vendor); no pip release vendors setuptools >= 83.0.0 yet.
+  - id: CVE-2026-97687
+    purls: [pkg:pypi/urllib3@2.7.0]
+    statement: Vendored by pip 26.2.1 (pip/_vendor); no pip release vendors urllib3 >= 2.8.0 yet.
+  - id: CVE-2026-97688
+    purls: [pkg:pypi/urllib3@2.7.0]
+    statement: Vendored by pip 26.2.1 (pip/_vendor); no pip release vendors urllib3 >= 2.8.0 yet.
+  - id: CVE-2026-97689
+    purls: [pkg:pypi/urllib3@2.7.0]
+    statement: Vendored by pip 26.2.1 (pip/_vendor); no pip release vendors urllib3 >= 2.8.0 yet.
+  # npm 11.21.0, the newest release, bundles these. The node22 substrate keeps
+  # npm because materialized nodes install from its offline cache with it.
+  - id: CVE-2026-102276
+    purls: [pkg:npm/brace-expansion@5.0.9]
+    statement: Bundled by npm 11.21.0; no npm release bundles brace-expansion >= 5.0.10 yet.
+  - id: CVE-2026-102277
+    purls: [pkg:npm/brace-expansion@5.0.9]
+    statement: Bundled by npm 11.21.0; no npm release bundles brace-expansion >= 5.0.12 yet.
+  - id: CVE-2026-102278
+    purls: [pkg:npm/brace-expansion@5.0.9]
+    statement: Bundled by npm 11.21.0; no npm release bundles brace-expansion >= 5.0.11 yet.
+  - id: CVE-2026-101910
+    purls: [pkg:npm/ip-address@10.5.0]
+    statement: Bundled by npm 11.21.0; no npm release bundles ip-address >= 10.5.1 yet.
+  - id: CVE-2026-101911
+    purls: [pkg:npm/ip-address@10.5.0]
+    statement: Bundled by npm 11.21.0; no npm release bundles ip-address >= 10.7.1 yet.
+  - id: CVE-2026-101912
+    purls: [pkg:npm/ip-address@10.5.0]
+    statement: Bundled by npm 11.21.0; no npm release bundles ip-address >= 10.7.1 yet.
+  - id: CVE-2026-101913
+    purls: [pkg:npm/ip-address@10.5.0]
+    statement: Bundled by npm 11.21.0; no npm release bundles ip-address >= 10.5.1 yet.
+  - id: CVE-2026-19534
+    purls: [pkg:npm/undici@6.28.0]
+    statement: Bundled by npm 11.21.0; no npm release bundles undici >= 6.28.1 yet.
+  - id: CVE-2026-85024
+    purls: [pkg:npm/undici@6.28.0]
+    statement: Bundled by npm 11.21.0; no npm release bundles undici >= 6.28.1 yet.

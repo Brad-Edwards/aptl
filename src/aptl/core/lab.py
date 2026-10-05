@@ -2586,7 +2586,7 @@ def _probe_ssh_target(ctx: _LabStartContext, name: str, user: str) -> None:
             key_path=ctx.ssh_key_path,
         ),
         # Generous ceiling: on a full first boot the generic-base SSH targets
-        # (image-free apt installs of openssh-server started under systemd) can
+        # (base-container apt installs of openssh-server started under systemd) can
         # take well past a minute to have sshd accepting connections while ~30
         # other containers initialize concurrently -- the heaviest target (Kali,
         # apt-installing openssh plus the offensive toolset) was observed still

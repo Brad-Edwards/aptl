@@ -56,7 +56,7 @@ transaction. Readback checks table ownership, policy digest, chain hooks,
 priority, default policy, and every expected rule identity. A missing,
 changed, or extra owned rule is fatal.
 
-Image-free nodes are created on their first declared RAES network and attached
+[Base-container-materialized nodes](node-realization.md) are created on their first declared RAES network and attached
 to all remaining declared networks before they start. There is no temporary
 Docker default-bridge or package-install egress window.
 

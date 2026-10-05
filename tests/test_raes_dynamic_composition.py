@@ -440,7 +440,7 @@ def test_unsupported_os_family_yields_no_substrate():
 
 
 # --------------------------------------------------------------------------- #
-# resolve_node_image treats a dynamic-composition source as image-free
+# resolve_node_image treats a dynamic-composition source as having no node image
 # --------------------------------------------------------------------------- #
 
 
@@ -453,7 +453,7 @@ def _node_resource(source: dict) -> PlannedResource:
     )
 
 
-def test_dynamic_composition_source_is_image_free():
+def test_dynamic_composition_source_has_no_node_image():
     resource = _node_resource(
         {"name": "web", "artifact_requirement": _dc_contract().model_dump(mode="json")}
     )

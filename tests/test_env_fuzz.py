@@ -52,7 +52,11 @@ _ENV_VAR_NAMES = st.text(
 )
 _ENV_VAR_VALUES = st.text(min_size=0, max_size=200)
 
-_REQUIRED_VARS = (
+# Wazuh bindings a scenario adapter supplies. Since #1152 none is globally
+# required: a missing or empty value stays empty until admission, and the
+# Wazuh-native readiness owner fails closed only for a realization that
+# actually declares Wazuh.
+_WAZUH_VARS = (
     "INDEXER_USERNAME",
     "INDEXER_PASSWORD",
     "API_USERNAME",
@@ -103,12 +107,12 @@ _OPTIONAL_VALUE = st.text(min_size=0, max_size=200)
 
 @st.composite
 def _valid_env_dict(draw):
-    """Build a dict where every required var is present and non-empty.
+    """Build a dict where every Wazuh var is present and non-empty.
 
     Dashboard bindings and the cluster key are randomly included so the
     successful path also exercises scenario-neutral empty defaults.
     """
-    env: dict[str, str] = {var: draw(_NONEMPTY_VALUE) for var in _REQUIRED_VARS}
+    env: dict[str, str] = {var: draw(_NONEMPTY_VALUE) for var in _WAZUH_VARS}
     for optional in ("DASHBOARD_USERNAME", "DASHBOARD_PASSWORD", "WAZUH_CLUSTER_KEY"):
         if draw(st.booleans()):
             env[optional] = draw(_OPTIONAL_VALUE)
@@ -118,10 +122,10 @@ def _valid_env_dict(draw):
 @given(env=_valid_env_dict())
 @settings(max_examples=200, deadline=500)
 def test_env_vars_from_dict_valid_input_constructs_envvars(env):
-    """When every required var is present and non-empty, the call succeeds.
+    """When every Wazuh var is present and non-empty, the call succeeds.
 
     Property: ``env_vars_from_dict(env)`` returns an ``EnvVars`` whose
-    required fields round-trip from the input dict, and whose optional
+    Wazuh fields round-trip from the input dict, and whose optional
     fields take either the supplied value or the documented default.
     """
     result = env_vars_from_dict(env)
@@ -138,19 +142,33 @@ def test_env_vars_from_dict_valid_input_constructs_envvars(env):
 
 @given(
     env=_valid_env_dict(),
-    drop_var=st.sampled_from(_REQUIRED_VARS),
+    drop_var=st.sampled_from(_WAZUH_VARS),
     empty=st.booleans(),
 )
 @settings(max_examples=100, deadline=500)
-def test_env_vars_from_dict_missing_required_raises(env, drop_var, empty):
-    """A missing or empty required var raises ``ValueError`` and names it."""
+def test_env_vars_from_dict_missing_wazuh_var_stays_empty(env, drop_var, empty):
+    """A missing or empty Wazuh var is not an error; it stays empty (#1152).
+
+    The other bindings still round-trip, so dropping one never corrupts or
+    shifts its neighbours.
+    """
     if empty:
         env[drop_var] = ""
     else:
         env.pop(drop_var, None)
 
-    with pytest.raises(ValueError, match=drop_var):
-        env_vars_from_dict(env)
+    result = env_vars_from_dict(env)
+
+    fields = {
+        "INDEXER_USERNAME": result.indexer_username,
+        "INDEXER_PASSWORD": result.indexer_password,
+        "API_USERNAME": result.api_username,
+        "API_PASSWORD": result.api_password,
+    }
+    assert fields[drop_var] == ""
+    for var, value in fields.items():
+        if var != drop_var:
+            assert value == env[var]
 
 
 @given(

@@ -1,9 +1,12 @@
-"""Image-free node partitioning and materialization (ADR-048, issue #581).
+"""Base-container-materialized node partitioning and materialization (ADR-048).
+
+Issue #581 introduced this route; issue #1193 renamed it from "image-free",
+because each such node still starts from a real Docker base image.
 
 Split out of ``_compose_realization.py`` (module-length budget): the pure
 helpers that decide which nodes convert to the generic materializer and
 which Compose service names must be scaled to zero, plus the shared
-materialize-a-node-subset entry point both the fully image-free and
+materialize-a-node-subset entry point both the fully base-container and
 mixed-realization paths dispatch through.
 """
 
@@ -37,20 +40,20 @@ def _needs_compose(realization: DeploymentRealizationSpec) -> bool:
         return True
     if not realization.nodes:
         return True
-    materialized = _image_free_node_addresses(realization)
+    materialized = _base_container_node_addresses(realization)
     return any(
         node.address not in materialized and node.service_name
         for node in realization.nodes
     )
 
 
-def _strip_image_free_published_ports(
-    realization: DeploymentRealizationSpec, image_free_addresses: frozenset[str]
+def _strip_base_container_published_ports(
+    realization: DeploymentRealizationSpec, base_container_addresses: frozenset[str]
 ) -> DeploymentRealizationSpec:
     """Clear ``published_ports`` on nodes the generic materializer already started.
 
-    An image-free node's declared host ports were already bound by its own
-    ``docker run -p`` (``start_base_container``) during image-free
+    A base-container-materialized node's declared host ports were already bound
+    by its own ``docker run -p`` (``start_base_container``) during base-container
     materialization, which runs before the legacy Compose pipeline below.
     Left alone, that pipeline's own published-port conflict check and
     Compose port override would re-probe the same host port their own
@@ -62,19 +65,19 @@ def _strip_image_free_published_ports(
 
     legacy_nodes = tuple(
         replace(node, published_ports=())
-        if node.address in image_free_addresses
+        if node.address in base_container_addresses
         else node
         for node in realization.nodes
     )
     return cast(DeploymentRealizationSpec, replace(realization, nodes=legacy_nodes))
 
 
-def _image_free_node_addresses(
+def _base_container_node_addresses(
     realization: DeploymentRealizationSpec,
 ) -> frozenset[str]:
-    """Return the addresses of nodes the generic materializer realizes from a base OS.
+    """Return the addresses of base-container-materialized nodes.
 
-    A node is materialized image-free only when it declares runtime desired state
+    A node is base-container-materialized only when it declares runtime desired state
     *and* resolves to no backing image. A node that declares runtime inventory but
     also carries a real image -- ``suricata`` describing its detection engine while
     still pulling ``jasonish/suricata``, ``wazuh-manager`` describing its SIEM while
@@ -97,8 +100,8 @@ def _image_free_node_addresses(
     )
 
 
-def _image_free_service_names(
-    realization: DeploymentRealizationSpec, image_free_addresses: frozenset[str]
+def _base_container_service_names(
+    realization: DeploymentRealizationSpec, base_container_addresses: frozenset[str]
 ) -> tuple[str, ...]:
     """Return the Compose service names of nodes materialized directly (ADR-048).
 
@@ -112,7 +115,7 @@ def _image_free_service_names(
         sorted(
             node.service_name
             for node in realization.nodes
-            if node.address in image_free_addresses and node.service_name
+            if node.address in base_container_addresses and node.service_name
         )
     )
 
@@ -127,13 +130,13 @@ def _realize_node_subset(
 ) -> LabResult | None:
     """Materialize a node subset's declared state via the generic materializer.
 
-    Shared by the fully image-free path and the mixed-realization path
+    Shared by the fully base-container path and the mixed-realization path
     (ADR-048); the only difference between them is which nodes/content are
     passed in. Lowers each content item to its placement op and dispatches
     per node, verified by read-after-write. ``extra_ops`` carries additional
     per-node placement ops (a consumer's generated-artifact outputs, #875)
     already keyed by node address. ``persistent_volumes`` carries the
-    realization's persistent volumes so an image-free node that consumes one
+    realization's persistent volumes so a base-container-materialized node that consumes one
     mounts it: the Compose override defers non-Compose consumers to this
     materializer rather than declaring a mount no Compose service carries
     (issue #875).
@@ -292,7 +295,7 @@ def _bind_base_container_networks(
     except BackendSeedError:
         return LabResult(
             success=False,
-            error="Image-free network binding failed.",
+            error="Base-container network binding failed.",
         )
     return None
 

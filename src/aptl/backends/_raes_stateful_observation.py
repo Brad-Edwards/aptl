@@ -52,14 +52,14 @@ def _observe_generated_artifact(
     artifact: DeploymentGeneratedArtifactRealization | None,
     node_containers: dict[str, str],
     realization_root: Path,
-    image_free_addresses: frozenset[str],
+    non_compose_addresses: frozenset[str],
 ) -> ObservedResource:
     """Observe verified outputs and realized delivery for one artifact.
 
     A generated artifact is read back from ``realization_root`` -- the writable
     root the backend produced it under -- never from the pristine scenario
     bundle it was deliberately not written into (issue #875). In-tree the two
-    coincide. ``image_free_addresses`` names the consumers that receive their
+    coincide. ``non_compose_addresses`` names the consumers that receive their
     outputs as placed files rather than Compose binds.
     """
 
@@ -73,7 +73,7 @@ def _observe_generated_artifact(
             node_containers,
             realization_root,
             source,
-            image_free_addresses,
+            non_compose_addresses,
         )
     )
     if not realized:
@@ -103,13 +103,13 @@ def _artifact_realization_state(
     node_containers: dict[str, str],
     realization_root: Path,
     source: Path,
-    image_free_addresses: frozenset[str],
+    non_compose_addresses: frozenset[str],
 ) -> tuple[bool, bool, bool, bool, dict[str, object]]:
     """Compute artifact output, delivery, readiness, and evidence state."""
 
     outputs_present = _artifact_outputs_present(source, artifact)
     consumers_mounted = outputs_present and _artifact_consumers_mounted(
-        backend, artifact, node_containers, source, image_free_addresses
+        backend, artifact, node_containers, source, non_compose_addresses
     )
     environment_delivered = outputs_present and _artifact_environment_delivered(
         backend, artifact, node_containers, source

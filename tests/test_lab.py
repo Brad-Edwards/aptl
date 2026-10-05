@@ -3525,7 +3525,7 @@ class TestStartupClassificationWiring:
         assert ctx.diagnostics == []
 
     def test_test_ssh_skips_profile_alias_without_declared_ssh(self, tmp_path, mocker):
-        """An image-free Kali node need not inherit the appliance's sshd."""
+        """A base-container-materialized Kali node need not inherit the appliance's sshd."""
         from aptl.core.lab import _step_test_ssh
 
         ctx = self._ctx(tmp_path, selected_profiles={"kali"})

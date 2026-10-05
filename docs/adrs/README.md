@@ -47,7 +47,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [023](adr-023-container-interaction-in-deployment-backend.md) | Container interaction (list/logs/shell/exec/inspect) on the DeploymentBackend Protocol | accepted | 2026-05-03 |
 | [024](adr-024-orchestrator-side-purple-continuity-carve-out.md) | Orchestrator-side purple-team continuity carve-out | accepted | 2026-05-03 |
 | [025](adr-025-strict-first-party-config-schema.md) | Strict first-party config schema | accepted | 2026-05-05 |
-| [026](adr-026-advisory-ci-vulnerability-scanning.md) | Advisory CI Vulnerability Scanning | accepted | 2026-05-09 |
+| [026](adr-026-advisory-ci-vulnerability-scanning.md) | Advisory CI Vulnerability Scanning (scanners made blocking by the #1193 amendment) | accepted (amended) | 2026-05-09 |
 | [027](adr-027-red-team-structured-logging.md) | Red Team Structured Logging Boundary (SIEM-transport superseded by ADR-033) | accepted (amended) | 2026-05-09 |
 | [028](adr-028-runtime-rendered-service-config.md) | Runtime-Rendered Service Config | accepted | 2026-05-10 |
 | [029](adr-029-control-plane-secret-handling.md) | Control-Plane Secret Handling in Run Data and Local State | accepted | 2026-05-10 |
@@ -69,7 +69,7 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [045](adr-045-ephemeral-lifecycle-policy-enforcement.md) | Ephemeral Lifecycle Policy Enforcement | accepted | 2026-06-28 |
 | [046](adr-046-dynamic-raes-scenario-realization.md) | Dynamic RAES Scenario Realization (Image Realization Addendum superseded by ADR-048) | accepted (amended) | 2026-06-29 |
 | [047](adr-047-raes-experiment-admission-and-trial-plan-boundary.md) | RAES Experiment Admission and Trial-Plan Boundary | accepted | 2026-07-19 |
-| [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope | superseded in part by ADR-051 | 2026-07-20 |
+| [048](adr-048-image-free-placement-realization.md) | APTL Image-Free, Placement-Based Realization Envelope (historical term; see [Node Realization Routes](../components/node-realization.md)) | superseded in part by ADR-051 | 2026-07-20 |
 | [049](adr-049-sealed-disposable-lab-appliance.md) | Sealed, Disposable Lab Appliance Delivery Boundary | superseded in part by ADR-060 | 2026-07-25 |
 | [050](adr-050-terminal-attempt-archival-and-atomic-seal.md) | Terminal Attempt Archival And Atomic Seal Boundary | accepted | 2026-07-28 |
 | [051](adr-051-component-level-raes-realization.md) | Component-Level RAES Realization | accepted | 2026-07-28 |

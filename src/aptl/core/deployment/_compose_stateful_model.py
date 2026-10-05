@@ -171,8 +171,8 @@ def _non_compose_consumer_addresses(
 ) -> frozenset[str]:
     """Return node addresses that are not Compose services.
 
-    Only a node with a backing image becomes a Compose service. An image-free
-    node (declared runtime, no image) is realized by the generic materializer,
+    Only a node with a backing image becomes a Compose service. A
+    base-container-materialized node (declared runtime, no node image) is realized by the generic materializer,
     and a node with neither image nor runtime is not realized as a container at
     all — so neither can carry a Compose bind. Emitting one puts a mount-only
     service with no image into the stateful override, which makes
@@ -194,11 +194,11 @@ def _append_artifact_mounts(
 ) -> None:
     """Append every declared generated-artifact bind mount for Compose nodes."""
 
-    image_free = _non_compose_consumer_addresses(realization)
+    non_compose = _non_compose_consumer_addresses(realization)
     for artifact in realization.generated_artifacts:
         source = artifact_source_path(scenario_root, artifact)
         for consumer in artifact.consumers:
-            if consumer.target_address in image_free:
+            if consumer.target_address in non_compose:
                 continue
             if _uses_per_output_mounts(artifact, consumer):
                 _append_selected_output_mounts(services, source, artifact, consumer)
@@ -309,7 +309,7 @@ def _append_volume_mounts(
             for consumer in volume.consumers
             if consumer.target_address not in non_compose
         ]
-        # A volume mounted only by non-Compose nodes (image-free or imageless)
+        # A volume mounted only by non-Compose nodes (base-container or imageless)
         # is delivered by the generic materializer, not Compose. Declaring it in
         # the override would leave a top-level volume no Compose service mounts,
         # which docker compose config prunes and the effective-model check then

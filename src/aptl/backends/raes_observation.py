@@ -174,7 +174,7 @@ def _observe_planned_resource(
             index.artifacts.get(address),
             index.node_containers,
             index.realization_root,
-            index.image_free,
+            index.non_compose,
         )
     elif resource.resource_type == "persistent-volume":
         observed = _observe_persistent_volume(

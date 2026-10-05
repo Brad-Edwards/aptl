@@ -200,7 +200,7 @@ def base_container_spec(
     named-volume mounts the node consumes that are not authored on
     ``runtime.mounts`` -- specifically its ``persistent_volumes`` consumer mounts,
     which the Compose override deliberately defers to the generic materializer for
-    an image-free consumer (issue #875).
+    a base-container-materialized consumer (issue #875).
     """
 
     unauthorized_backend_capabilities = sorted(

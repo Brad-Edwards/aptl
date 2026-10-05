@@ -15,10 +15,10 @@ from pathlib import Path
 from raes.runtime_configuration import RuntimeConfiguration, ServiceManagerUnit
 
 from aptl.core.deployment._compose_realization import (
-    _image_free_node_addresses,
-    _image_free_service_names,
+    _base_container_node_addresses,
+    _base_container_service_names,
     _realize_node_subset,
-    _strip_image_free_published_ports,
+    _strip_base_container_published_ports,
 )
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
@@ -64,16 +64,16 @@ def _image(address: str, service_name: str) -> DeploymentImageRealization:
     )
 
 
-class TestImageFreeNodeAddresses:
+class TestBaseContainerNodeAddresses:
     def test_only_runtime_declaring_nodes_are_included(self):
         free = _node("provision.node.free", runtime=RuntimeConfiguration())
         legacy = _node("provision.node.legacy", runtime=None)
-        addresses = _image_free_node_addresses(_spec((free, legacy)))
+        addresses = _base_container_node_addresses(_spec((free, legacy)))
         assert addresses == frozenset({"provision.node.free"})
 
     def test_empty_when_nothing_declares_runtime(self):
         legacy = _node("provision.node.legacy", runtime=None)
-        assert _image_free_node_addresses(_spec((legacy,))) == frozenset()
+        assert _base_container_node_addresses(_spec((legacy,))) == frozenset()
 
     def test_runtime_node_with_a_backing_image_stays_compose_managed(self):
         """A node declaring runtime that also resolves to a real backing image
@@ -89,25 +89,25 @@ class TestImageFreeNodeAddresses:
         )
         spec = _spec((node,), images=(_image("provision.node.wazuh", "wazuh-manager"),))
 
-        assert _image_free_node_addresses(spec) == frozenset()
+        assert _base_container_node_addresses(spec) == frozenset()
 
 
-class TestImageFreeServiceNames:
-    def test_returns_service_names_of_image_free_nodes_only(self):
+class TestBaseContainerServiceNames:
+    def test_returns_service_names_of_base_container_nodes_only(self):
         free = _node(
             "provision.node.free", runtime=RuntimeConfiguration(), service_name="free"
         )
         legacy = _node("provision.node.legacy", runtime=None, service_name="legacy")
         spec = _spec((free, legacy))
-        names = _image_free_service_names(spec, _image_free_node_addresses(spec))
+        names = _base_container_service_names(spec, _base_container_node_addresses(spec))
         assert names == ("free",)
 
-    def test_image_free_node_without_a_compose_service_is_skipped(self):
+    def test_base_container_node_without_a_compose_service_is_skipped(self):
         # A brand-new node with no legacy Compose definition at all (e.g. one
-        # authored only after the image-free cutover) has nothing to exclude.
+        # authored only after the base-container materialization cutover) has nothing to exclude.
         free = _node("provision.node.free", runtime=RuntimeConfiguration(), service_name=None)
         spec = _spec((free,))
-        names = _image_free_service_names(spec, _image_free_node_addresses(spec))
+        names = _base_container_service_names(spec, _base_container_node_addresses(spec))
         assert names == ()
 
     def test_names_are_sorted_for_deterministic_argv(self):
@@ -118,19 +118,19 @@ class TestImageFreeServiceNames:
             "provision.node.a", runtime=RuntimeConfiguration(), service_name="a-service"
         )
         spec = _spec((b, a))
-        names = _image_free_service_names(spec, _image_free_node_addresses(spec))
+        names = _base_container_service_names(spec, _base_container_node_addresses(spec))
         assert names == ("a-service", "b-service")
 
 
-class TestStripImageFreePublishedPorts:
-    """An image-free node's declared host ports are already bound by its own
-    `docker run -p` during image-free materialization, which runs before the
+class TestStripBaseContainerPublishedPorts:
+    """A base-container-materialized node's declared host ports are already bound by its own
+    `docker run -p` during base-container materialization, which runs before the
     legacy Compose pipeline's own published-port conflict check and Compose
     port override. Left alone, those would re-probe the same host port
     their own earlier stage already bound and fail realize() on a false
     conflict with itself (issue #581, caught only by a real local boot)."""
 
-    def test_image_free_node_published_ports_are_cleared(self):
+    def test_base_container_node_published_ports_are_cleared(self):
         free = _node(
             "provision.node.webapp",
             runtime=RuntimeConfiguration(),
@@ -139,7 +139,7 @@ class TestStripImageFreePublishedPorts:
         )
         spec = _spec((free,))
 
-        result = _strip_image_free_published_ports(spec, frozenset({"provision.node.webapp"}))
+        result = _strip_base_container_published_ports(spec, frozenset({"provision.node.webapp"}))
 
         assert result.nodes[0].published_ports == ()
 
@@ -152,7 +152,7 @@ class TestStripImageFreePublishedPorts:
         )
         spec = _spec((legacy,))
 
-        result = _strip_image_free_published_ports(spec, frozenset())
+        result = _strip_base_container_published_ports(spec, frozenset())
 
         assert result.nodes[0].published_ports == legacy.published_ports
 
@@ -165,7 +165,7 @@ class TestStripImageFreePublishedPorts:
         )
         spec = _spec((free,))
 
-        result = _strip_image_free_published_ports(spec, frozenset({"provision.node.webapp"}))
+        result = _strip_base_container_published_ports(spec, frozenset({"provision.node.webapp"}))
 
         assert result.nodes[0].service_name == "webapp"
         assert result.nodes[0].runtime is free.runtime

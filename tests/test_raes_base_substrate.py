@@ -241,7 +241,7 @@ class TestBaseContainerSpec:
         assert spec_none.volume_mounts == ()
 
     def test_extra_volume_mounts_extend_declared_mounts(self):
-        # An image-free node's persistent_volume consumer mounts arrive here as
+        # A base-container-materialized node's persistent_volume consumer mounts arrive here as
         # extra_volume_mounts (the Compose override defers non-Compose consumers
         # to the generic materializer, issue #875), alongside runtime.mounts.
         from raes.runtime_mounts import RuntimeMount

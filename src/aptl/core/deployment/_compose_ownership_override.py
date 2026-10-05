@@ -129,8 +129,8 @@ def _add_receipted_container_names(
 ) -> None:
     """Add directly materialized containers to reference rewriting.
 
-    A Compose-managed sidecar may join the network namespace of an image-free
-    node that was started directly by the generic materializer. That node is
+    A Compose-managed sidecar may join the network namespace of a
+    base-container-materialized node that was started directly by the generic materializer. That node is
     absent from the final Compose file set, so its immutable ownership receipt
     is the authoritative semantic-to-external-name mapping.
     """

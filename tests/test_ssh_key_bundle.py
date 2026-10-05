@@ -215,7 +215,7 @@ def test_realizing_the_same_staging_root_twice_reuses_the_generated_keys(
 ):
     """Re-realization must not re-run keygen over an existing key.
 
-    The bundle is realized once for image-free consumers and again for the
+    The bundle is realized once for base-container consumers and again for the
     Compose consumers. ``ssh-keygen`` refuses to overwrite an existing file
     non-interactively, so a second generation attempt would fail the run; the
     provider is idempotent instead, and the second pass must leave the key bytes

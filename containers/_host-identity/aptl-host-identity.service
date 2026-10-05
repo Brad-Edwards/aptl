@@ -1,0 +1,13 @@
+[Unit]
+Description=Generate this container's own SSH host keys and default TLS key
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target ssh.service ssh.socket postgresql.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/aptl-host-identity
+
+[Install]
+WantedBy=sysinit.target

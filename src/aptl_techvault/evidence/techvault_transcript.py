@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
 from aptl.core.evidence.adapters.sources import SourceResult
 from aptl.core.evidence.outcomes import CollectorStatus
+from aptl.utils.redaction import REDACTED, is_sensitive_key, redact
 
 _UTC_OFFSET = "+00:00"
+_RETAINED_SCHEMA = "aptl-techvault-transcript/v2"
+_DIGEST_PATTERN = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_REF_PATTERN = re.compile(r"terminal-[0-9a-f]{64}\Z")
+# The shared scanner skips some command patterns beyond this text length.
+# Withhold that direction's frames instead of making a partial safety claim.
+_MAX_REDACTION_CONTEXT = 64 * 1024
 
 
 @dataclass(frozen=True)
@@ -94,35 +102,41 @@ def _transcript_result(
         sessions, key=lambda item: (item.started_at, item.session_id)
     ):
         rendered_frames: list[dict[str, object]] = []
-        for frame in session.frames:
+        safe_data = _retained_frame_data(session.frames)
+        for frame, data in zip(session.frames, safe_data, strict=True):
             rendered_frames.append(
                 {
                     "sequence": frame.sequence,
                     "timestamp": frame.timestamp,
                     "direction": frame.direction,
-                    "data": frame.data.decode("utf-8"),
+                    "data": data,
                 }
             )
             frame_count += 1
+        terminal_identity = (
+            b"aptl.techvault.terminal-ref/v1\0"
+            + session.session_id.encode("utf-8")
+            + b"\0"
+            + session.final_chain_digest.encode("ascii")
+        )
         rendered_sessions.append(
             {
-                "session_id": session.session_id,
+                "terminal_ref": "terminal-"
+                + hashlib.sha256(terminal_identity).hexdigest(),
                 "started_at": session.started_at,
                 "finished_at": session.finished_at,
                 "close_reason": session.close_reason,
-                "final_chain_digest": session.final_chain_digest,
+                "source_chain_digest": session.final_chain_digest,
                 "frames": rendered_frames,
             }
         )
     payload = {
-        "schema_version": "aptl-techvault-transcript/v1",
-        "sessions": rendered_sessions,
+        "schema_version": "aptl-techvault-transcript/v2",
+        "transcript_entries": rendered_sessions,
     }
     return SourceResult(
         status=CollectorStatus.OK if sessions else CollectorStatus.EMPTY_OK,
-        chunks=(
-            json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(),
-        ),
+        chunks=(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(),),
         media_type="application/json",
         source_min_time=min((item.started_at for item in sessions), default=start_iso),
         source_max_time=max((item.finished_at for item in sessions), default=end_iso),
@@ -138,6 +152,30 @@ def _transcript_result(
             "frame_count": frame_count,
         },
     )
+
+
+def _retained_frame_data(frames: Sequence[TranscriptFrame]) -> list[str]:
+    """Preserve useful frames while withholding secrets split across reads.
+
+    Frame boundaries are transport artifacts. Scan joined input and output
+    streams, then the retained chronological stream. When a joined scan finds
+    context that individual frame scans missed, withhold the implicated
+    direction; a cross-direction match withholds the entire session.
+    """
+    raw = [frame.data.decode("utf-8") for frame in frames]
+    safe = [str(redact(data)) for data in raw]
+    for direction in ("input", "output"):
+        indices = [i for i, frame in enumerate(frames) if frame.direction == direction]
+        joined = "".join(raw[i] for i in indices)
+        if len(joined) > _MAX_REDACTION_CONTEXT or redact(joined) != "".join(
+            safe[i] for i in indices
+        ):
+            for index in indices:
+                safe[index] = REDACTED
+    retained = "".join(safe)
+    if len(retained) > _MAX_REDACTION_CONTEXT or redact(retained) != retained:
+        return [REDACTED] * len(frames)
+    return safe
 
 
 def _valid_transcript_session(
@@ -202,6 +240,126 @@ def transcript_chain_digest(frames: Sequence[TranscriptFrame]) -> str:
     return _transcript_chain(frames)
 
 
+def validate_retained_transcript(
+    payload: object,
+    *,
+    expected_entries: int | None = None,
+    expected_frames: int | None = None,
+) -> None:
+    """Check the v2 retained projection, optionally against trusted source counts.
+
+    The source chain authenticates the original frames; it cannot be rebuilt
+    from frame data after redaction. The evidence record checksums the retained
+    bytes separately.
+    """
+    entries = _retained_entries(payload)
+    if expected_entries is not None and len(entries) != expected_entries:
+        raise ValueError("retained transcript count disagrees with source")
+    frame_count = _validate_retained_entries(entries)
+    if expected_frames is not None and frame_count != expected_frames:
+        raise ValueError("retained frame count disagrees with source")
+
+
+def _retained_entries(payload: object) -> list[object]:
+    """Check the retained envelope and return its transcript entries."""
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"schema_version", "transcript_entries"}
+        or payload["schema_version"] != _RETAINED_SCHEMA
+        or not isinstance(payload["transcript_entries"], list)
+    ):
+        raise ValueError("retained transcript shape is invalid")
+    return payload["transcript_entries"]
+
+
+def _validate_retained_entries(entries: list[object]) -> int:
+    """Validate every entry and its ordered frames; return the frame count."""
+    frame_count = 0
+    refs: set[str] = set()
+    for entry in entries:
+        frames = _validate_retained_entry(entry, refs)
+        for index, frame in enumerate(frames, 1):
+            _validate_retained_frame(frame, index, entry)
+            frame_count += 1
+    return frame_count
+
+
+def _validate_retained_entry(entry: object, refs: set[str]) -> list[object]:
+    """Check one entry's exact safe fields and unique derived identity."""
+    if not isinstance(entry, dict) or set(entry) != {
+        "terminal_ref",
+        "started_at",
+        "finished_at",
+        "close_reason",
+        "source_chain_digest",
+        "frames",
+    }:
+        raise ValueError("retained transcript entry is invalid")
+    if any(is_sensitive_key(key) for key in entry):
+        raise ValueError("retained transcript has a sensitive structural key")
+    ref = entry["terminal_ref"]
+    if not isinstance(ref, str) or not _REF_PATTERN.fullmatch(ref) or ref in refs:
+        raise ValueError("retained terminal reference is invalid")
+    refs.add(ref)
+    if not _valid_retained_metadata(entry):
+        raise ValueError("retained transcript metadata is invalid")
+    return entry["frames"]
+
+
+def _valid_retained_metadata(entry: dict[str, object]) -> bool:
+    """Check custody digest, completion reason, timestamps, and frame shape."""
+    digest = entry["source_chain_digest"]
+    reason = entry["close_reason"]
+    start = entry["started_at"]
+    end = entry["finished_at"]
+    return all(
+        (
+            isinstance(digest, str) and bool(_DIGEST_PATTERN.fullmatch(digest)),
+            isinstance(reason, str)
+            and reason in {"clean-exit", "remote-eof", "signal", "forced-teardown"},
+            isinstance(start, str),
+            isinstance(end, str),
+            isinstance(entry["frames"], list),
+            isinstance(start, str)
+            and isinstance(end, str)
+            and _inside_window(start, start, end),
+        )
+    )
+
+
+def _validate_retained_frame(
+    frame: object, index: int, entry: dict[str, object]
+) -> None:
+    """Check one ordered frame without interpreting its redacted data as source."""
+    if (
+        not isinstance(frame, dict)
+        or set(frame) != {"sequence", "timestamp", "direction", "data"}
+        or any(is_sensitive_key(key) for key in frame)
+    ):
+        raise ValueError("retained transcript frame is invalid")
+    if not _valid_retained_frame_values(frame, index, entry):
+        raise ValueError("retained transcript frame is invalid")
+
+
+def _valid_retained_frame_values(
+    frame: dict[str, object], index: int, entry: dict[str, object]
+) -> bool:
+    """Check frame order, direction, text shape, and session-relative time."""
+    direction = frame["direction"]
+    timestamp = frame["timestamp"]
+    return all(
+        (
+            type(frame["sequence"]) is int,
+            frame["sequence"] == index,
+            isinstance(direction, str) and direction in {"input", "output"},
+            isinstance(timestamp, str),
+            isinstance(frame["data"], str),
+            isinstance(timestamp, str)
+            and _inside_window(timestamp, entry["started_at"], entry["finished_at"]),
+        )
+    )
+
+
 def _inside_window(value: object, start_iso: str, end_iso: str) -> bool:
     """Return whether an ISO timestamp lies inside the closed capture window."""
 
@@ -211,12 +369,16 @@ def _inside_window(value: object, start_iso: str, end_iso: str) -> bool:
         end = datetime.fromisoformat(end_iso.replace("Z", _UTC_OFFSET))
     except (TypeError, ValueError):
         return False
-    return start <= instant <= end
+    try:
+        return start <= instant <= end
+    except TypeError:
+        return False
 
 
 __all__ = (
     "RedteamSessionTranscriptSource",
     "TranscriptFrame",
     "TranscriptSession",
+    "validate_retained_transcript",
     "transcript_chain_digest",
 )

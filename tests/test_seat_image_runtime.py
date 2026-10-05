@@ -161,7 +161,6 @@ def test_readiness_calls_the_current_guest_access_contract(
         backend=backend,
     )
     monkeypatch.setattr(readiness, "publish_guest_readiness", lambda *_a: None)
-    monkeypatch.setattr("aptl.appliance.guest_web.start_guest_web", lambda *a: None)
 
     def access(
         *, request_path, descriptor_path, device_path, output_dir,

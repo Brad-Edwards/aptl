@@ -73,6 +73,21 @@ class TechVaultCaptureRuntimeAdapter:
     ) -> object:
         return FinalizedTranscriptCollector(binding, payload, activated_at)
 
+    @staticmethod
+    def validate_retained_transcript(
+        payload: object,
+        *,
+        expected_entries: int | None = None,
+        expected_frames: int | None = None,
+    ) -> None:
+        from aptl_techvault.evidence.techvault_transcript import (
+            validate_retained_transcript,
+        )
+
+        validate_retained_transcript(
+            payload, expected_entries=expected_entries, expected_frames=expected_frames
+        )
+
 
 class TechVaultCaptureProvider:
     """Supply TechVault declarations through exact pack/backend admission."""

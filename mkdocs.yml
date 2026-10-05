@@ -139,6 +139,7 @@ nav:
     - MCP Smoke-Test Protocol: components/mcp-smoke-test-protocol.md
     - Participant Workbench: components/participant-workbench.md
     - Appliance Network Boundary: components/appliance-boundary.md
+    - Node Realization Routes: components/node-realization.md
   - Scenarios:
     - Authoring Boundary: sdl/index.md
     - Curated RAES Variants: sdl/techvault-curated-variants.md
@@ -221,7 +222,7 @@ nav:
     - ADR-045 Ephemeral Lifecycle Policy Enforcement: adrs/adr-045-ephemeral-lifecycle-policy-enforcement.md
     - ADR-046 Dynamic RAES Scenario Realization: adrs/adr-046-dynamic-raes-scenario-realization.md
     - ADR-047 RAES Experiment Admission and Trial-Plan Boundary: adrs/adr-047-raes-experiment-admission-and-trial-plan-boundary.md
-    - ADR-048 APTL Image-Free, Placement-Based Realization Envelope: adrs/adr-048-image-free-placement-realization.md
+    - ADR-048 APTL Image-Free (historical term), Placement-Based Realization Envelope: adrs/adr-048-image-free-placement-realization.md
     - ADR-049 Sealed Disposable Lab Appliance: adrs/adr-049-sealed-disposable-lab-appliance.md
     - ADR-051 Component-Level RAES Realization: adrs/adr-051-component-level-raes-realization.md
     - ADR-052 Configured Participant Credential Sourcing: adrs/adr-052-configured-participant-credential-sourcing.md

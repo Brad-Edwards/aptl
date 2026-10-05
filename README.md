@@ -3,9 +3,18 @@
 
 🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322), [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785), and SecTor 2026 Briefings.**
 
-# APTL—Advanced Purple Team Lab
+# LilRAE (formerly APTL)
 
-APTL is a local purple-team lab where human operators and AI agents exercise
+> **APTL is now LilRAE.** The Advanced Purple Team Lab (APTL) repository moved
+> to [OpenRAE/lilrae](https://github.com/OpenRAE/lilrae) and was renamed. It is
+> the same project, with the same source, history, features, and issue tracker.
+> The rename does not change how you install or run it: the package is still
+> `aptl-labs`, the command is still `aptl`, and existing configuration, state
+> directories, and runtime identifiers keep their `aptl` names. Where current
+> pages still say APTL, they mean LilRAE. See
+> [ADR-062](docs/adrs/adr-062-lilrae-name-and-naming-convention.md).
+
+LilRAE is a local purple-team lab where human operators and AI agents exercise
 red- and blue-team workflows against an intentionally vulnerable enterprise
 range. Scenario documents select and realize the target, attacker, and SOC
 topology; the CLI owns validation, startup, readiness, access discovery,
@@ -16,7 +25,7 @@ and AI threat-actor assessment.
 
 ## Status And Safety
 
-**Active development. Not for production. Not hardened.** APTL gives AI agents
+**Active development. Not for production. Not hardened.** LilRAE gives AI agents
 penetration-testing tools and starts intentionally vulnerable services. Use a
 dedicated, rebuildable host, keep unrelated credentials and workloads
 elsewhere, control the surrounding network, and operate only on systems you are

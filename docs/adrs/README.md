@@ -83,3 +83,4 @@ We use [MADR](https://adr.github.io/madr/) (Markdown Any Decision Records). Each
 | [059](adr-059-canonical-techvault-delivery-and-host-mcp-access.md) | Canonical TechVault Delivery and Host MCP Access | superseded in part by ADR-060 and ADR-061 | 2026-09-17 |
 | [060](adr-060-vm-only-seat-containment.md) | VM-Only Seat Containment | superseded in part by ADR-061 | 2026-09-20 |
 | [061](adr-061-gateless-vm-seat-access.md) | Browser Desktop for VM Seats | accepted | 2026-09-30 |
+| [062](adr-062-lilrae-name-and-naming-convention.md) | LilRAE Name and Naming Convention for New Code | accepted | 2026-10-05 |

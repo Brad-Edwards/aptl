@@ -1887,3 +1887,5 @@ src/aptl/backends/scenario_runtime_selection.py	core-candidate	Keep scenario run
 containers/_host-identity/aptl-host-identity	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/_host-identity/aptl-host-identity.service	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/_host-identity/install.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
+docs/adrs/adr-062-lilrae-name-and-naming-convention.md	architecture-history	Preserve LilRAE name change and new-code naming decision
+docs/architecture/issue-1232-lilrae-naming-preflight.md	architecture-history	Preserve LilRAE public naming boundary and compatibility guardrails

@@ -39,6 +39,7 @@ prose must not accidentally rename them.
 
 | Surface | Files | Disposition |
 | --- | --- | --- |
+| LilRAE public naming boundary | `docs/architecture/issue-1232-lilrae-naming-preflight.md` | Preserve pack, RAES, and backend ownership while explaining the project's public name and retained compatibility identifiers. |
 | Shipped seat network investigation | `docs/architecture/issue-1194-shipped-seat-network-preflight.md` | Keep authored environment-pack topology distinct from APTL runtime attachment verification and shipped seat delivery evidence. |
 | Base-container terminology | `docs/architecture/issue-1193-base-container-terminology-preflight.md` | Keep env-pack artifact resolution and authored content sources distinct from the base-container node route and its base image. |
 | Historical seat implementation audit | `docs/architecture/issue-1022-historical-branch-audit.md` | Distinguish historical pack inputs from current APTL guest realization and delivery policy. |

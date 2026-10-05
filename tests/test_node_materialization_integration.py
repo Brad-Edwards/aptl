@@ -208,8 +208,8 @@ def test_dynamic_composition_node_starts_immutably_from_config_id(tmp_path):
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
-def test_realize_routes_image_free_spec_through_materializer(tmp_path):
-    """realize() materializes an image-free node directly (no compose-up)."""
+def test_realize_routes_base_container_spec_through_materializer(tmp_path):
+    """realize() materializes a base-container-materialized node directly (no compose-up)."""
     from aptl.core.deployment.realization import (
         DeploymentNodeRealization,
         DeploymentRealizationSpec,
@@ -233,7 +233,7 @@ def test_realize_routes_image_free_spec_through_materializer(tmp_path):
         ),
     )
     spec = DeploymentRealizationSpec(profiles=(), nodes=(node,), networks=())
-    # The node is image-free by shape -- runtime state, no image, no service --
+    # The node is base-container-materialized by shape -- runtime state, no image, no service --
     # so nothing is left for Compose and realize() routes it straight to the
     # generic materializer. (The old whole-spec image_free flag was removed when
     # routing moved to per-node facts.)

@@ -58,7 +58,7 @@ class NodeRealization(object):
     os_version: str = ""
     runtime: RuntimeConfiguration | None = None
     # ADR-051 route 3 (issue #876): the node authored an open dynamic-composition
-    # source, so it is realized image-free onto the generic substrate and its base
+    # source, so it is base-container-materialized onto the generic substrate and its base
     # container is started immutably from the verified config id. False for every
     # exact/materialized/Compose-owned node.
     dynamic_composition: bool = False

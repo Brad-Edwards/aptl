@@ -409,7 +409,7 @@ def test_runtime_qualification_precedes_ownership_and_mixed_materialization(
     )
     monkeypatch.setattr(
         backend,
-        "_materialize_image_free_nodes",
+        "_materialize_base_container_nodes",
         lambda *args, **kwargs: calls.append("materialize"),
     )
 

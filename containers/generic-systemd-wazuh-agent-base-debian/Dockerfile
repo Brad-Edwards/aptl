@@ -1,4 +1,4 @@
-ARG APTL_PARENT_IMAGE=aptl/generic-systemd-base-debian:latest
+ARG APTL_PARENT_IMAGE
 FROM ${APTL_PARENT_IMAGE}
 
 COPY containers/_wazuh-agent/install.sh /tmp/install-wazuh.sh

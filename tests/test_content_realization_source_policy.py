@@ -18,8 +18,8 @@ from raes_contracts.planning import PlannedResource, RuntimeDomain
 
 from aptl.backends.raes_content_realization import resolve_content_placement
 from aptl.backends.raes_content_source_policy import forbidden_source_reason
-from aptl.backends.raes_image_free_content_realization import (
-    resolve_image_free_content_placement,
+from aptl.backends.raes_literal_content_realization import (
+    resolve_literal_content_placement,
 )
 
 # --------------------------------------------------------------------------- #
@@ -166,11 +166,11 @@ def test_legacy_path_rejects_an_unlisted_file_under_keys(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# resolve_image_free_content_placement — ADR-048 generic-materializer entry point
+# resolve_literal_content_placement — ADR-048 generic-materializer entry point
 # --------------------------------------------------------------------------- #
 
 
-def _image_free_payload(source_name: str, *, dest: str = "/home/kali/leak.txt") -> dict:
+def _literal_content_payload(source_name: str, *, dest: str = "/home/kali/leak.txt") -> dict:
     return {
         "name": "attack",
         "content_name": "attack",
@@ -190,10 +190,10 @@ def _image_free_payload(source_name: str, *, dest: str = "/home/kali/leak.txt") 
     }
 
 
-def test_image_free_path_rejects_dotenv_targeting_kali():
-    payload = _image_free_payload(".env")
+def test_literal_content_path_rejects_dotenv_targeting_kali():
+    payload = _literal_content_payload(".env")
 
-    content, diagnostics = resolve_image_free_content_placement(
+    content, diagnostics = resolve_literal_content_placement(
         resource=_resource(),
         payload=payload,
         target_address="provision.node.kali",
@@ -205,12 +205,12 @@ def test_image_free_path_rejects_dotenv_targeting_kali():
     assert diagnostics[0].is_error
 
 
-def test_image_free_path_still_realizes_the_kali_pivot_key():
-    payload = _image_free_payload(
+def test_literal_content_path_still_realizes_the_kali_pivot_key():
+    payload = _literal_content_payload(
         "config/lab-ssh/kali_pivot_key", dest="/home/kali/.ssh/kali_pivot_key"
     )
 
-    content, diagnostics = resolve_image_free_content_placement(
+    content, diagnostics = resolve_literal_content_placement(
         resource=_resource(),
         payload=payload,
         target_address="provision.node.kali",
@@ -221,12 +221,12 @@ def test_image_free_path_still_realizes_the_kali_pivot_key():
     assert content.source_relpath == "config/lab-ssh/kali_pivot_key"
 
 
-def test_image_free_path_rejects_an_unlisted_file_under_config_lab_ssh():
-    payload = _image_free_payload(
+def test_literal_content_path_rejects_an_unlisted_file_under_config_lab_ssh():
+    payload = _literal_content_payload(
         "config/lab-ssh/other_key", dest="/home/kali/.ssh/other_key"
     )
 
-    content, diagnostics = resolve_image_free_content_placement(
+    content, diagnostics = resolve_literal_content_placement(
         resource=_resource(),
         payload=payload,
         target_address="provision.node.kali",
@@ -235,3 +235,28 @@ def test_image_free_path_rejects_an_unlisted_file_under_config_lab_ssh():
     assert content is None
     assert len(diagnostics) == 1
     assert diagnostics[0].code == "aptl.provisioner.content-source-forbidden"
+
+
+def test_literal_content_path_without_destination_reports_literal_content_code():
+    """An unplaceable spec fails closed with the route-neutral diagnostic (#1193).
+
+    The resolver serves base-container-materialized and image-backed nodes alike,
+    so its code and message name the literal-destination placement, not a node
+    route. The pre-#1193 ``image-free-content-unsupported`` code is retired.
+    """
+
+    payload = _literal_content_payload("config/lab-ssh/kali_pivot_key", dest="")
+
+    content, diagnostics = resolve_literal_content_placement(
+        resource=_resource(),
+        payload=payload,
+        target_address="provision.node.kali",
+    )
+
+    assert content is None
+    assert [d.code for d in diagnostics] == [
+        "aptl.provisioner.literal-content-unsupported"
+    ]
+    assert diagnostics[0].is_error
+    assert "image-free" not in diagnostics[0].message
+    assert "literal-destination content placement" in diagnostics[0].message

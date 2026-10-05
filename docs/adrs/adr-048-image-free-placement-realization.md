@@ -10,7 +10,15 @@ accepted
 
 ## Last Updated
 
-2026-07-20
+2026-10-04
+
+> **Terminology note ([#1193](https://github.com/Brad-Edwards/aptl/issues/1193)).**
+> "Image-free" in this record is a historical term, kept so the original
+> decision text stays unchanged. These nodes are not literally image-free: each
+> one starts as a base container from a real base image, and APTL then applies
+> the node's declared state to it. Current documentation and code call them
+> **base-container-materialized nodes**; see
+> [Node Realization Routes](../components/node-realization.md).
 
 ## Context
 

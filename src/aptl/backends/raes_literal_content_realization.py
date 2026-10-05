@@ -1,4 +1,4 @@
-"""Resolve RAES content-placement payloads for image-free nodes (ADR-048).
+"""Resolve RAES content placements at authored literal destinations (ADR-048).
 
 Split out of ``raes_content_realization.py`` (module-length budget). The
 generic materializer places declared config directly into a node's own
@@ -32,10 +32,10 @@ from aptl.core.deployment.realization import DeploymentContentRealization
 _RUNTIME_OBSERVED_PREFIX = "runtime-observed:"
 _SHA256_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
-_ImageFreeResult = tuple[DeploymentContentRealization | None, list[Diagnostic]]
+_LiteralPlacementResult = tuple[DeploymentContentRealization | None, list[Diagnostic]]
 
 
-def _inline_text_image_free_placement(
+def _inline_text_literal_placement(
     resource: PlannedResource,
     target_address: str,
     *,
@@ -43,7 +43,7 @@ def _inline_text_image_free_placement(
     name: str,
     text: str | None,
     spec: Mapping[str, Any],
-) -> _ImageFreeResult | None:
+) -> _LiteralPlacementResult | None:
     """Lower an inline-text placement, or None if this spec is not one."""
 
     if text is None or not dest:
@@ -95,7 +95,7 @@ def _project_source_rejection(
     return [diagnostic(code, resource.address, message)]
 
 
-def _project_source_image_free_placement(
+def _project_source_literal_placement(
     resource: PlannedResource,
     target_address: str,
     *,
@@ -104,7 +104,7 @@ def _project_source_image_free_placement(
     source_name: str,
     content_type: str,
     spec: Mapping[str, Any],
-) -> _ImageFreeResult | None:
+) -> _LiteralPlacementResult | None:
     """Lower a project-contained source placement, or None if this spec is not one."""
 
     if not source_name or not dest:
@@ -128,7 +128,7 @@ def _project_source_image_free_placement(
     )
 
 
-def _pack_artifact_image_free_placement(
+def _pack_artifact_literal_placement(
     resource: PlannedResource,
     target_address: str,
     *,
@@ -136,7 +136,7 @@ def _pack_artifact_image_free_placement(
     name: str,
     content_type: str,
     spec: Mapping[str, Any],
-) -> _ImageFreeResult | None:
+) -> _LiteralPlacementResult | None:
     """Lower an exact-artifact env-pack placement, or None if this spec is not one."""
 
     exact = _content_source_exact_artifact(spec)
@@ -203,15 +203,17 @@ def _pack_artifact_rejection(
     return [diagnostic(code, resource.address, message)]
 
 
-def resolve_image_free_content_placement(
+def resolve_literal_content_placement(
     resource: PlannedResource,
     payload: Mapping[str, Any],
     target_address: str,
-) -> _ImageFreeResult:
-    """Resolve content for an image-free node (ADR-048).
+) -> _LiteralPlacementResult:
+    """Resolve content placed at an authored literal destination (ADR-048).
 
-    The generic materializer places declared config directly into the node's
-    container, so there is no compose service / named-volume requirement.
+    Serves every realized node route (issue #875): a base-container-materialized
+    node has the generic materializer place declared config directly into its
+    container, and an image-backed node has it bound in at the same literal
+    path, so there is no named-volume requirement.
     ``path``/``destination`` is the authored, literal absolute destination
     (never volume-relative). Inline text and project-contained file/directory
     sources both lower to a ``DeploymentContentRealization``; dataset content
@@ -231,11 +233,11 @@ def resolve_image_free_content_placement(
     dest = _optional_string(spec, "path") or _optional_string(spec, "destination")
     name = _optional_string(payload, "content_name") or _optional_string(payload, "name") or ""
 
-    result = _inline_text_image_free_placement(
+    result = _inline_text_literal_placement(
         resource, target_address, dest=dest, name=name, text=_content_text(spec), spec=spec
     )
     if result is None:
-        result = _pack_artifact_image_free_placement(
+        result = _pack_artifact_literal_placement(
             resource,
             target_address,
             dest=dest,
@@ -244,7 +246,7 @@ def resolve_image_free_content_placement(
             spec=spec,
         )
     if result is None:
-        result = _project_source_image_free_placement(
+        result = _project_source_literal_placement(
             resource,
             target_address,
             dest=dest,
@@ -256,9 +258,9 @@ def resolve_image_free_content_placement(
     if result is None:
         result = None, [
             diagnostic(
-                "aptl.provisioner.image-free-content-unsupported",
+                "aptl.provisioner.literal-content-unsupported",
                 resource.address,
-                "image-free content placement supports an inline-text file or a "
+                "literal-destination content placement supports an inline-text file or a "
                 "project-contained file/directory source with a destination path.",
             )
         ]

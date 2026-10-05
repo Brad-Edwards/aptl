@@ -3,7 +3,7 @@
 An env-pack ships no ``docker-compose.yml``: APTL realizes the scenario from the
 SDL's declared desired state instead. Image-backed nodes still run as Compose
 services, so their service definitions must be *generated* from the realization
-rather than read from a hand-authored file. Image-free nodes are realized by the
+rather than read from a hand-authored file. Base-container-materialized nodes are realized by the
 generic materializer (ADR-048) and are not emitted here.
 
 This module is a pure renderer: it turns a :class:`DeploymentRealizationSpec`
@@ -57,7 +57,7 @@ STATIC_COMPOSE_FILENAME = "docker-compose.yml"
 def render_realization_compose(spec: DeploymentRealizationSpec) -> dict[str, object]:
     """Return a Compose document for the spec's image-backed nodes and networks.
 
-    Image-free nodes (no backing image) are omitted: the generic materializer
+    Base-container-materialized nodes (no backing image) are omitted: the generic materializer
     realizes them directly. ``depends_on`` edges are kept only when the target
     is itself an emitted service, so the document never references an undefined
     service.

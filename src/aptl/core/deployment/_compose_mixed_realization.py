@@ -7,10 +7,10 @@ from pathlib import Path
 from typing import cast
 
 from aptl.core.appliance_boundary import ApplianceBoundaryPolicy
-from aptl.core.deployment._compose_image_free_realization import (
-    _image_free_node_addresses,
-    _image_free_service_names,
-    _strip_image_free_published_ports,
+from aptl.core.deployment._compose_base_container_realization import (
+    _base_container_node_addresses,
+    _base_container_service_names,
+    _strip_base_container_published_ports,
 )
 from aptl.core.deployment._compose_node_generation import STATIC_COMPOSE_FILENAME
 from aptl.core.deployment._compose_runtime_orchestration import (
@@ -53,12 +53,12 @@ class ComposeMixedRealizationMixin:
         realization: DeploymentRealizationSpec,
         scenario_root: Path,
     ) -> tuple[LabResult | None, DeploymentRealizationSpec, tuple[str, ...]]:
-        """Materialize image-free nodes and return the remaining Compose graph."""
+        """Materialize base-container nodes and return the remaining Compose graph."""
 
-        addresses = _image_free_node_addresses(realization)
+        addresses = _base_container_node_addresses(realization)
         if not addresses:
             return None, realization, ()
-        failure = self._materialize_image_free_nodes(
+        failure = self._materialize_base_container_nodes(
             realization,
             addresses,
             scenario_root,
@@ -69,7 +69,7 @@ class ComposeMixedRealizationMixin:
         if failure is not None:
             return failure, realization, ()
         excluded_services = (
-            _image_free_service_names(realization, addresses)
+            _base_container_service_names(realization, addresses)
             if (scenario_root / STATIC_COMPOSE_FILENAME).exists()
             else ()
         )
@@ -80,7 +80,7 @@ class ComposeMixedRealizationMixin:
             DeploymentRealizationSpec,
             replace(realization, content=legacy_content),
         )
-        remaining = _strip_image_free_published_ports(remaining, addresses)
+        remaining = _strip_base_container_published_ports(remaining, addresses)
         return None, remaining, excluded_services
 
     def _run_compose_pipeline(

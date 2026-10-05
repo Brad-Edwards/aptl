@@ -221,12 +221,12 @@ def test_successful_disconnect_must_remove_default_bridge(tmp_path):
     assert "default bridge" in "; ".join(failures)
 
 
-@pytest.mark.parametrize("route", ["image-free", "compose"])
+@pytest.mark.parametrize("route", ["base-container", "compose"])
 def test_every_startup_route_rejects_unobserved_networks(tmp_path, route):
     backend = _backend(tmp_path, _info())
     spec = _spec()
     backend._realize_networks_and_boundaries = MagicMock(return_value=None)
-    backend._image_free_generated_artifact_ops = MagicMock(return_value=(None, {}))
+    backend._base_container_generated_artifact_ops = MagicMock(return_value=(None, {}))
     backend._realize_platform_boundary = MagicMock(return_value=None)
     backend._await_realized_service_health = MagicMock(return_value=[])
 
@@ -234,7 +234,7 @@ def test_every_startup_route_rejects_unobserved_networks(tmp_path, route):
         "aptl.core.deployment._compose_realization._realize_node_subset",
         return_value=LabResult(success=True),
     ):
-        if route == "image-free":
+        if route == "base-container":
             result = backend._realize_without_compose(spec, tmp_path)
         else:
             from aptl.core.deployment.observation import DeploymentObservationContext
@@ -288,7 +288,7 @@ def test_authored_scenario_networks_cannot_report_success_on_default_bridge(
     from aptl.core.deployment._compose_realization_networks import (
         _concrete_network_name,
     )
-    from aptl.core.deployment._compose_image_free_realization import _needs_compose
+    from aptl.core.deployment._compose_base_container_realization import _needs_compose
 
     root = Path(__file__).resolve().parents[1]
     bundle = (

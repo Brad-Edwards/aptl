@@ -260,7 +260,8 @@ def observed_content_type(
     ``observe_content_type`` reads back a Compose-managed named volume - it
     has nothing to inspect for volume-free content, which is delivered either as
     a read-only bind mount (an image node) or placed straight into the container
-    filesystem by the generic materializer (an image-free node, ADR-048). When a
+    filesystem by the generic materializer (a base-container-materialized node,
+    ADR-048). When a
     container is available for that case, read the destination back off the
     container instead of going through the volume-shaped provider probe.
     """

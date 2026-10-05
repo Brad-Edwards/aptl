@@ -1,13 +1,19 @@
 # Shared base image for Ubuntu 26.04 APTL containers
-FROM ubuntu:26.04@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78
+FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
 
 # Prevent interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
     rsyslog \
+    logrotate \
     openssh-server \
+    dbus \
+    libpam-systemd \
+    libnss-systemd \
+    netbase \
+    tzdata \
     sudo \
     systemd \
     systemd-sysv \
@@ -20,6 +26,7 @@ RUN apt-get update && \
     curl \
     wget \
     ca-certificates \
+    && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Trim systemd for container usage
@@ -42,7 +49,8 @@ RUN systemctl enable rsyslog ssh systemd-user-sessions && \
 # /etc/ssh/sshd_config.d/*.conf, so the policy is a drop-in rather than an
 # in-place edit of the distribution's own config.
 COPY --chmod=644 base/sshd/00-aptl-hardening.conf /etc/ssh/sshd_config.d/
-RUN ssh-keygen -A && sshd -t
+# Validate the config against throwaway host keys; no key stays in a layer.
+RUN ssh-keygen -A && sshd -t && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
 
 # Create labadmin user
 RUN useradd -m -s /bin/bash labadmin && \
@@ -65,7 +73,11 @@ COPY base/scripts/ossec.conf.template /opt/purple-team/scripts/
 RUN mkdir -p /etc/falco/config.d
 COPY base/falco_custom.yaml /etc/falco/config.d/
 
-EXPOSE 22 514
+# Ship no private keys; each container generates its own at boot (issue #1193).
+COPY _host-identity /tmp/aptl-host-identity
+RUN sh /tmp/aptl-host-identity/install.sh && rm -rf /tmp/aptl-host-identity
+
+EXPOSE 514
 
 VOLUME ["/var/log", "/home"]
 

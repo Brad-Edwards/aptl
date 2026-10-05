@@ -1,4 +1,4 @@
-"""Real-Docker proof: a real TechVault node (dns) boots working image-free.
+"""Real-Docker proof: a real TechVault node (dns) boots as a base-container-materialized node.
 
 Authors the dns node from its real bind9 config + zones as declared RAES state
 (admitted straight from the verified acquired pack, not a reauthored fixture),
@@ -48,7 +48,7 @@ def _docker_available() -> bool:
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
-def test_dns_node_boots_image_free_and_resolves(tmp_path):
+def test_dns_node_boots_base_container_materialized_and_resolves(tmp_path):
     repo = Path(__file__).resolve().parent.parent
     subprocess.run(
         [

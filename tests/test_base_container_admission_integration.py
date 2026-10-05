@@ -1,9 +1,9 @@
-"""Full-stack real-Docker test: admit an image-free pack and realize it (ADR-048).
+"""Full-stack real-Docker test: admit a base-container pack and realize it (ADR-048).
 
 Exercises the entire path through the real RAES compiler:
-pack admission -> parse -> plan -> interpret -> deployment_spec (image_free
+pack admission -> parse -> plan -> interpret -> deployment_spec (base-container nodes
 derived) -> backend.realize -> generic materializer -> real container, verified
-by read-after-write. Zero product code; proves an arbitrary image-free scenario
+by read-after-write. Zero product code; proves an arbitrary base-container scenario
 composes and boots on local Docker.
 
 One scenario, the shared `materialization-envelope.sdl.yaml`, admitted as
@@ -55,7 +55,7 @@ def _docker_available() -> bool:
 
 
 @pytest.mark.skipif(not _docker_available(), reason="docker daemon not available")
-def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
+def test_admit_and_realize_base_container_scenario_on_real_docker(tmp_path):
     bundle = admit_fixture_pack(tmp_path / "staged-packs")
     assert bundle.source_kind is ScenarioSourceKind.ENV_PACK
     # The shared fixture declares service units, so the node materializes onto
@@ -76,7 +76,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
 
     cfg = AptlConfig(lab={"name": "smoke"}, containers={})
     backend = DockerComposeBackend(
-        project_dir=tmp_path, project_name="aptl-imagefree-admit"
+        project_dir=tmp_path, project_name="aptl-base-container-admit"
     )
 
     # Admit through the real RAES compiler/planner/interpreter.
@@ -92,7 +92,7 @@ def test_admit_and_realize_image_free_scenario_on_real_docker(tmp_path):
     assert realization.pack_identity == bundle.pack_identity
 
     spec = realization.deployment_spec([])
-    # Fully image-free: every node is materialized, so nothing is left for the
+    # Fully base-container-materialized: every node is materialized, so nothing is left for the
     # Compose path (this replaces the removed whole-spec image_free flag).
     from aptl.core.deployment._compose_realization import _needs_compose
 

@@ -114,7 +114,7 @@ class TestComposeConsistency:
         volume mount) share the ``suricata_misp_rules`` named volume instead. The env-var side
         of misp-suricata-sync's config (RULES_OUT_PATH, MISP_API_KEY, ...)
         is a separate, not-yet-built secrets-injection concern for
-        image-free nodes (tracked alongside #809) and is not asserted here.
+        base-container-materialized nodes (tracked alongside #809) and is not asserted here.
         """
         from raes import parse_sdl_file
 

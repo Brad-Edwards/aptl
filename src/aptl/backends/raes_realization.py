@@ -150,7 +150,7 @@ def interpret_provisioning_plan(
         nodes,
         diagnostics,
     )
-    if bundle.pack_identity is None and not _all_nodes_image_free(nodes):
+    if bundle.pack_identity is None and not _all_nodes_base_container_materialized(nodes):
         _append_profile_diagnostics(profiles, config, diagnostics)
 
     return AptlRealization(
@@ -269,7 +269,7 @@ def _realize_nodes_and_networks(
 
 
 def _is_materializable_node(node: NodeRealization) -> bool:
-    """Whether a node is realized image-free by the generic materializer (ADR-048).
+    """Whether the generic materializer realizes a node onto a base container (ADR-048).
 
     Such a node declares an OS and typed runtime desired state and carries no
     appliance image, so it legitimately maps to no compose profile.
@@ -278,8 +278,8 @@ def _is_materializable_node(node: NodeRealization) -> bool:
     return bool(node.os and node.runtime is not None and node.image is None)
 
 
-def _all_nodes_image_free(nodes: list[NodeRealization]) -> bool:
-    """Whether every OS-bearing node is materialized image-free."""
+def _all_nodes_base_container_materialized(nodes: list[NodeRealization]) -> bool:
+    """Whether every OS-bearing node is base-container-materialized."""
 
     os_nodes = [node for node in nodes if node.os]
     return bool(os_nodes) and all(_is_materializable_node(node) for node in os_nodes)

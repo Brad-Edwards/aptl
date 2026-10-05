@@ -633,7 +633,7 @@ def stub_pack(monkeypatch):
 
 
 class TestPackArtifactPlacement:
-    """Placing pack content into an image-free node (#875).
+    """Placing pack content into a base-container-materialized node (#875).
 
     The bytes are resolved by opaque id and byte-bound to the declared digest at
     execution time; no host path is read from the scenario. The executor stages
@@ -666,7 +666,7 @@ class TestPackArtifactPlacement:
     ):
         import os
 
-        from aptl.core.deployment._compose_image_free_realization import (
+        from aptl.core.deployment._compose_base_container_realization import (
             _content_placement_op,
         )
         from aptl.core.deployment.realization import DeploymentContentRealization

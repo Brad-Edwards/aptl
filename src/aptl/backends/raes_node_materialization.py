@@ -15,7 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Protocol
 
-# Image-free nodes are materialized concurrently: each is an independent
+# Base-container-materialized nodes are materialized concurrently: each is an independent
 # container whose realization (start base, install packages, place content,
 # configure services) shells out to Docker, and the project networks are already
 # created before this step. Serial materialization made a full range's boot the

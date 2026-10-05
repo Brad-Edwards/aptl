@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -272,3 +273,85 @@ def test_the_cleanup_proof_diffs_the_daemon_against_a_pre_start_baseline() -> No
     assert f"--record-baseline {baseline}" in steps[record]["run"]
     assert f"--baseline {baseline}" in steps[proof]["run"]
     assert steps[proof]["if"] == "always()"
+
+
+_BLOCKING_SCANNER_JOBS = {
+    "trivy-fs",
+    "trivy-iac",
+    "trivy-image-gate",
+    "osv-scanner",
+    "raes-scenario-gate",
+}
+
+
+def test_scanner_and_validation_gates_block_and_are_required() -> None:
+    """No scanner or validation gate may report without failing (#1193).
+
+    Each is a required ``dev`` context, none sets ``continue-on-error``, and
+    every Trivy gate step fails on findings while the SARIF-recording step
+    keeps unfixed findings tracked instead of gating on them.
+    """
+
+    jobs = _jobs()
+    contexts = set(
+        json.loads(BASELINE.read_text(encoding="utf-8"))["branches"]["dev"][
+            "required_status_checks"
+        ]["contexts"]
+    )
+    assert {jobs[job]["name"] for job in _BLOCKING_SCANNER_JOBS} <= contexts
+    for job in [*_BLOCKING_SCANNER_JOBS, "trivy-image"]:
+        assert "continue-on-error" not in jobs[job], job
+        assert "advisory" not in jobs[job]["name"].lower(), job
+
+    for job in ("trivy-fs", "trivy-iac", "trivy-image"):
+        trivy = [
+            step["with"]
+            for step in jobs[job]["steps"]
+            if "aquasecurity/trivy-action" in step.get("uses", "")
+        ]
+        gates = [w for w in trivy if w["exit-code"] == "1"]
+        records = [w for w in trivy if w["exit-code"] == "0"]
+        assert len(gates) == 1, job
+        assert len(records) == 1, job
+        assert records[0]["format"] == "sarif"
+        assert "ignore-unfixed" not in records[0]
+        assert gates[0]["severity"] == records[0]["severity"] == "CRITICAL,HIGH,MEDIUM"
+        assert gates[0]["trivyignores"] == ".trivyignore.yaml"
+        if job == "trivy-iac":
+            # Misconfiguration waivers are permanent design decisions.
+            assert records[0]["trivyignores"] == ".trivyignore.yaml"
+        else:
+            # Vulnerability waivers relax the gate only; the record and code
+            # scanning keep tracking findings that have no upstream fix yet.
+            assert "trivyignores" not in records[0]
+        if job != "trivy-iac":
+            assert gates[0]["ignore-unfixed"] == "true"
+
+    image_gate = jobs["trivy-image-gate"]
+    assert image_gate["needs"] == ["trivy-image"]
+    assert image_gate["if"] == "always()"
+
+
+def test_trivy_waivers_are_scoped_and_justified() -> None:
+    """Every waiver is narrow and states why the finding cannot be fixed.
+
+    A misconfiguration waiver names exact Dockerfiles. A vulnerability waiver
+    names exact package versions (``pkg:<type>/<name>@<version>``), so a
+    release that ships a fix is no longer covered by it. None is rule-wide.
+    """
+
+    waivers = yaml.safe_load((ROOT / ".trivyignore.yaml").read_text(encoding="utf-8"))
+    assert set(waivers) <= {"misconfigurations", "vulnerabilities"}
+    for waiver in waivers["misconfigurations"]:
+        assert waiver["statement"].strip()
+        assert waiver["paths"]
+        for path in waiver["paths"]:
+            assert (ROOT / path).is_file(), path
+            assert Path(path).name.startswith("Dockerfile"), path
+    for waiver in waivers.get("vulnerabilities", []):
+        assert waiver["statement"].strip()
+        assert waiver["id"].strip()
+        assert "paths" not in waiver
+        assert waiver["purls"]
+        for purl in waiver["purls"]:
+            assert re.fullmatch(r"pkg:[a-z]+/[^@\s]+@[^@\s]+", purl), purl

@@ -44,12 +44,12 @@ from aptl.core.deployment._compose_image_realization import (
 from aptl.core.deployment._compose_network_realization import (
     ComposeRealizationNetworkMixin,
 )
-from aptl.core.deployment._compose_image_free_realization import (
-    _image_free_node_addresses,
-    _image_free_service_names,
+from aptl.core.deployment._compose_base_container_realization import (
+    _base_container_node_addresses,
+    _base_container_service_names,
     _needs_compose,
     _realize_node_subset,
-    _strip_image_free_published_ports,
+    _strip_base_container_published_ports,
 )
 from aptl.core.deployment._compose_realization_networks import (
     _container_networks,
@@ -69,12 +69,12 @@ from aptl.core.lab_types import LabResult
 __all__ = [
     "ComposeRealizationMixin",
     "_container_networks",
-    "_image_free_node_addresses",
-    "_image_free_service_names",
+    "_base_container_node_addresses",
+    "_base_container_service_names",
     "_network_name_candidates",
     "_realize_node_subset",
     "_resolve_realization_networks",
-    "_strip_image_free_published_ports",
+    "_strip_base_container_published_ports",
 ]
 
 
@@ -205,7 +205,7 @@ class ComposeRealizationMixin(
             return LabResult(success=False, error="; ".join(network_failures[:5]))
         return self._realize_authority_boundaries(realization)
 
-    def _materialize_image_free_nodes(
+    def _materialize_base_container_nodes(
         self,
         realization: DeploymentRealizationSpec,
         addresses: frozenset[str],
@@ -215,9 +215,9 @@ class ComposeRealizationMixin(
         """Materialize just the runtime:-declared node subset (ADR-048).
 
         Shares the same node materialization and content-op lowering as the
-        fully image-free path, scoped to ``addresses`` so mixed-realization
+        fully base-container path, scoped to ``addresses`` so mixed-realization
         content meant for a Compose-managed node is never misinterpreted as
-        an image-free placement. Content is read from ``scenario_root`` (the
+        a base-container placement. Content is read from ``scenario_root`` (the
         pack); generated artifacts are written under ``realization_root`` (the
         writable engine checkout) — issue #875.
         """
@@ -230,7 +230,7 @@ class ComposeRealizationMixin(
         content = tuple(
             item for item in realization.content if item.target_address in addresses
         )
-        failure, extra_ops = self._image_free_generated_artifact_ops(
+        failure, extra_ops = self._base_container_generated_artifact_ops(
             realization, addresses, realization_root
         )
         if failure is not None:
@@ -244,16 +244,16 @@ class ComposeRealizationMixin(
             persistent_volumes=realization.persistent_volumes,
         )
 
-    def _image_free_generated_artifact_ops(
+    def _base_container_generated_artifact_ops(
         self,
         realization: DeploymentRealizationSpec,
         addresses: frozenset[str],
         realization_root: Path,
     ) -> tuple[LabResult | None, dict[str, tuple[object, ...]]]:
-        """Generate and lower each image-free consumer's generated-artifact outputs.
+        """Generate and lower each base-container consumer's generated-artifact outputs.
 
-        Compose nodes receive generated artifacts as bind mounts; an image-free
-        node has no Compose service to mount into, so its consumer's selected,
+        Compose nodes receive generated artifacts as bind mounts; a
+        base-container-materialized node has no Compose service to mount into, so its consumer's selected,
         non-producer-private outputs are placed into the container as files
         instead (issue #875). The artifact is generated under ``realization_root``
         (never the pristine pack) once here, before the node is materialized, so
@@ -261,7 +261,7 @@ class ComposeRealizationMixin(
         compose-side generation reuses the same material.
         """
 
-        self._image_free_generated_environment = {}
+        self._base_container_generated_environment = {}
         ops_by_address: dict[str, list[object]] = {}
         generated_environment: dict[str, dict[str, str]] = {}
         for artifact in realization.generated_artifacts:
@@ -281,11 +281,11 @@ class ComposeRealizationMixin(
                 artifact, realization_root, realization
             )
             if failure is None:
-                failure = _append_image_free_artifact_ops(
+                failure = _append_base_container_artifact_ops(
                     ops_by_address, artifact, consumers, realization_root
                 )
             if failure is None:
-                failure = _append_image_free_environment_bindings(
+                failure = _append_base_container_environment_bindings(
                     generated_environment,
                     artifact,
                     environment_consumers,
@@ -293,7 +293,7 @@ class ComposeRealizationMixin(
                 )
             if failure is not None:
                 return failure, {}
-        self._image_free_generated_environment = generated_environment
+        self._base_container_generated_environment = generated_environment
         return None, {addr: tuple(ops) for addr, ops in ops_by_address.items()}
 
     def _realize_without_compose(
@@ -316,7 +316,7 @@ class ComposeRealizationMixin(
         node_result: LabResult | None = None
         if failure is None:
             addresses = frozenset(node.address for node in realization.nodes)
-            failure, extra_ops = self._image_free_generated_artifact_ops(
+            failure, extra_ops = self._base_container_generated_artifact_ops(
                 realization, addresses, self.realization_root
             )
         if failure is None:
@@ -416,7 +416,7 @@ class ComposeRealizationMixin(
         return [line.strip() for line in listed.stdout.splitlines() if line.strip()]
 
 
-def _append_image_free_artifact_ops(
+def _append_base_container_artifact_ops(
     ops_by_address: dict[str, list[object]],
     artifact: object,
     consumers: list[object],
@@ -427,7 +427,7 @@ def _append_image_free_artifact_ops(
     Each selected, non-producer-private output becomes a file placement under
     the consumer's declared mount destination, with a secret output placed
     owner-only. Returns a fail-closed result when a declared output was not
-    produced, so an image-free node never starts missing material it declared.
+    produced, so a base-container node never starts missing material it declared.
     """
 
     from pathlib import PurePosixPath
@@ -449,7 +449,7 @@ def _append_image_free_artifact_ops(
                 return LabResult(
                     success=False,
                     error=(
-                        "Generated artifact output missing for image-free "
+                        "Generated artifact output missing for base-container "
                         f"consumer {consumer.target_address}: {output.path}."
                     ),
                 )
@@ -461,7 +461,7 @@ def _append_image_free_artifact_ops(
     return None
 
 
-def _append_image_free_environment_bindings(
+def _append_base_container_environment_bindings(
     bindings_by_address: dict[str, dict[str, str]],
     artifact: object,
     consumers: list[object],

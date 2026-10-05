@@ -1,4 +1,4 @@
-ARG APTL_PARENT_IMAGE=aptl/generic-systemd-base:latest
+ARG APTL_PARENT_IMAGE
 FROM ${APTL_PARENT_IMAGE}
 
 # Rocky's conventional /var/log/secure and /var/log/messages are produced by

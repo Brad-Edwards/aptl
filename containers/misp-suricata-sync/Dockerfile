@@ -4,9 +4,9 @@
 # rules file, and triggers Suricata rule reload via its unix-command
 # socket.
 
-FROM python:3.14-slim@sha256:cad9a2c871761c413caa6fdd6441c783451e740a48aaeba60ae62a8b53525ef6
+FROM python:3.14-slim@sha256:c3e521df8b2b498a7a682e7e18676771cb80c6b75b8699af886b2d554ce40151
 
-RUN apt-get update \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && apt-get install -y --no-install-recommends curl ca-certificates git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -30,17 +30,18 @@ COPY requirements/runtime.txt /app/requirements/runtime.txt
 
 RUN pip install --no-cache-dir --require-hashes -r requirements/runtime.txt \
     && pip install --no-cache-dir -e . --no-deps --no-build-isolation \
+    && python -m pip uninstall --yes pip \
     && apt-get purge -y git \
     && apt-get autoremove -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Run as root: the service writes misp-iocs.rules into the shared
-# suricata_misp_rules named volume (ADR-043), whose tree the Suricata image
-# entrypoint chowns to its own UID; running as root keeps the write and the
-# atomic file replacement working regardless of that ownership. The lab
-# follows this pattern broadly (see ADR-020 for the in-process Wazuh
-# agents); the sync container's only inputs are MISP HTTPS responses and its
-# own env config.
+# Run unprivileged (issue #1193). TechVault realizes this service as a
+# base-container-materialized node (ADR-048), so this image is not on the
+# runtime path; a deployment that does run it alongside Suricata passes the
+# Suricata UID/GID (`--user`) so it can replace misp-iocs.rules in the shared
+# suricata_misp_rules volume (ADR-043) and reach the unix-command socket.
+RUN useradd --system --uid 10001 --user-group --no-create-home --home-dir /nonexistent aptl
+USER 10001:10001
 
 ENTRYPOINT ["aptl-misp-suricata-sync"]

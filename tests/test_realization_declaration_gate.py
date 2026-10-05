@@ -16,7 +16,7 @@ from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
-from aptl.validation.imagefree_gate import image_free_violations
+from aptl.validation.realization_declaration_gate import realization_declaration_violations
 
 
 def _spec(*nodes: DeploymentNodeRealization, images=()) -> DeploymentRealizationSpec:
@@ -45,7 +45,7 @@ def _node(address: str, *, runtime=None, services=()) -> DeploymentNodeRealizati
 def test_an_entirely_empty_runtime_is_not_a_declaration():
     """`runtime: {}` says nothing about how the node is realized."""
 
-    violations = image_free_violations(_spec(_node("provision.node.hollow", runtime=RuntimeConfiguration())))
+    violations = realization_declaration_violations(_spec(_node("provision.node.hollow", runtime=RuntimeConfiguration())))
 
     assert violations, "an empty runtime was accepted as a declared realization"
     assert "hollow" in violations[0]
@@ -66,7 +66,7 @@ def test_declared_listeners_need_something_to_provide_them():
         services=(DeploymentServicePort(name="ssh", port=22, protocol="tcp"),),
     )
 
-    assert image_free_violations(_spec(node))
+    assert realization_declaration_violations(_spec(node))
 
 
 def test_a_node_with_real_declared_state_passes():
@@ -81,7 +81,7 @@ def test_a_node_with_real_declared_state_passes():
         ),
     )
 
-    assert image_free_violations(_spec(node)) == []
+    assert realization_declaration_violations(_spec(node)) == []
 
 
 def test_an_image_backed_node_without_runtime_still_passes():
@@ -99,4 +99,4 @@ def test_an_image_backed_node_without_runtime_still_passes():
         policy_rule="authored-exact-artifact",
     )
 
-    assert image_free_violations(_spec(_node("provision.node.vendor"), images=(image,))) == []
+    assert realization_declaration_violations(_spec(_node("provision.node.vendor"), images=(image,))) == []

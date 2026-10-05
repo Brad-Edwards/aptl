@@ -53,7 +53,7 @@ def resolve_node_image(
     source = _node_source(payload, resource.address, diagnostics)
     if source is not None:
         if _is_dynamic_composition_source(source):
-            # An admitted dynamic-composition node is intentionally image-free
+            # An admitted dynamic-composition node intentionally has no node image
             # (ADR-051 route 3): it composes onto the generic substrate and proves
             # its runtime by readback, so it selects no container image. This must
             # precede the unmapped-service / untrusted-image failures that exact

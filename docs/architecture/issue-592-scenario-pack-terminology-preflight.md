@@ -40,6 +40,7 @@ prose must not accidentally rename them.
 | Surface | Files | Disposition |
 | --- | --- | --- |
 | Shipped seat network investigation | `docs/architecture/issue-1194-shipped-seat-network-preflight.md` | Keep authored environment-pack topology distinct from APTL runtime attachment verification and shipped seat delivery evidence. |
+| Base-container terminology | `docs/architecture/issue-1193-base-container-terminology-preflight.md` | Keep env-pack artifact resolution and authored content sources distinct from the base-container node route and its base image. |
 | Historical seat implementation audit | `docs/architecture/issue-1022-historical-branch-audit.md` | Distinguish historical pack inputs from current APTL guest realization and delivery policy. |
 | TechVault database realization | `docs/architecture/issue-1183-techvault-postgresql-startup-preflight.md` | Keep the pack's declared database, schema, and seed content distinct from APTL's backend-selected client-authentication posture and initialization bookkeeping. |
 | Wazuh API cold-boot recovery | `docs/architecture/issue-1188-wazuh-api-cold-boot-preflight.md` | Keep the exact-pack recovery boundary and observed process failure distinct from the pack's authored content and an unproven API exit trigger. |

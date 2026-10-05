@@ -40,6 +40,11 @@ _GLOBAL_ARG = re.compile(
     r"^\s*ARG\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)=(?P<default>\S+)\s*$",
     re.IGNORECASE | re.MULTILINE,
 )
+# `ARG NAME` with no default: the builder must supply it, so a FROM that names
+# it never resolves to an implicit registry pull (issue #1193).
+_REQUIRED_ARG = re.compile(
+    r"^\s*ARG\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*$", re.IGNORECASE | re.MULTILINE
+)
 _FROM_ARG = re.compile(r"^\$\{(?P<name>[A-Za-z_][A-Za-z0-9_]*)\}$")
 _DIGEST_PINNED = re.compile(r"^[^\s@]+@sha256:[0-9a-f]{64}$")
 _LOCALLY_BUILT_BASES = frozenset(
@@ -82,6 +87,10 @@ def _registry_base_refs(dockerfile: Path) -> list[str]:
             text[: first_from.start() if first_from else 0]
         )
     }
+    required_args = {
+        match.group("name")
+        for match in _REQUIRED_ARG.finditer(text[: first_from.start() if first_from else 0])
+    }
     stages = {
         m.group(1).lower()
         for m in re.finditer(
@@ -92,6 +101,8 @@ def _registry_base_refs(dockerfile: Path) -> list[str]:
     for match in _FROM.finditer(text):
         ref = match.group("ref")
         argument = _FROM_ARG.fullmatch(ref)
+        if argument and argument.group("name") in required_args:
+            continue
         resolved = global_args.get(argument.group("name"), ref) if argument else ref
         if (
             resolved.lower() not in stages
@@ -109,6 +120,17 @@ def test_dockerfile_from_arg_keeps_external_defaults_subject_to_pinning(
     dockerfile.write_text("ARG PARENT=ubuntu:latest\nFROM ${PARENT}\n")
 
     assert _registry_base_refs(dockerfile) == ["ubuntu:latest"]
+
+
+def test_dockerfile_from_a_required_arg_is_builder_supplied(tmp_path: Path) -> None:
+    """A parent with no default cannot fall back to a registry tag; the build
+    fails unless the builder names it, and APTL's builders name it by an
+    immutable reference (issue #1193)."""
+
+    dockerfile = tmp_path / "Dockerfile"
+    dockerfile.write_text("ARG PARENT\nFROM ${PARENT}\n")
+
+    assert _registry_base_refs(dockerfile) == []
 
 
 @pytest.mark.parametrize(

@@ -50,18 +50,18 @@ def test_badge_proposals_link_to_real_public_evidence() -> None:
     )
 
     required = {
-        "description_good_justification": "https://brad-edwards.github.io/aptl/",
+        "description_good_justification": "https://openrae.github.io/lilrae/",
         "contribution_justification": (
-            "https://github.com/Brad-Edwards/aptl/blob/main/CONTRIBUTING.md"
+            "https://github.com/OpenRAE/lilrae/blob/main/CONTRIBUTING.md"
         ),
         "documentation_basics_justification": (
-            "https://brad-edwards.github.io/aptl/getting-started/"
+            "https://openrae.github.io/lilrae/getting-started/"
         ),
         "documentation_interface_justification": (
-            "https://brad-edwards.github.io/aptl/reference/cli/"
+            "https://openrae.github.io/lilrae/reference/cli/"
         ),
         "report_process_justification": (
-            "https://github.com/Brad-Edwards/aptl/blob/main/SUPPORT.md"
+            "https://github.com/OpenRAE/lilrae/blob/main/SUPPORT.md"
         ),
     }
     assert {key: proposals.get(key) for key in required} == required

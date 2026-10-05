@@ -42,9 +42,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Brad-Edwards/aptl"
-Repository = "https://github.com/Brad-Edwards/aptl"
-Issues = "https://github.com/Brad-Edwards/aptl/issues"
+Homepage = "https://github.com/OpenRAE/lilrae"
+Repository = "https://github.com/OpenRAE/lilrae"
+Issues = "https://github.com/OpenRAE/lilrae/issues"
 
 [project.scripts]
 aptl = "aptl.cli.main:app"

@@ -68,11 +68,11 @@ logins.
 
 ## Help And Project Policies
 
-- [Get support](https://github.com/Brad-Edwards/aptl/blob/dev/SUPPORT.md) for a
+- [Get support](https://github.com/OpenRAE/lilrae/blob/dev/SUPPORT.md) for a
   reproducible problem or focused usage question.
-- [Contribute](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md) a
+- [Contribute](https://github.com/OpenRAE/lilrae/blob/dev/CONTRIBUTING.md) a
   fix or improvement against the `dev` branch.
-- [Report a vulnerability privately](https://github.com/Brad-Edwards/aptl/security/advisories/new).
+- [Report a vulnerability privately](https://github.com/OpenRAE/lilrae/security/advisories/new).
   Do not disclose suspected vulnerabilities in a public issue.
 - [Review the OpenSSF Best Practices assessment](security/openssf-best-practices.md)
   and the evidence behind the project's self-certification.

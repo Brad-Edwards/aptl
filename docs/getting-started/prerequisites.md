@@ -181,7 +181,7 @@ identity and operation, not freedom from VM escape.
 
 | Selection | Host resources and limits | Evidence status |
 | --- | --- | --- |
-| Native Linux Docker | The CLI and Docker-authorized services can control the selected daemon; project files are mounted into workloads and realized services may publish host ports. A daemon socket mount is root-equivalent on that daemon. | The candidate QA above shows functionality on one versioned host; [boundary classification tests](https://github.com/Brad-Edwards/aptl/blob/876c493adb8919ed83a86899596897b4d0d07b57/tests/test_execution_boundary.py) check local-kernel matching and unknown cases. Host containment is not qualified. |
+| Native Linux Docker | The CLI and Docker-authorized services can control the selected daemon; project files are mounted into workloads and realized services may publish host ports. A daemon socket mount is root-equivalent on that daemon. | The candidate QA above shows functionality on one versioned host; [boundary classification tests](https://github.com/OpenRAE/lilrae/blob/876c493adb8919ed83a86899596897b4d0d07b57/tests/test_execution_boundary.py) check local-kernel matching and unknown cases. Host containment is not qualified. |
 | Docker Desktop or another Docker VM | The CLI, project credentials and any published-port forwarding still touch the physical host. VM resource, device, network and sharing settings depend on the selected runtime. | No exact Desktop/Colima/Windows full-TechVault and containment matrix is recorded here. A `docker-vm-unverified` label is an observation, not proof. |
 | SSH/remote Docker | The CLI controls a remote daemon; service ports are on that host, while project-local files and credentials remain on the CLI machine unless an explicit transport moves them. | The selected transport is reported; remote host isolation and port reachability are not inferred. |
 | Optional VM seat | QEMU/KVM uses `/dev/kvm`, reserved CPU/RAM/disk and only declared loopback host-to-guest mappings. New desktop seats need `bwrap`, `nsenter`, `slirp4netns` and `/dev/net/tun`; they add no default outbound controls. Rootful Docker workloads inside one guest share that guest's authority. | The one-host acceptance above supports only its tested historical image and host. [VM-only containment](../adrs/adr-060-vm-only-seat-containment.md) is the contract; internal guest zones are deferred. |
@@ -194,4 +194,4 @@ seat. A scenario requiring its own VM node is also separate from the outer
 seat VM and must be admitted and realized by the backend as a scenario
 requirement. Internal guest zone isolation and default-deny guest egress are
 not provided by the current VM-only seat; see [ADR-060](../adrs/adr-060-vm-only-seat-containment.md)
-and [issue #1127](https://github.com/Brad-Edwards/aptl/issues/1127).
+and [issue #1127](https://github.com/OpenRAE/lilrae/issues/1127).

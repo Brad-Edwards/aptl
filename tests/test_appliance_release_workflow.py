@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,7 +39,10 @@ def test_every_project_owned_image_is_still_published() -> None:
     assert "docker build --provenance=false" in publisher
 
 
-def test_private_candidate_does_not_move_latest(tmp_path: Path) -> None:
+@pytest.mark.parametrize("fresh_candidate", [False, True])
+def test_private_candidate_does_not_move_latest(
+    tmp_path: Path, fresh_candidate: bool
+) -> None:
     out = tmp_path / "out"
     out.mkdir()
     (out / "seat-disk.qcow2").write_bytes(b"disk")
@@ -63,8 +67,12 @@ def test_private_candidate_does_not_move_latest(tmp_path: Path) -> None:
 case "$1" in
   login) cat >/dev/null ;;
   resolve)
+    if test "$APTL_TEST_FRESH_CANDIDATE" = 1 && ! test -f "$APTL_TEST_PUSH_LOG"; then
+      exit 1
+    fi
     case "$2" in *:v5.6.0) exit 1 ;; esac
     printf '%s\\n' "$APTL_TEST_MANIFEST_DIGEST" ;;
+  push) printf '%s\\n' "$@" > "$APTL_TEST_PUSH_LOG" ;;
   manifest) cp "$APTL_TEST_MANIFEST" "$5" ;;
   tag) printf 'tag\\n' >> "$APTL_TEST_ORAS_LOG" ;;
 esac
@@ -91,10 +99,12 @@ esac
         env={
             "PATH": f"{binary}:{os.environ['PATH']}",
             "APTL_SEAT_SIGNING_KEY": str(tmp_path / "fixture.key"),
-            "REPOSITORY_OWNER": "Brad-Edwards",
+            "REPOSITORY_OWNER": "OpenRAE",
             "GHCR_TOKEN": "test-token",
             "GITHUB_ACTOR": "test-actor",
             "APTL_TEST_ORAS_LOG": str(log),
+            "APTL_TEST_FRESH_CANDIDATE": "1" if fresh_candidate else "0",
+            "APTL_TEST_PUSH_LOG": str(tmp_path / "push.log"),
             "APTL_TEST_MANIFEST": str(manifest_path),
             "APTL_TEST_MANIFEST_DIGEST": manifest_digest,
             "APTL_TEST_COSIGN_LOG": str(tmp_path / "cosign.log"),
@@ -107,8 +117,12 @@ esac
     )
 
     assert result.returncode != 0
-    assert "key-" in result.stderr
+    assert manifest_digest in result.stderr
     assert "not anonymously pullable" in result.stderr
     assert not log.exists()
     assert not (tmp_path / "cosign.log").exists()
     assert len((tmp_path / "curl.log").read_text().splitlines()) <= 4
+    if fresh_candidate:
+        pushed = (tmp_path / "push.log").read_text().splitlines()
+        assert "org.opencontainers.image.source=https://github.com/openrae/lilrae" in pushed
+        assert any(arg.startswith("ghcr.io/openrae/aptl-seat:key-") for arg in pushed)

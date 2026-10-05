@@ -14,7 +14,7 @@ workflow config in a single call.
 Key facts encoded there today:
 
 - Ground Control project: `aptl`
-- GitHub repo: `Brad-Edwards/aptl`
+- GitHub repo: `OpenRAE/lilrae`
 - Local test command: `bash tools/run-targeted-tests.sh` (changed test files
   only, or pass explicit test paths)
 - Local hygiene command: `pre-commit run` after staging the intended changes

@@ -32,7 +32,7 @@ selected scenario.
 ## Source Checkout
 
 A source checkout is for contributors. Follow the
-[contribution setup](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md#development-setup)
+[contribution setup](https://github.com/OpenRAE/lilrae/blob/dev/CONTRIBUTING.md#development-setup)
 to create a virtual environment and editable install. The checkout itself is
 the project directory; do not run `aptl lab init` over it.
 

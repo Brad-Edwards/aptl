@@ -31,7 +31,7 @@ Prerequisites:
 Set up the Python control plane:
 
 ```shell
-git clone https://github.com/Brad-Edwards/aptl.git
+git clone https://github.com/OpenRAE/lilrae.git
 cd aptl
 python -m venv .venv
 . .venv/bin/activate

@@ -22,6 +22,7 @@ from aptl.utils.pathsafe import (
     open_contained_nofollow,
     read_contained_nofollow,
 )
+from aptl.backends._raes_transcript_qualification import qualify_retained_transcript
 from aptl.backends.identity import BackendIdentity
 from aptl.backends.scenario_capture import (
     ResolvedScenarioCapture,
@@ -343,20 +344,10 @@ def finalize_active_transcript_authority(
         raise ValueError("transcript run store does not match configured run storage")
     capture_selection = _capture_selection_from_state(state)
     runtime_adapter = capture_selection.contribution.runtime_adapter
-    binding_loader = getattr(runtime_adapter, "binding_from_projection", None)
-    collector_factory = getattr(runtime_adapter, "finalized_transcript_collector", None)
-    if not callable(binding_loader) or not callable(collector_factory):
-        raise ValueError("capture adapter cannot finalize transcripts")
-    binding = binding_loader(state["binding"])
-    if not isinstance(binding, CaptureBinding):
-        raise ValueError("capture adapter returned an invalid binding")
-    transcript_id = capture_selection.contribution.transcript_registration_id
-    if transcript_id is None or binding.registration_id != transcript_id:
-        raise ValueError("capture adapter transcript identity mismatch")
-    plan_id = str(state["capture_plan_id"])
+    binding, collector_factory = _finalization_binding(capture_selection, state)
+    transcript_id = binding.registration_id
+    plan_id = binding.capture_spec_id
     run_id = str(state["run_id"])
-    if binding.capture_spec_id != plan_id:
-        raise ValueError("transcript binding plan identity mismatch")
     active_clock = clock or SystemClockProvider()
     payload, activated_at = _validated_activation_time(
         _export_transcript_payload(backend, store_base, run_id, binding),
@@ -378,8 +369,34 @@ def finalize_active_transcript_authority(
         clock=active_clock,
     )
     if result.disposition is AcquisitionDisposition.SEALED_READY:
+        result = qualify_retained_transcript(
+            result, runtime_adapter, payload, binding, store_base, run_id
+        )
+    if result.disposition is AcquisitionDisposition.SEALED_READY:
         _mark_transcript_finalized(project_dir, state, result)
     return result
+
+
+def _finalization_binding(
+    capture_selection: ResolvedScenarioCapture,
+    state: Mapping[str, object],
+) -> tuple[CaptureBinding, object]:
+    """Load the persisted binding and check it against the adapter and plan."""
+
+    runtime_adapter = capture_selection.contribution.runtime_adapter
+    binding_loader = getattr(runtime_adapter, "binding_from_projection", None)
+    collector_factory = getattr(runtime_adapter, "finalized_transcript_collector", None)
+    if not callable(binding_loader) or not callable(collector_factory):
+        raise ValueError("capture adapter cannot finalize transcripts")
+    binding = binding_loader(state["binding"])
+    if not isinstance(binding, CaptureBinding):
+        raise ValueError("capture adapter returned an invalid binding")
+    transcript_id = capture_selection.contribution.transcript_registration_id
+    if transcript_id is None or binding.registration_id != transcript_id:
+        raise ValueError("capture adapter transcript identity mismatch")
+    if binding.capture_spec_id != str(state["capture_plan_id"]):
+        raise ValueError("transcript binding plan identity mismatch")
+    return binding, collector_factory
 
 
 def _capture_selection_from_state(

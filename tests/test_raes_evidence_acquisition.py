@@ -787,16 +787,31 @@ def test_expected_transcript_sessions_reject_symlinked_census_entry(tmp_path):
         )
 
 
+@pytest.mark.parametrize("collapse_retained", [False, True])
 def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complete(
     tmp_path,
+    monkeypatch,
+    collapse_retained,
 ):
+    import base64
+    import hashlib
+    import json
+
     from aptl.backends.raes_evidence_acquisition import (
         finalize_active_transcript_authority,
         load_active_transcript_authorities,
         persist_active_transcript_authority,
     )
+    from aptl_techvault.evidence.techvault import (
+        TranscriptFrame,
+        transcript_chain_digest,
+    )
 
-    binding = _binding("aptl.collector.redteam-session-transcript", "transcript")
+    binding = replace(
+        _binding("aptl.collector.redteam-session-transcript", "transcript"),
+        redaction_required=True,
+        redaction_policy="redact_secrets",
+    )
     plan = SimpleNamespace(
         plan_id="capture-plan-test",
         canonical_bytes=b"{}",
@@ -818,6 +833,11 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
         "binding_id": "aptl.collector.redteam-session-transcript",
         "activated_at": "2026-09-14T10:00:00Z",
     }
+    frames = (
+        TranscriptFrame(1, "2026-09-14T10:00:01Z", "input", b"whoami"),
+        TranscriptFrame(2, "2026-09-14T10:00:02Z", "output", b"password="),
+        TranscriptFrame(3, "2026-09-14T10:00:02Z", "output", b"hunter2"),
+    )
     exported = {
         "authority": authority,
         "expected_session_ids": ["session-1"],
@@ -829,8 +849,16 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
                 "finished_at": "2026-09-14T10:00:02Z",
                 "close_reason": "clean-exit",
                 "loss_count": 0,
-                "final_chain_digest": "sha256:" + "00" * 32,
-                "frames": [],
+                "final_chain_digest": transcript_chain_digest(frames),
+                "frames": [
+                    {
+                        "sequence": frame.sequence,
+                        "timestamp": frame.timestamp,
+                        "direction": frame.direction,
+                        "data_b64": base64.b64encode(frame.data).decode(),
+                    }
+                    for frame in frames
+                ],
             }
         ],
     }
@@ -855,6 +883,17 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
         quiesce_capture_apparatus=quiesce_capture_apparatus,
         export_capture_apparatus=export_capture_apparatus,
     )
+    if collapse_retained:
+        from aptl.core.evidence import _persist
+
+        monkeypatch.setitem(
+            _persist._REDACTION_HANDLERS,
+            "redact_secrets",
+            lambda _payload: {
+                "schema_version": "aptl-techvault-transcript/v2",
+                "transcript_entries": [],
+            },
+        )
 
     result = finalize_active_transcript_authority(
         project_dir=tmp_path,
@@ -864,11 +903,96 @@ def test_finalize_transcript_quiesces_broker_persists_evidence_and_marks_complet
         clock=_SequenceClock("2026-09-14T10:00:03Z"),
     )
 
+    if collapse_retained:
+        assert result.disposition is AcquisitionDisposition.INVALIDATED
+        assert result.reports[0].status is CollectorStatus.FINALIZATION_FAILURE
+        assert (
+            store.read_run_json("run-1", result.records[0].raw_content.content_uri)[
+                "transcript_entries"
+            ]
+            == []
+        )
+        assert load_active_transcript_authorities(tmp_path)
+        return
+
     assert result.disposition is AcquisitionDisposition.SEALED_READY
     assert len(result.records) == 1
     assert observed_expected == ("session-1",)
     assert lifecycle == ["quiesce", "export"]
     assert load_active_transcript_authorities(tmp_path) == ()
+    record = result.records[0]
+    retained = store.read_run_json("run-1", record.raw_content.content_uri)
+    assert retained["schema_version"] == "aptl-techvault-transcript/v2"
+    assert len(retained["transcript_entries"]) == 1
+    entry = retained["transcript_entries"][0]
+    assert len(entry["frames"]) == 3
+    assert entry["frames"][0]["data"] == "whoami"
+    assert [frame["data"] for frame in entry["frames"][1:]] == [
+        "[REDACTED]",
+        "[REDACTED]",
+    ]
+    assert "session-1" not in json.dumps(retained)
+    assert "hunter2" not in json.dumps(retained)
+    assert entry["source_chain_digest"] == transcript_chain_digest(frames)
+    retained_bytes = (
+        store.get_run_path("run-1") / record.raw_content.content_uri
+    ).read_bytes()
+    assert (
+        record.raw_content.content_checksum.value
+        == hashlib.sha256(retained_bytes).hexdigest()
+    )
+    assert (
+        record.raw_content.content_checksum.value
+        != entry["source_chain_digest"].split(":", 1)[1]
+    )
+
+    # A distinct transcript in another run must not reuse the retained blob.
+    second_frames = (TranscriptFrame(1, "2026-09-14T10:00:01Z", "input", b"id"),)
+    second_export = {
+        **exported,
+        "authority": {**authority, "run_id": "run-2"},
+        "sessions": [
+            {
+                **exported["sessions"][0],
+                "final_chain_digest": transcript_chain_digest(second_frames),
+                "frames": [
+                    {
+                        "sequence": 1,
+                        "timestamp": second_frames[0].timestamp,
+                        "direction": "input",
+                        "data_b64": base64.b64encode(b"id").decode(),
+                    }
+                ],
+            }
+        ],
+    }
+    persist_active_transcript_authority(
+        project_dir=tmp_path,
+        plan=plan,
+        binding=binding,
+        run_store=store,
+        run_id="run-2",
+        capture_selection=_capture_selection(),
+    )
+    second_census = store.get_run_path("run-2") / "mcp-side/sessions"
+    second_census.mkdir(parents=True)
+    (second_census / "session-1.jsonl").write_text("")
+    second_state = load_active_transcript_authorities(tmp_path)[0]
+    second_result = finalize_active_transcript_authority(
+        project_dir=tmp_path,
+        state=second_state,
+        backend=SimpleNamespace(
+            quiesce_capture_apparatus=lambda: True,
+            export_capture_apparatus=lambda **_kwargs: second_export,
+        ),
+        expected_run_store_base=store.base_dir,
+        clock=_SequenceClock("2026-09-14T10:00:03Z"),
+    )
+    assert second_result.disposition is AcquisitionDisposition.SEALED_READY
+    assert (
+        second_result.records[0].raw_content.content_checksum.value
+        != record.raw_content.content_checksum.value
+    )
 
 
 def test_finalize_transcript_rejects_mismatched_broker_authority_and_uses_host_clock(

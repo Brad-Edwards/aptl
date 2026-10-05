@@ -1878,6 +1878,8 @@ docs/architecture/issue-1193-base-container-terminology-preflight.md	architectur
 docs/components/node-realization.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs
 .trivyignore.yaml	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 tests/test_web_api_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+docs/architecture/issue-1201-transcript-redaction-preflight.md	architecture-history	Preserve transcript redaction and retained-payload validation guardrails
+src/aptl/backends/_raes_transcript_qualification.py	backend-observability	Retain retained-transcript read-back qualification with transcript finalization
 docs/architecture/issue-1183-techvault-postgresql-startup-preflight.md	architecture-history	Preserve issue 1183 TechVault database realization, client-authentication, and initialization guardrails
 src/aptl_techvault/database_access.py	scenario-integration	Keep TechVault database client-authentication realization with the scenario adapter
 src/aptl_techvault/database_support.py	scenario-integration	Keep TechVault database realization helpers with the scenario adapter

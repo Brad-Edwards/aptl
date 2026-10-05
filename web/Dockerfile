@@ -11,8 +11,15 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM caddy:2-alpine@sha256:de23def33b17fb5d1290b0f6c2add1d70780e52341896c00a4c8a2a2fe9d355e
+FROM caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028
 COPY --from=builder /app/build /srv
 COPY Caddyfile /etc/caddy/Caddyfile
+
+# Run unprivileged (issue #1193): Caddy listens on unprivileged port 3000 and
+# only needs its own state directories writable.
+RUN addgroup -S -g 10001 caddy \
+    && adduser -S -D -H -u 10001 -G caddy caddy \
+    && chown -R caddy:caddy /data /config
+USER 10001:10001
 
 EXPOSE 3000

@@ -26,7 +26,7 @@ from aptl.core.deployment.realization import (
 
 def _spec(nodes):
     # Host ports are published by the port override only for image (compose)
-    # nodes; image-free nodes get theirs from the generic materializer. Mark
+    # nodes; base-container-materialized nodes get theirs from the generic materializer. Mark
     # every port-test node as image-backed so the override emits (issue #875).
     images = tuple(
         DeploymentImageRealization(

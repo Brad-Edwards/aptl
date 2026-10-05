@@ -99,7 +99,7 @@ def _resolve_base_network_bindings(
     *,
     appliance_boundary: bool,
 ) -> dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]]:
-    """Resolve exact Docker network bindings for image-free base containers."""
+    """Resolve exact Docker network bindings for base-container-materialized nodes."""
 
     bindings: dict[str, tuple[tuple[str, DeploymentNetworkAttachment], ...]] = {}
     for node in nodes:
@@ -109,11 +109,11 @@ def _resolve_base_network_bindings(
             project_name,
         )
         if missing:
-            raise BackendSeedError("image-free node network binding was not observed")
+            raise BackendSeedError("base-container node network binding was not observed")
         if desired:
             bindings[str(getattr(node, "address"))] = tuple(desired.items())
         elif appliance_boundary:
-            raise BackendSeedError("appliance image-free node has no admitted network")
+            raise BackendSeedError("appliance base-container node has no admitted network")
     return bindings
 
 

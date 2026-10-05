@@ -20,10 +20,10 @@ from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentRealizationSpec,
 )
-from aptl.validation.imagefree_gate import (
-    ImageFreeGateError,
-    assert_image_free,
-    image_free_violations,
+from aptl.validation.realization_declaration_gate import (
+    RealizationDeclarationGateError,
+    assert_realization_declared,
+    realization_declaration_violations,
 )
 
 
@@ -63,8 +63,8 @@ def test_clean_runtime_node_passes():
             ],
         ),
     )
-    assert image_free_violations(_spec([node])) == []
-    assert_image_free(_spec([node]))  # does not raise
+    assert realization_declaration_violations(_spec([node])) == []
+    assert_realization_declared(_spec([node]))  # does not raise
 
 
 def test_node_with_a_resolved_image_source_passes():
@@ -72,13 +72,13 @@ def test_node_with_a_resolved_image_source_passes():
     # violation - TechVault's SOC-stack nodes are permanently this shape.
     node = _node("n.box", runtime=None)
     spec = _spec([node], images=[_image("n.box")])
-    assert image_free_violations(spec) == []
-    assert_image_free(spec)  # does not raise
+    assert realization_declaration_violations(spec) == []
+    assert_realization_declared(spec)  # does not raise
 
 
 def test_node_with_neither_runtime_nor_image_is_a_violation():
     node = _node("n.box", runtime=None)
-    violations = image_free_violations(_spec([node]))
+    violations = realization_declaration_violations(_spec([node]))
     assert any("neither declared runtime" in v for v in violations)
 
 
@@ -91,21 +91,21 @@ def test_service_without_software_is_a_violation():
             ]
         ),
     )
-    violations = image_free_violations(_spec([node]))
+    violations = realization_declaration_violations(_spec([node]))
     assert any("no packages/software_components" in v for v in violations)
 
 
 def test_assert_raises_with_the_violation():
     node = _node("n.box", runtime=None)
     spec = _spec([node])
-    with pytest.raises(ImageFreeGateError) as exc:
-        assert_image_free(spec)
+    with pytest.raises(RealizationDeclarationGateError) as exc:
+        assert_realization_declared(spec)
     assert len(exc.value.violations) == 1
 
 
 def test_switch_nodes_are_ignored():
     # A switch has no os and nothing to materialize; it is not a violation.
-    assert image_free_violations(_spec([_node("n.sw", os="", runtime=None)])) == []
+    assert realization_declaration_violations(_spec([_node("n.sw", os="", runtime=None)])) == []
 
 
 def test_mixed_realization_with_both_styles_passes():
@@ -117,4 +117,4 @@ def test_mixed_realization_with_both_styles_passes():
     )
     image_node = _node("n.image", runtime=None)
     spec = _spec([runtime_node, image_node], images=[_image("n.image")])
-    assert image_free_violations(spec) == []
+    assert realization_declaration_violations(spec) == []

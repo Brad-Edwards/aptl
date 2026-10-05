@@ -132,7 +132,7 @@ class DeploymentNodeRealization(object):
     # immutable config id (issue #876), without a pull or mutable tag lookup.
     dynamic_composition: bool = False
     # Backend-owned base selected under open compute-substrate authority for an
-    # otherwise image-free materialized node.
+    # otherwise base-container-materialized node.
     backend_base_image_ref: str | None = None
     backend_base_use_image_command: bool = False
     backend_run_capabilities: tuple[str, ...] = ()

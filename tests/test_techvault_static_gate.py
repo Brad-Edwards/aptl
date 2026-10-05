@@ -345,8 +345,8 @@ def test_no_start_backend_reads_back_simulated_content_kind():
     assert backend.container_exists("unrealized") is False
 
 
-def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec():
-    """Image-free content (empty volume_suffix) is read back via container_exec.
+def test_no_start_backend_reads_back_literal_content_kind_via_container_exec():
+    """Literal-destination content (empty volume_suffix) is read back via container_exec.
 
     The generic materializer places content directly into a node's
     filesystem, so ``observed_content_type`` skips ``observe_content_type``
@@ -354,7 +354,7 @@ def test_no_start_backend_reads_back_image_free_content_kind_via_container_exec(
     calls ``backend.container_exec`` instead. ``_NoStartBackend`` must answer
     that probe from its simulated shapes rather than starting Docker; a
     missing ``container_exec`` method previously crashed the static gate
-    with an AttributeError the moment a scenario used image-free content
+    with an AttributeError the moment a scenario used literal-destination content
     (caught only by a real live-gate boot, not by any prior unit test).
     """
     from aptl.backends._raes_observation_helpers import observed_content_type

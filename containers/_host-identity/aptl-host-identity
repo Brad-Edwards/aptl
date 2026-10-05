@@ -1,0 +1,17 @@
+#!/bin/sh
+# Give this container its own host identity on boot (issue #1193).
+#
+# Images never ship private keys: a key baked into an image is shared by every
+# container started from it, so one leaked image would let anyone impersonate
+# every node. The build removes the SSH host keys and the default TLS key the
+# packages generate, and this runs before sshd or a TLS consumer starts to
+# create fresh ones. Existing keys are kept, so a restart keeps its identity.
+set -eu
+
+if command -v ssh-keygen >/dev/null 2>&1; then
+    ssh-keygen -A
+fi
+if command -v make-ssl-cert >/dev/null 2>&1 \
+    && [ ! -e /etc/ssl/private/ssl-cert-snakeoil.key ]; then
+    make-ssl-cert generate-default-snakeoil
+fi

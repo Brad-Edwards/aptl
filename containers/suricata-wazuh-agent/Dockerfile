@@ -1,5 +1,10 @@
 FROM jasonish/suricata:8.0@sha256:7ca2546f7f2735f621b981b6a5ec84fb962984636f7629a1a2fa6a324d4b6840
 
+# Apply published AlmaLinux fixes to the OS libraries Suricata links against.
+# Suricata itself is built from source in this image, not an RPM, so the
+# upgrade cannot change the pinned engine (issue #1193).
+RUN dnf -y upgrade --refresh && dnf clean all && rm -rf /var/cache/dnf
+
 # The runtime bypasses the upstream entrypoint's network-dependent updater.
 # Prepare only product rules already present in this pinned image. The upstream
 # updater filters disabled protocols; a file URL prevents its default remote

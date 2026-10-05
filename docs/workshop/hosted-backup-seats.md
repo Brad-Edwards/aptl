@@ -65,8 +65,8 @@ current release paths found during the proof did not produce the required
 participant lab:
 
 - PyPI `aptl-labs==5.1.1` does not contain the guided participant profile.
-- The current development scenario materialization starts image-free Debian
-  placeholders that exit instead of the required Kali and victim services.
+- The current development scenario materialization starts base-container-materialized
+  Debian placeholders that exit instead of the required Kali and victim services.
 - The older working Kali Dockerfile uses a stale NodeSource installation path.
 - A desktop install can start NetworkManager and interrupt an EC2 host that is
   using `systemd-networkd`.

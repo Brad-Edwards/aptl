@@ -35,6 +35,7 @@ from aptl.core.experiment.policy import (
     CaptureLimitationAcceptance,
     default_admission_policy,
 )
+from aptl_techvault.capture_registrations import BUILTIN_REGISTRATIONS
 
 CORPUS_ROOT = corpus_family_root(FIXTURES)
 
@@ -266,11 +267,12 @@ _CAPTURE_SCOPES = (
     "service",
 )
 
-#: The (capture_kind, capture_scope) pairs the production built-in fleet covers
+#: The (capture_kind, capture_scope) pairs the TechVault built-in fleet covers
 #: for the reference requirement's other axes (media/integrity/window/etc.).
 #: EXP-010 PR 2 turned these on; every other legal combination still fails
-#: closed.
-_COVERED_BY_DEFAULT_FLEET = frozenset(
+#: closed. Since #1141 that fleet is contributed by the admitted TechVault pack,
+#: not the core default registry, which is an honest empty baseline.
+_COVERED_BY_TECHVAULT_FLEET = frozenset(
     {
         ("observation", "participant"),
         ("log", "service"),
@@ -288,7 +290,7 @@ class TestFuzzCaptureRequirementsDeterministic:
         capture_scope=st.sampled_from(_CAPTURE_SCOPES),
     )
     @settings(max_examples=56, deadline=2000)
-    def test_every_legal_kind_scope_combination_is_deterministic_against_the_default_fleet(
+    def test_every_legal_kind_scope_combination_is_deterministic_against_each_fleet(
         self, capture_kind, capture_scope
     ):
         payload = json.loads(
@@ -313,9 +315,20 @@ class TestFuzzCaptureRequirementsDeterministic:
         spec = ExperimentCaptureSpecModel.model_validate(payload)
         policy = default_admission_policy()
 
-        if (capture_kind, capture_scope) in _COVERED_BY_DEFAULT_FLEET:
-            bindings = bind_capture_requirements([spec], policy=policy)
+        # The core default registry carries no collectors, so admission without
+        # a pack-contributed registry fails closed for every combination.
+        with pytest.raises(AdmissionRejection):
+            bind_capture_requirements([spec], policy=policy)
+
+        techvault = CollectorRegistry(BUILTIN_REGISTRATIONS)
+        if (capture_kind, capture_scope) in _COVERED_BY_TECHVAULT_FLEET:
+            bindings = bind_capture_requirements(
+                [spec], registry=techvault, policy=policy
+            )
             assert len(bindings) == 1
+            assert bindings == bind_capture_requirements(
+                [spec], registry=techvault, policy=policy
+            )
         else:
             with pytest.raises(AdmissionRejection):
-                bind_capture_requirements([spec], policy=policy)
+                bind_capture_requirements([spec], registry=techvault, policy=policy)

@@ -160,7 +160,7 @@ def test_direct_static_start_includes_backend_file(engine, tmp_path, monkeypatch
     assert _SERVICES <= {name for doc in documents for name in doc.get("services", {})}
 
 
-def test_image_free_path_starts_apparatus_before_materialization(
+def test_base_container_path_starts_apparatus_before_materialization(
     engine, tmp_path, monkeypatch
 ):
     from aptl.core.deployment import _compose_realization

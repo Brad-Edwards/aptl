@@ -50,17 +50,21 @@ def retain_image(seat_root: Path, shared_cache: Path, selection: SeatImageSelect
         except OSError as exc:
             if exc.errno != errno.EXDEV:
                 raise
-            with open_contained_nofollow(shared_cache, selection.path.relative_to(shared_cache)) as source:
-                with target.open("xb") as output:
-                    shutil.copyfileobj(source, output, length=1024 * 1024)
+            with (
+                open_contained_nofollow(shared_cache, selection.path.relative_to(shared_cache)) as source,
+                target.open("xb") as output,
+            ):
+                shutil.copyfileobj(source, output, length=1024 * 1024)
             target.chmod(0o444)
         write_verification_stamp(target, digest=selection.digest, size_bytes=selection.size_bytes)
         for name in ("seat-config.json", "seat-config-binding.json", "cosign-verification.json"):
             relative = selection.path.parent.relative_to(shared_cache) / name
-            with open_contained_nofollow(shared_cache, relative) as source:
-                with (target.parent / name).open("xb") as output:
-                    os.fchmod(output.fileno(), 0o600)
-                    shutil.copyfileobj(source, output)
+            with (
+                open_contained_nofollow(shared_cache, relative) as source,
+                (target.parent / name).open("xb") as output,
+            ):
+                os.fchmod(output.fileno(), 0o600)
+                shutil.copyfileobj(source, output)
         configure_trust(temporary, reference, _key_path(shared_cache, reference))
         save_selection(temporary, selection.reference, digest=selection.digest, size_bytes=selection.size_bytes)
         cached_selection(reference, cache_dir=temporary)

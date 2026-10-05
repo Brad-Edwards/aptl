@@ -232,10 +232,12 @@ def _ignore_common_state(directory: str, names: list[str]) -> list[str]:
 def _copy_common_file(target: Path, source: str, destination: str) -> str:
     """Copy through the same containment boundary as the archive reader."""
 
-    with open_contained_nofollow(target, Path(source).relative_to(target)) as handle:
-        with open(destination, "xb") as output:
-            shutil.copyfileobj(handle, output)
-            os.fchmod(output.fileno(), os.fstat(handle.fileno()).st_mode & 0o777)
+    with (
+        open_contained_nofollow(target, Path(source).relative_to(target)) as handle,
+        open(destination, "xb") as output,
+    ):
+        shutil.copyfileobj(handle, output)
+        os.fchmod(output.fileno(), os.fstat(handle.fileno()).st_mode & 0o777)
     return destination
 
 

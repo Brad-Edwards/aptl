@@ -197,13 +197,15 @@ class BrowserGateway:
                 + path
                 + ("?" + request.url.query if request.url.query else "")
             )
-            async with httpx.AsyncClient(
-                verify=self.tls, trust_env=False, follow_redirects=False, timeout=30
-            ) as client:
-                async with client.stream(
+            async with (
+                httpx.AsyncClient(
+                    verify=self.tls, trust_env=False, follow_redirects=False, timeout=30
+                ) as client,
+                client.stream(
                     request.method, target, headers=self._headers(request), content=body
-                ) as upstream:
-                    return await self._http_response(upstream, request, route)
+                ) as upstream,
+            ):
+                return await self._http_response(upstream, request, route)
         except _ProxyDenied as exc:
             return Response(str(exc), status_code=exc.status)
         except (OSError, httpx.HTTPError):

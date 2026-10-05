@@ -34,9 +34,9 @@ exemption.
 explicit ``writable-cgroups`` request at container create (moby
 ``daemon/oci_linux.go``: "option WritableCgroups conflicts with user namespaces
 and rootless mode"), and a userns-remap daemon forces writable cgroups on
-regardless of what was asked. Neither is a qualified substrate runtime -- that
-qualification is issue #1120 -- so the gate names the mode before mutation
-instead of letting the create fail with an opaque start error.
+regardless of what was asked. Neither is a qualified substrate runtime (ADR-060
+makes the VM seat the alternative boundary), so the gate names the mode before
+mutation instead of letting the create fail with an opaque start error.
 
 A future supported cgroup v1 path would be a separately qualified backend policy
 with its own exact readback baseline -- never a boolean that re-enables host

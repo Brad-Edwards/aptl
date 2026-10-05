@@ -16,7 +16,7 @@ pipx install aptl-labs
 aptl --version
 ```
 
-`aptl-labs` requires Python 3.11 or newer. On macOS, if pipx is bound to the
+`aptl-labs` requires Python 3.12 or newer. On macOS, if pipx is bound to the
 Command Line Tools Python 3.9, ask pipx to fetch a supported interpreter:
 
 ```shell

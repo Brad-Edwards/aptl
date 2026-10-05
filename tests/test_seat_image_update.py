@@ -103,10 +103,10 @@ def test_failed_update_admission_preserves_selection_and_overlay(tmp_path, monke
     assert overlay.read_bytes() == b"existing state"
 
 
-@pytest.mark.skipif(sys.platform != "linux", reason="Linux seat lifecycle")
-def test_updating_one_seat_retains_another_seats_offline_image(tmp_path, monkeypatch):
+def _trusted_shared_cache(tmp_path, monkeypatch):
+    """Return a shared cache with publisher trust and a seeder for admitted disks."""
     import hashlib
-    from aptl.appliance.seat import image, image_trust, lifecycle, image_update
+    from aptl.appliance.seat import image, image_trust
     from aptl.appliance.seat.image_selection import save_selection, select_seat_image
     from aptl.appliance.seat.image_disk_cache import write_verification_stamp
     from tests.test_seat_image_config import _config
@@ -132,6 +132,15 @@ def test_updating_one_seat_retains_another_seats_offline_image(tmp_path, monkeyp
         image_trust.publish_verified_image(cache, receipt)
         save_selection(cache, reference, digest=digest, size_bytes=len(payload))
         return select_seat_image(reference, cache_dir=cache, check=False)
+    return cache, seed
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux seat lifecycle")
+def test_updating_one_seat_retains_another_seats_offline_image(tmp_path, monkeypatch):
+    from aptl.appliance.seat import image, lifecycle, image_update
+    from tests.test_seat_image_trust import REFERENCE
+
+    cache, seed = _trusted_shared_cache(tmp_path, monkeypatch)
     old = seed(b"old disk")
     monkeypatch.setattr(lifecycle, "require_host_prerequisites", lambda *a, **k: None)
     monkeypatch.setattr(image_update, "require_host_prerequisites", lambda *a, **k: None)
@@ -152,3 +161,29 @@ def test_updating_one_seat_retains_another_seats_offline_image(tmp_path, monkeyp
         assert restored.selection.digest == expected.digest
         assert restored.selection.path.is_relative_to(root)
     assert (roots[1] / "launch/appliance-launch.json").read_bytes() == descriptor_before
+
+
+def test_retained_image_copies_across_filesystems(tmp_path, monkeypatch):
+    import errno
+    import os
+    import stat
+    from aptl.appliance.seat import retained_image
+
+    cache, seed = _trusted_shared_cache(tmp_path, monkeypatch)
+    selection = seed(b"cross-device disk")
+
+    def cross_device_link(*args, **kwargs):
+        raise OSError(errno.EXDEV, "Invalid cross-device link")
+
+    monkeypatch.setattr(retained_image.os, "link", cross_device_link)
+    seat_root = tmp_path / "seat"
+    retained_image.retain_image(seat_root, cache, selection)
+
+    retained = seat_root / "image" / selection.path.relative_to(cache)
+    assert retained.read_bytes() == b"cross-device disk"
+    assert not os.path.samefile(retained, selection.path)
+    assert stat.S_IMODE(retained.stat().st_mode) == 0o444
+    for name in ("seat-config.json", "seat-config-binding.json", "cosign-verification.json"):
+        copied = retained.parent / name
+        assert copied.read_bytes() == (selection.path.parent / name).read_bytes()
+        assert stat.S_IMODE(copied.stat().st_mode) == 0o600

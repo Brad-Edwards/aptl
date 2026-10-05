@@ -16,7 +16,7 @@
   recipe
 - Docker Compose 2.0+ (`docker compose version`)
 - Docker Buildx (`docker buildx version`)
-- Python 3.11+ (for the CLI)
+- Python 3.12+ (for the CLI)
 - OpenSSH client. `ssh-keygen` must be on `PATH`. `aptl lab start` generates the
   lab SSH keys (the control-plane key and, for pack-backed scenarios, the
   scenario's `ssh_key_bundle` keypairs) with it, and hardens them per-platform
@@ -108,7 +108,7 @@ block system-wide `pip` under [PEP 668](https://peps.python.org/pep-0668/), so
 For released installs on any OS, prefer `pipx install aptl-labs`.
 
 **macOS gotcha—pipx bound to the system Python 3.9.** `aptl-labs` requires
-Python 3.11+ (declared in `pyproject.toml`). If your `pipx` was installed
+Python 3.12+ (declared in `pyproject.toml`). If your `pipx` was installed
 against the Command Line Tools Python (`/usr/bin/python3`, which is 3.9),
 `pipx install aptl-labs` fails with:
 

@@ -1,6 +1,6 @@
 """Deliver declared content to image (Compose) nodes as bind mounts (#875).
 
-Content for an image-free node is placed into its container by the generic
+Content for a base-container-materialized node is placed into its container by the generic
 materializer. An image node is a Compose service with a fixed image whose config
 files are read from fixed paths, so its content is delivered the way the retiring
 ``docker-compose.yml`` delivered it: a read-only bind mount of the resolved file
@@ -38,7 +38,7 @@ def image_node_content_override(
     """Return a Compose override mounting each image node's declared content.
 
     Only content whose target is an image node (a Compose service) is handled;
-    image-free targets are delivered by the generic materializer elsewhere.
+    base-container-materialized targets are delivered by the generic materializer elsewhere.
     """
 
     # Bind sources must be absolute: Docker resolves a relative source against

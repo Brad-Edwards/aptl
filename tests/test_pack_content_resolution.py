@@ -155,8 +155,8 @@ def test_seed_fails_closed_on_declared_digest_mismatch(tmp_path):
 def test_image_node_content_is_admitted_without_runtime():
     """Issue #875: an image node that declares content but no other runtime.
 
-    Content placement must route to the literal-destination (image-free) path
-    for any realized node -- image-free OR image-backed -- not only nodes that
+    Content placement must route to the literal-destination content path
+    for any realized node -- base-container-materialized OR image-backed -- not only nodes that
     declare a runtime. Before the fix, an image node with content but no runtime
     fell through to the legacy named-volume check and was rejected with
     'destination-without-backing-mount', so its config never reached the range.

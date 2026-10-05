@@ -1374,7 +1374,7 @@ def test_content_probe_timeout_omits_concern_without_echoing_plan(tmp_path):
     assert observation.concerns == {}
 
 
-def _image_free_content_placement_fixture():
+def _literal_content_placement_fixture():
     """Same shape as _content_placement_fixture but with no named volume
     (ADR-048): the generic materializer places content directly into the
     node's container filesystem, so volume_suffix is empty and the probe
@@ -1430,9 +1430,9 @@ def _image_free_content_placement_fixture():
     return address, plan, realization
 
 
-def test_image_free_content_type_observed_via_container_exec_not_volume_probe(tmp_path):
+def test_literal_content_type_observed_via_container_exec_not_volume_probe(tmp_path):
     """No named volume to probe (ADR-048) - read the destination back directly."""
-    address, plan, realization = _image_free_content_placement_fixture()
+    address, plan, realization = _literal_content_placement_fixture()
     backend = _Backend(
         containers=("aptl-vm",),
         exec_results={"aptl-vm": [(1, ""), (0, "")]},  # test -d fails, test -f succeeds
@@ -1446,8 +1446,8 @@ def test_image_free_content_type_observed_via_container_exec_not_volume_probe(tm
     assert observation.concerns == {("spec", "type"): "file"}
 
 
-def test_image_free_content_type_directory_observed_via_container_exec(tmp_path):
-    address, plan, realization = _image_free_content_placement_fixture()
+def test_literal_content_type_directory_observed_via_container_exec(tmp_path):
+    address, plan, realization = _literal_content_placement_fixture()
     backend = _Backend(
         containers=("aptl-vm",),
         exec_results={"aptl-vm": [(0, "")]},  # test -d succeeds; test -f never runs
@@ -1460,8 +1460,8 @@ def test_image_free_content_type_directory_observed_via_container_exec(tmp_path)
     assert observation.concerns == {("spec", "type"): "directory"}
 
 
-def test_image_free_content_missing_omits_concern_without_echoing_plan(tmp_path):
-    address, plan, realization = _image_free_content_placement_fixture()
+def test_literal_content_missing_omits_concern_without_echoing_plan(tmp_path):
+    address, plan, realization = _literal_content_placement_fixture()
     backend = _Backend(
         containers=("aptl-vm",),
         exec_results={"aptl-vm": [(1, ""), (1, "")]},  # neither -d nor -f
@@ -1475,8 +1475,8 @@ def test_image_free_content_missing_omits_concern_without_echoing_plan(tmp_path)
     assert observation.concerns == {}
 
 
-def test_image_free_content_exec_timeout_fails_closed_not_crash(tmp_path):
-    address, plan, realization = _image_free_content_placement_fixture()
+def test_literal_content_exec_timeout_fails_closed_not_crash(tmp_path):
+    address, plan, realization = _literal_content_placement_fixture()
     backend = _Backend(containers=("aptl-vm",), exec_raises=True)
 
     observation = observe_realization(
@@ -1633,8 +1633,8 @@ def test_a_consumer_is_never_expected_to_mount_material_withheld_from_it(tmp_pat
     assert "control-plane-key" not in str(observed.evidence)
 
 
-def test_image_free_consumer_artifact_is_observed_from_its_placed_files(tmp_path):
-    """An image-free node has no Compose service, so no bind to observe.
+def test_base_container_consumer_artifact_is_observed_from_its_placed_files(tmp_path):
+    """A base-container-materialized node has no Compose service, so no bind to observe.
 
     Its selected outputs are placed into the container as files instead
     (issue #875); demanding a bind mount reported every such artifact as
@@ -1657,7 +1657,7 @@ def test_image_free_consumer_artifact_is_observed_from_its_placed_files(tmp_path
     assert observed.realized is True
 
 
-def test_image_free_consumer_missing_its_placed_output_is_not_realized(tmp_path):
+def test_base_container_consumer_missing_its_placed_output_is_not_realized(tmp_path):
     """An output that never reached the container fails the gate, as it must."""
 
     address, plan, realization = _ssh_bundle_fixture(imaged=False)
@@ -1676,7 +1676,7 @@ def test_image_free_consumer_missing_its_placed_output_is_not_realized(tmp_path)
     assert observed.realized is False
 
 
-def test_image_free_consumer_exec_failure_is_not_read_as_delivery(tmp_path):
+def test_base_container_consumer_exec_failure_is_not_read_as_delivery(tmp_path):
     address, plan, realization = _ssh_bundle_fixture(imaged=False)
     engine_root = tmp_path / "engine"
     _write_ssh_bundle(engine_root)

@@ -697,8 +697,8 @@ services:
   # bindings.py TARGET_SURFACES), so unlike kali-ssh-proxy this proxy's own
   # publish stays on all interfaces, not loopback (issue #581). Targets the
   # container name, not webapp's declared static IP: webapp is realized
-  # generically (ADR-048), and an image-free node's declared docker-
-  # compose.yml ipv4_address is reference data only, never actually applied
+  # generically (ADR-048), and a base-container-materialized node's declared
+  # docker-compose.yml ipv4_address is reference data only, never actually applied
   # to the running container's network attachment.
   mailserver:
     profiles: ["mail"]
@@ -957,6 +957,14 @@ services:
       # API bind address. Print the one-time login URL for that origin so the
       # session header token is stored for the origin the SPA actually runs on.
       - APTL_WEB_PUBLIC_ORIGIN=http://127.0.0.1:3000
+    # Never root (issue #1193). Run as the uid:gid that owns the project, so
+    # the API can read the owner-only lab state `aptl` writes under it, and
+    # join only the bind-mounted socket's owning group. Set both in `.env`
+    # (see .env.example). Unset, the placeholder names stop container creation
+    # instead of falling back to root or to an identity that cannot read state.
+    user: "${APTL_WEB_API_USER:-aptl-web-api-user-unset}"
+    group_add:
+      - "${APTL_DOCKER_SOCKET_GID:-aptl-docker-socket-gid-unset}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro

@@ -25,6 +25,8 @@ apt-get update
 
 # Install Wazuh agent
 WAZUH_MANAGER="$WAZUH_MANAGER" apt-get install -y wazuh-agent=4.12.0-1
+# Keep the agent at the manager's version through later upgrades (issue #1193).
+apt-mark hold wazuh-agent
 
 echo "Wazuh agent installed successfully"
 

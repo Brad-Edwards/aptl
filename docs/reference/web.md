@@ -38,6 +38,13 @@ Use `aptl web serve --help` for the exact options in the installed release.
 `--api-only` is for the split Compose delivery behind its static UI proxy; it
 does not provide a browser interface by itself.
 
+The split delivery's API container never runs as root. Set
+`APTL_WEB_API_USER` to the project owner's `uid:gid` and
+`APTL_DOCKER_SOCKET_GID` to the Docker socket's group in the project's `.env`.
+`.env.example` shows the commands. The container then reads the owner-only lab
+state under `.aptl/` and reaches the daemon with no other privilege. It refuses
+to start while either value is unset.
+
 ## Operator Surfaces
 
 | Browser route | Supported behavior |

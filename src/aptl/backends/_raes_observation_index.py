@@ -32,7 +32,7 @@ class RealizationObservationIndex:
     """Address-indexed realization inputs shared by resource observers."""
 
     realization_root: Path
-    image_free: frozenset[str]
+    non_compose: frozenset[str]
     node_containers: dict[str, str]
     node_runtimes: dict[str, RuntimeConfiguration]
     network_names: dict[str, str]
@@ -61,7 +61,7 @@ def build_observation_index(
     placement_content, placement_datasets = _placement_payload_indexes(realization)
     return RealizationObservationIndex(
         realization_root=_realization_root(backend, scenario_root),
-        image_free=_image_free_addresses(realization),
+        non_compose=_non_compose_addresses(realization),
         node_containers=node_containers,
         node_runtimes=node_runtimes,
         network_names={item.address: item.name for item in realization.networks},
@@ -102,7 +102,7 @@ def _node_indexes(
     return containers, runtimes
 
 
-def _image_free_addresses(realization: AptlRealization) -> frozenset[str]:
+def _non_compose_addresses(realization: AptlRealization) -> frozenset[str]:
     """Return nodes realized without an authored image."""
 
     return frozenset(node.address for node in realization.nodes if node.image is None)

@@ -342,7 +342,7 @@ def test_generated_environment_file_rejects_variable_name_injection(
     assert not list((tmp_path / ".aptl/realization/env").glob("*.env"))
 
 
-def test_image_free_generated_environment_uses_the_declared_output(
+def test_base_container_generated_environment_uses_the_declared_output(
     tmp_path: Path,
 ) -> None:
     from dataclasses import replace
@@ -362,7 +362,7 @@ def test_image_free_generated_environment_uses_the_declared_output(
     artifact = replace(artifact, environment_consumers=(consumer,))
     realization = replace(spec, generated_artifacts=(artifact,))
 
-    failure, operations = backend._image_free_generated_artifact_ops(
+    failure, operations = backend._base_container_generated_artifact_ops(
         realization,
         frozenset({"provision.node.kali"}),
         tmp_path,
@@ -435,7 +435,7 @@ def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> N
     assert not (tmp_path / ".aptl/realization/env/aptl-kali.env").exists()
 
 
-def test_image_free_environment_binding_rejects_variable_name_injection(
+def test_base_container_environment_binding_rejects_variable_name_injection(
     tmp_path: Path,
 ) -> None:
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
@@ -451,7 +451,7 @@ def test_image_free_environment_binding_rejects_variable_name_injection(
     artifact = replace(artifact, environment_consumers=(consumer,))
     realization = replace(spec, generated_artifacts=(artifact,))
 
-    failure, operations = backend._image_free_generated_artifact_ops(
+    failure, operations = backend._base_container_generated_artifact_ops(
         realization,
         frozenset({"provision.node.kali"}),
         tmp_path,
@@ -460,7 +460,7 @@ def test_image_free_environment_binding_rejects_variable_name_injection(
     assert failure is not None
     assert failure.success is False
     assert operations == {}
-    assert backend._image_free_generated_environment == {}
+    assert backend._base_container_generated_environment == {}
 
 
 def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:
@@ -957,7 +957,7 @@ def test_effective_compose_model_rejects_undeclared_certificate_mount(
     assert "undeclared certificate material" in result.error
 
 
-def test_effective_model_ignores_image_free_certificate_delivery(
+def test_effective_model_ignores_base_container_certificate_delivery(
     tmp_path: Path,
 ) -> None:
     """Compose validation does not re-demand a mount delivered as a file."""
@@ -965,10 +965,10 @@ def test_effective_model_ignores_image_free_certificate_delivery(
     from raes.runtime_configuration import RuntimeConfiguration
 
     spec = _spec()
-    image_free_node = replace(spec.nodes[0], runtime=RuntimeConfiguration())
+    base_container_node = replace(spec.nodes[0], runtime=RuntimeConfiguration())
     realization = replace(
         spec,
-        nodes=(image_free_node,),
+        nodes=(base_container_node,),
         images=(),
         persistent_volumes=(),
     )
@@ -1690,7 +1690,7 @@ def test_authenticated_readiness_accepts_an_applied_manager_config(
     assert backend.authenticated_readiness == {"wazuh.manager": True}
 
 
-# -- ssh_key_bundle dispatch and image-free delivery (issue #875) -------------
+# -- ssh_key_bundle dispatch and base-container delivery (issue #875) -------------
 
 
 #: A realization with no nodes: these tests exercise generator dispatch and
@@ -1832,7 +1832,7 @@ def test_an_unsupported_generator_kind_is_refused(tmp_path: Path) -> None:
     assert "unsupported" in result.error
 
 
-def _image_free_consumer(node: str, *, selected: tuple[str, ...]):
+def _base_container_consumer(node: str, *, selected: tuple[str, ...]):
     return DeploymentStatefulConsumer(
         target_address=f"provision.node.{node}",
         node_name=node,
@@ -1843,10 +1843,10 @@ def _image_free_consumer(node: str, *, selected: tuple[str, ...]):
     )
 
 
-def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
+def test_base_container_consumers_receive_their_selected_outputs_as_placed_files(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """An image-free node has no Compose service to mount into (issue #875).
+    """A base-container-materialized node has no Compose service to mount into (issue #875).
 
     Its consumer's selected outputs are placed into the container as files
     instead, at the same destination the mount model would have bound them to,
@@ -1857,7 +1857,7 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     _stub_ssh_generator(monkeypatch)
-    consumer = _image_free_consumer(
+    consumer = _base_container_consumer(
         "workstation",
         selected=(
             "workstation-dev-private-key",
@@ -1872,7 +1872,7 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops = backend._base_container_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
@@ -1886,14 +1886,14 @@ def test_image_free_consumers_receive_their_selected_outputs_as_placed_files(
     assert placed[0].content == "material for workstation-dev-private-key\n"
 
 
-def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
+def test_an_artifact_with_no_base_container_consumer_is_not_generated_here(
     tmp_path: Path, monkeypatch
 ) -> None:
     """Compose consumers get bind mounts; this path must not duplicate that work."""
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     staged = _stub_ssh_generator(monkeypatch)
-    consumer = _image_free_consumer("kali", selected=("target-authorized-keys",))
+    consumer = _base_container_consumer("kali", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
         profiles=(),
         nodes=(),
@@ -1901,7 +1901,7 @@ def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops = backend._base_container_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
@@ -1909,17 +1909,17 @@ def test_an_artifact_with_no_image_free_consumer_is_not_generated_here(
     assert staged == []
 
 
-def test_a_generator_failure_stops_image_free_placement(
+def test_a_generator_failure_stops_base_container_placement(
     tmp_path: Path, monkeypatch
 ) -> None:
     """Nothing is placed from an artifact that failed to generate."""
 
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
-    backend._image_free_generated_environment = {
+    backend._base_container_generated_environment = {
         "provision.node.workstation": {"STALE_SECRET": "must-not-survive"}
     }
     _stub_ssh_generator(monkeypatch, error="no entropy source")
-    consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
+    consumer = _base_container_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
         profiles=(),
         nodes=(),
@@ -1927,17 +1927,17 @@ def test_a_generator_failure_stops_image_free_placement(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops = backend._base_container_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
     assert failure is not None
     assert failure.success is False
     assert ops == {}
-    assert backend._image_free_generated_environment == {}
+    assert backend._base_container_generated_environment == {}
 
 
-def test_a_declared_output_that_never_materialized_stops_image_free_placement(
+def test_a_declared_output_that_never_materialized_stops_base_container_placement(
     tmp_path: Path, monkeypatch
 ) -> None:
     """An absent output would otherwise be placed as an empty file in the node."""
@@ -1949,7 +1949,7 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
             None
         ),  # reports success, writes nothing
     )
-    consumer = _image_free_consumer("workstation", selected=("target-authorized-keys",))
+    consumer = _base_container_consumer("workstation", selected=("target-authorized-keys",))
     realization = DeploymentRealizationSpec(
         profiles=(),
         nodes=(),
@@ -1957,13 +1957,13 @@ def test_a_declared_output_that_never_materialized_stops_image_free_placement(
         generated_artifacts=(_ssh_artifact((consumer,)),),
     )
 
-    failure, ops = backend._image_free_generated_artifact_ops(
+    failure, ops = backend._base_container_generated_artifact_ops(
         realization, frozenset({"provision.node.workstation"}), tmp_path
     )
 
     assert failure is not None
     assert failure.success is False
-    assert "missing for image-free consumer" in failure.error
+    assert "missing for base-container consumer" in failure.error
     assert "labadmin/.ssh/authorized_keys" in failure.error
     assert ops == {}
 
@@ -2258,7 +2258,7 @@ def test_no_image_node_content_means_no_override_file(tmp_path: Path) -> None:
 
 
 def _seedable_spec(tmp_path: Path):
-    """One image node and one image-free node, each declaring content."""
+    """One image node and one base-container-materialized node, each declaring content."""
 
     from aptl.core.deployment.realization import DeploymentContentRealization
 

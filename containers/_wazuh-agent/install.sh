@@ -38,6 +38,9 @@ echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4
 
 apt-get update
 WAZUH_MANAGER=PLACEHOLDER apt-get install -y wazuh-agent=4.12.0-1
+# The agent must not run ahead of the 4.12 manager. Hold it so an image or
+# node-level `apt-get upgrade` keeps the pinned version (issue #1193).
+apt-mark hold wazuh-agent
 
 apt-get clean
 rm -rf /var/lib/apt/lists/*

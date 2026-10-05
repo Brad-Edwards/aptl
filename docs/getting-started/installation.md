@@ -7,7 +7,9 @@ pipx environment. Check the [prerequisites](prerequisites.md) first.
 
 Install pipx through your operating system or the
 [official pipx instructions](https://pipx.pypa.io/stable/installation/), then
-install APTL:
+install LilRAE. LilRAE was formerly named APTL; it is still published as the
+`aptl-labs` package and provides the `aptl` command
+([ADR-062](../adrs/adr-062-lilrae-name-and-naming-convention.md)):
 
 ```shell
 pipx install aptl-labs

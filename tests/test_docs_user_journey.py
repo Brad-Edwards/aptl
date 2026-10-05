@@ -78,7 +78,7 @@ def test_home_links_directly_to_the_complete_first_time_journey() -> None:
     links = _links(_document("docs/index.md"))
     task_targets = {
         "Check prerequisites": "getting-started/prerequisites.md",
-        "Install APTL": "getting-started/installation.md",
+        "Install LilRAE": "getting-started/installation.md",
         "Start and verify the lab": (
             "getting-started/quick-start.md#start-and-verify-the-lab"
         ),

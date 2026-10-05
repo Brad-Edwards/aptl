@@ -1,4 +1,4 @@
-# APTL plan rules
+# LilRAE plan rules
 
 Mandatory constraints the `/implement` skill applies during plan phase.
 
@@ -28,3 +28,12 @@ Mandatory constraints the `/implement` skill applies during plan phase.
   `docs`/`chore`/`refactor`/`test`/`ci`/`build` do not release. The PR title is
   the changelog entry, so make it a clear Conventional Commit. See
   `docs/releasing.md`.
+- New code MUST use `lilrae` naming: a new module, package, service,
+  environment variable (`LILRAE_`), resource name, or configuration file is
+  named for LilRAE, not APTL. Code that extends an existing interface MUST keep
+  that interface's current identifiers (for example the `aptl` import root,
+  `aptl` CLI, `aptl.*` entry-point groups, existing config fields, `APTL_*`
+  variables, and runtime resource names); add no alias, shim, or parallel
+  `lilrae` spelling. Renaming an existing identifier needs its own
+  compatibility decision. See
+  [ADR-062](../docs/adrs/adr-062-lilrae-name-and-naming-convention.md).

@@ -1,16 +1,27 @@
-# APTL—Advanced Purple Team Lab
+# LilRAE (formerly APTL)
 
-APTL is a local purple-team lab where human operators and AI agents exercise
+!!! note "APTL is now LilRAE"
+
+    The Advanced Purple Team Lab (APTL) repository moved to
+    [OpenRAE/lilrae](https://github.com/OpenRAE/lilrae) and was renamed. It is
+    the same project, with the same source, history, features, and issue
+    tracker. You still install the `aptl-labs` package and run the `aptl`
+    command, and existing configuration, state directories, and runtime
+    identifiers keep their `aptl` names. Where current pages still say APTL,
+    they mean LilRAE. See
+    [ADR-062](adrs/adr-062-lilrae-name-and-naming-convention.md).
+
+LilRAE is a local purple-team lab where human operators and AI agents exercise
 red- and blue-team workflows against an intentionally vulnerable enterprise
 range. The released Python package supplies the CLI and materializes the lab
 assets; Docker runs the selected scenario on your chosen engine.
 
 !!! warning "Use a dedicated, rebuildable environment"
 
-    APTL starts vulnerable services and gives agent tooling access to
+    LilRAE starts vulnerable services and gives agent tooling access to
     penetration-testing capabilities. Use a dedicated host or the stronger
     disposable [appliance seat](reference/appliance-seat-launcher.md), keep
-    unrelated credentials elsewhere, and use APTL only on systems you are
+    unrelated credentials elsewhere, and use LilRAE only on systems you are
     authorized to test.
 
 ## Run Your First Lab
@@ -20,7 +31,7 @@ require a source checkout or an architecture record.
 
 1. [Check prerequisites](getting-started/prerequisites.md) for Docker, Python,
    host resources, and the required command-line tools.
-2. [Install APTL](getting-started/installation.md) with pipx and create a lab
+2. [Install LilRAE](getting-started/installation.md) with pipx and create a lab
    project from the assets in the release.
 3. [Choose a scenario](getting-started/quick-start.md#choose-a-scenario) from
    the catalog provided by the installed environment pack.

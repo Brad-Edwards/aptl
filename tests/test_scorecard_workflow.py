@@ -137,5 +137,5 @@ def test_workflow_declares_no_env_or_defaults(workflow: dict, scorecard_job: dic
 
 def test_readme_carries_the_scorecard_badge() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "api.scorecard.dev/projects/github.com/Brad-Edwards/aptl/badge" in readme
-    assert "scorecard.dev/viewer/?uri=github.com/Brad-Edwards/aptl" in readme
+    assert "api.scorecard.dev/projects/github.com/OpenRAE/lilrae/badge" in readme
+    assert "scorecard.dev/viewer/?uri=github.com/OpenRAE/lilrae" in readme

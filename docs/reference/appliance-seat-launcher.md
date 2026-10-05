@@ -18,7 +18,7 @@ HTTPS, SSH, and other TCP/UDP traffic. The launcher adds no destination or port
 allow-list and no outbound proxy. The host network, selected scenario, or an
 operator's event-specific network controls may still affect connectivity.
 Optional controls for future events are tracked in
-[issue #1182](https://github.com/Brad-Edwards/aptl/issues/1182).
+[issue #1182](https://github.com/OpenRAE/lilrae/issues/1182).
 Only the declared host-to-guest Guacamole port is published, inside the seat
 user's private network namespace. The VM does not share the host filesystem or
 Docker socket. Network services exposed by the physical host may be reachable

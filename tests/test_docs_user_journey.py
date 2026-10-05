@@ -185,11 +185,11 @@ def test_support_and_security_actions_use_the_canonical_repository_policies() ->
     for relative_path in ("README.md", "docs/index.md"):
         links = _links(_document(relative_path))
         assert links["Contribute"] == (
-            "https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md"
+            "https://github.com/OpenRAE/lilrae/blob/dev/CONTRIBUTING.md"
         )
         assert links["Get support"] == (
-            "https://github.com/Brad-Edwards/aptl/blob/dev/SUPPORT.md"
+            "https://github.com/OpenRAE/lilrae/blob/dev/SUPPORT.md"
         )
         assert links["Report a vulnerability privately"] == (
-            "https://github.com/Brad-Edwards/aptl/security/advisories/new"
+            "https://github.com/OpenRAE/lilrae/security/advisories/new"
         )

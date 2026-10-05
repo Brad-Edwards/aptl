@@ -25,8 +25,8 @@ validate_pr_title = check_pr_title.validate_pr_title
 def _pull_request_event(
     *,
     title: str = "Dev",
-    base_repo: str = "Brad-Edwards/aptl",
-    head_repo: str = "Brad-Edwards/aptl",
+    base_repo: str = "OpenRAE/lilrae",
+    head_repo: str = "OpenRAE/lilrae",
     base_ref: str = "main",
     head_ref: str = "dev",
 ) -> dict[str, object]:
@@ -138,6 +138,10 @@ def test_promotion_identity_is_independent_of_the_allowed_title() -> None:
     [
         ("base_repo", "someone/aptl"),
         ("head_repo", "someone/aptl"),
+        ("base_repo", "Brad-Edwards/aptl"),
+        ("head_repo", "Brad-Edwards/aptl"),
+        ("base_repo", "OpenRAE/aptl"),
+        ("head_repo", "OpenRAE/aptl"),
         ("base_ref", "dev"),
         ("head_ref", "dev-copy"),
     ],
@@ -163,7 +167,7 @@ def test_exact_promotion_does_not_exempt_an_arbitrary_title(tmp_path: Path) -> N
         {
             "pull_request": {
                 "base": {"ref": "main", "repo": None},
-                "head": {"ref": "dev", "repo": {"full_name": "Brad-Edwards/aptl"}},
+                "head": {"ref": "dev", "repo": {"full_name": "OpenRAE/lilrae"}},
             }
         },
     ],

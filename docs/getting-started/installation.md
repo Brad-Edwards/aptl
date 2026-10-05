@@ -62,5 +62,5 @@ Do not copy generated credentials or state between project directories.
 
 A source checkout is a development path, not a prerequisite for operating the
 released lab. Contributors should follow the repository's
-[development setup](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md#development-setup),
+[development setup](https://github.com/OpenRAE/lilrae/blob/dev/CONTRIBUTING.md#development-setup),
 which creates a virtual environment and uses an editable install.

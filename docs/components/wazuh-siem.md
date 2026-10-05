@@ -120,7 +120,7 @@ Emergency      → 100607     → Level 15
 
 **Configuration sources:**
 - Acquired [`techvault` environment pack](https://github.com/OpenRAE/env-packs/tree/main/packs/techvault) - scenario-owned Falco rules
-- [wazuh_manager.conf](https://github.com/Brad-Edwards/aptl/blob/main/config/wazuh_cluster/wazuh_manager.conf) - generic manager config
+- [wazuh_manager.conf](https://github.com/OpenRAE/lilrae/blob/main/config/wazuh_cluster/wazuh_manager.conf) - generic manager config
 
 ## MCP Integration
 

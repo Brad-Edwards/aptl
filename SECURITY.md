@@ -6,8 +6,8 @@ Do not report suspected vulnerabilities through public GitHub issues.
 
 Report privately through GitHub private vulnerability reporting:
 
-- Open a report: https://github.com/Brad-Edwards/aptl/security/advisories/new
-- Published advisories: https://github.com/Brad-Edwards/aptl/security/advisories
+- Open a report: https://github.com/OpenRAE/lilrae/security/advisories/new
+- Published advisories: https://github.com/OpenRAE/lilrae/security/advisories
 
 If private reporting is unavailable to you, contact the maintainer privately
 through the contact path listed on Brad Edwards' GitHub profile:

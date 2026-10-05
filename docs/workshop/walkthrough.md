@@ -23,7 +23,7 @@ and staged dependencies. It requires the hardware fixture named in the
 [participant profile](../reference/participant-profile.md): x86-64, 8 vCPUs,
 16 GiB of memory, and 100 GiB of disk.
 
-For the developer preview only, you need Docker, Python 3.11 or newer, `pipx`,
+For the developer preview only, you need Docker, Python 3.12 or newer, `pipx`,
 Node.js 20 or newer for the MCP servers, and an MCP-capable agent.
 
 On native Linux Docker Engine only, raise the memory-map limit that OpenSearch

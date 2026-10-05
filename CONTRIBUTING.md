@@ -23,7 +23,7 @@ authors and agent integrations.
 
 Prerequisites:
 
-- Python 3.11 or newer
+- Python 3.12 or newer
 - Docker and Docker Compose
 - Node.js and npm for MCP server and web UI work
 - [pre-commit](https://pre-commit.com/)

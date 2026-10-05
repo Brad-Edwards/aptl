@@ -30,8 +30,7 @@ secret:
     # Deterministic SOC-stack lab fixture credentials for the disposable,
     # single-user local TechVault range. Identical to the values in the
     # checked-in docker-compose.yml the SOC services have always run with; the
-    # temporary env-pack SOAR fixup (scripts/envpack-soar-fixups.sh) and the seed
-    # scripts must use exactly these to match the realized containers. Lab
+    # seed scripts must use exactly these to match the realized containers. Lab
     # defaults, never real secrets.
     - name: techvault-misp-redis-fixture-password
       match: "redispassword"

@@ -32,9 +32,9 @@ the full rationale.
   `script` + `tcpdump` and execs the agent's command (or an
   interactive bash).
 
-See [containers/kali/Dockerfile](https://github.com/Brad-Edwards/aptl/blob/main/containers/kali/Dockerfile) for
+See [containers/kali/Dockerfile](https://github.com/OpenRAE/lilrae/blob/main/containers/kali/Dockerfile) for
 complete build configuration and
-[containers/kali/scripts/aptl-wrap-shell.sh](https://github.com/Brad-Edwards/aptl/blob/main/containers/kali/scripts/aptl-wrap-shell.sh)
+[containers/kali/scripts/aptl-wrap-shell.sh](https://github.com/OpenRAE/lilrae/blob/main/containers/kali/scripts/aptl-wrap-shell.sh)
 for the session wrapper.
 
 ## Network Access
@@ -68,7 +68,7 @@ Two container-wide captures are also collected (not per-session yet):
 
 - `/var/log/audit/audit.log`: auditd events for execve, connect,
   and file ops on /home/kali, /tmp, /root, /etc. Loaded from
-  [containers/kali/audit/aptl.rules](https://github.com/Brad-Edwards/aptl/blob/main/containers/kali/audit/aptl.rules).
+  [containers/kali/audit/aptl.rules](https://github.com/OpenRAE/lilrae/blob/main/containers/kali/audit/aptl.rules).
 - `/var/log/account/pacct`: process accounting (who ran what, when).
 
 Reading these:
@@ -97,8 +97,8 @@ The container requires:
 
 ## MCP Integration
 
-The red-team MCP server is in [mcp/mcp-red](https://github.com/Brad-Edwards/aptl/tree/main/mcp/mcp-red). The
-shared SSH layer in [mcp/aptl-mcp-common/src/ssh.ts](https://github.com/Brad-Edwards/aptl/blob/main/mcp/aptl-mcp-common/src/ssh.ts)
+The red-team MCP server is in [mcp/mcp-red](https://github.com/OpenRAE/lilrae/tree/main/mcp/mcp-red). The
+shared SSH layer in [mcp/aptl-mcp-common/src/ssh.ts](https://github.com/OpenRAE/lilrae/blob/main/mcp/aptl-mcp-common/src/ssh.ts)
 opens sessions with `SendEnv APTL_*` and writes a continuous PTY tee
 to `.aptl/runs/<run_id>/mcp-side/sessions/<session_id>.jsonl`—
 that's the MCP-server-side witness, independent of the Kali-side

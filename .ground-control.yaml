@@ -1,6 +1,6 @@
 schema_version: 1
 project: aptl
-github_repo: Brad-Edwards/aptl
+github_repo: OpenRAE/lilrae
 workflow:
   # Local verification is deliberately change-scoped. The helper runs only
   # changed test files (or explicit paths supplied by the caller); it refuses

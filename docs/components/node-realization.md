@@ -43,7 +43,7 @@ image-backed node.
 
 ## Historical term
 
-Before issue [#1193](https://github.com/Brad-Edwards/aptl/issues/1193), APTL
+Before issue [#1193](https://github.com/OpenRAE/lilrae/issues/1193), APTL
 called base-container-materialized nodes "image-free." That name was wrong:
 these nodes always start from a base image. ADR-048's title, older ADRs,
 architecture preflight notes, reviews, and changelog entries keep the old term

@@ -98,7 +98,7 @@ participants, `runtime.orchestration_authorities` (a host-root-equivalent
 Docker authority surface governed by ADR-055), remote Docker endpoints, or
 non-Linux hosts. Focused unit and integration suites remain authoritative for
 those, and full-range qualification is tracked in APTL #870 and #685 and in
-OpenRAE/lilrae #4, #9, and #10.
+OpenRAE/lilrae #1214, #1219, and #1220.
 
 Adding the next regression should add one field to the shared scenario and one
 effect assertion to the verifier, not a second boot job and not a second

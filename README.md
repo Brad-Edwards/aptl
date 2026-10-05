@@ -1,5 +1,5 @@
 [![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=Brad-Edwards_aptl&token=4dd88be3421d6d030a4615b86ac8ab0e3c9eb4d3)](https://sonarcloud.io/summary/new_code?id=Brad-Edwards_aptl)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Brad-Edwards/aptl/badge)](https://scorecard.dev/viewer/?uri=github.com/Brad-Edwards/aptl)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/OpenRAE/lilrae/badge)](https://scorecard.dev/viewer/?uri=github.com/OpenRAE/lilrae)
 
 🎤 **Accepted to [Black Hat USA Arsenal 2026](https://blackhat.com/us-26/arsenal/schedule/#aptl-advanced-purple-team-labs-52322), [SecTor Arsenal 2026](https://blackhat.com/sector/arsenal/schedule/index.html#aptl-advanced-purple-team-labs-54785), and SecTor 2026 Briefings.**
 
@@ -115,7 +115,7 @@ selected scenario in the local lab.
 
 The published site is the canonical user manual:
 
-- [Documentation home](https://brad-edwards.github.io/aptl/)
+- [Documentation home](https://openrae.github.io/lilrae/)
 - [Installation](docs/getting-started/installation.md)
 - [Run your first lab](docs/getting-started/quick-start.md)
 - [Troubleshooting](docs/troubleshooting/index.md)
@@ -127,9 +127,9 @@ manual.
 
 ## Project Links
 
-- [Get support](https://github.com/Brad-Edwards/aptl/blob/dev/SUPPORT.md)
-- [Contribute](https://github.com/Brad-Edwards/aptl/blob/dev/CONTRIBUTING.md)
-- [Report a vulnerability privately](https://github.com/Brad-Edwards/aptl/security/advisories/new)
+- [Get support](https://github.com/OpenRAE/lilrae/blob/dev/SUPPORT.md)
+- [Contribute](https://github.com/OpenRAE/lilrae/blob/dev/CONTRIBUTING.md)
+- [Report a vulnerability privately](https://github.com/OpenRAE/lilrae/security/advisories/new)
 - [Review the OpenSSF Best Practices assessment](docs/security/openssf-best-practices.md)
 
 Do not report suspected vulnerabilities through a public issue. The

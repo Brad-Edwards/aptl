@@ -201,6 +201,17 @@ def test_guest_event_check_rejects_another_effective_sudo_grant(tmp_path: Path, 
             guest._check("event", "none")
 
 
+def test_guest_event_check_accepts_sudo_no_grant_with_zero_exit(tmp_path: Path, monkeypatch) -> None:
+    guest = _guest_module()
+    monkeypatch.setattr(guest, "SUDOERS", tmp_path / "managed-rule")
+    monkeypatch.setattr(guest, "_command", lambda *args, **kwargs: SimpleNamespace(stdout="aptl"))
+    with patch.object(guest.subprocess, "run", return_value=SimpleNamespace(
+        returncode=0, stdout=b"User aptl is not allowed to run sudo on (none).\n",
+    )) as run:
+        guest._check("event", "none")
+    assert run.call_args.kwargs["env"]["LC_ALL"] == "C"
+
+
 def test_guest_admin_applies_password_and_does_not_reask_on_restart(tmp_path: Path, monkeypatch) -> None:
     guest = _guest_module()
     launch = tmp_path / "appliance-launch.json"

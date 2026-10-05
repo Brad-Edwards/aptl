@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import stat
 import subprocess
 from pathlib import Path
@@ -109,9 +110,15 @@ def _check(mode: str, authentication: str) -> None:
         )
     listing = subprocess.run(
         ["sudo", "-l", "-U", "aptl"], capture_output=True, timeout=15,
+        env={**os.environ, "LC_ALL": "C"},
+    )
+    grants = listing.stdout.decode(errors="replace")
+    no_grant = listing.returncode == 0 and any(
+        re.fullmatch(r"User aptl is not allowed to run sudo on .+\.", line)
+        for line in grants.splitlines()
     )
     if mode == "event":
-        if SUDOERS.exists() or listing.returncode == 0:
+        if SUDOERS.exists() or not no_grant:
             raise ValueError("event account has sudo authorization")
         return
     expected = (
@@ -121,9 +128,8 @@ def _check(mode: str, authentication: str) -> None:
     info = SUDOERS.stat()
     if (info.st_uid, info.st_gid, info.st_mode & 0o777) != (0, 0, 0o440):
         raise ValueError("sudoers permissions are invalid")
-    if SUDOERS.read_text() != expected or listing.returncode != 0:
+    if SUDOERS.read_text() != expected or listing.returncode != 0 or no_grant:
         raise ValueError("administrative sudo rule is invalid")
-    grants = listing.stdout.decode(errors="replace")
     if authentication == "password" and "NOPASSWD:" in grants:
         raise ValueError("administrative sudo is unexpectedly passwordless")
     if authentication == "passwordless" and "NOPASSWD:" not in grants:

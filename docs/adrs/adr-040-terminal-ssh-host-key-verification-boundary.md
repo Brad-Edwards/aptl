@@ -153,3 +153,15 @@ verification because a provider is remote or because containers were rebuilt.
   when `DeploymentBackend` or endpoint registry data already owns the fact.
 - Surfacing host-key fingerprints, private key paths with sensitive context, raw
   exceptions, or operator input in WebSocket error messages.
+
+## References
+
+- [ADR-028](adr-028-runtime-rendered-service-config.md): generated runtime
+  artifact placement and containment.
+- [ADR-029](adr-029-control-plane-secret-handling.md): control-plane secret
+  handling boundaries.
+- [ADR-036](adr-036-snapshot-endpoint-registry.md): canonical endpoint registry
+  and runtime reachability.
+- [ADR-037](adr-037-docker-compose-backend-cohesion.md): Docker Compose backend
+  cohesion.
+- Issue #418: operator terminal relay dials `asyncssh` with `known_hosts=None`.

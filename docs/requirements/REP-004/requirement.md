@@ -6,7 +6,7 @@ type: FUNCTIONAL
 priority: COULD
 wave: 3
 created_at: 2026-03-21T07:53:00.981772Z
-updated_at: 2026-03-21T07:53:00.981772Z
+updated_at: 2026-10-05T07:51:12.874346Z
 ---
 
 # REP-004: Traffic Generation Profiles
@@ -21,4 +21,4 @@ Without background traffic, attack traffic is the only traffic on the network, w
 
 ## Traceability
 
-- DOCUMENTS → GITHUB_ISSUE `#478` (REP-004: Traffic Generation Profiles)
+- DOCUMENTS → GITHUB_ISSUE `#436` (DSL-009: Run declared user-behavior profiles)

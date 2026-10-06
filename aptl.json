@@ -3,7 +3,7 @@
         "provider": "docker-compose"
     },
     "scenario": {
-        "identity": "techvault-participant-study",
+        "identity": "techvault",
         "source": "env-pack"
     },
     "containers": {

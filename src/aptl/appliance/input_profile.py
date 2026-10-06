@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from aptl.utils.deterministic_archive import hash_file_nofollow as _hash_file
+from aptl.core.config import load_config
 from aptl.core.scenario_bundle import ScenarioBundle
 from aptl.validation.curated_live_proof import ExpectedMatrix
 from aptl.validation.participant_mcp_smoke import resolve_participant_mcp_smoke_plan
@@ -185,6 +186,15 @@ def _write_full_profile(
 ) -> None:
     """Bind the installed full pack to the incumbent qualification machinery."""
     from aptl.validation.participant_profile_models import ParticipantProfileManifest
+
+    selected = load_config(project / "aptl.json").scenario
+    identity = bundle.pack_identity
+    if (
+        identity is None
+        or selected.source != "env-pack"
+        or selected.identity != identity.pack_id
+    ):
+        raise ValueError("seat project scenario differs from the acquired profile pack")
 
     root = project / "participant-profiles/techvault-full-v1"
     root.mkdir(parents=True)

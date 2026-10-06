@@ -49,11 +49,37 @@ if test -n "$public_key"; then
   image_args+=(--public-key "$public_key")
 fi
 
+check_guest_privileges() {
+  local mode=$1 overlay=$2 phase=$3
+  local result=$work/$mode.$phase.result.json
+  local copy_args=(--copy-in "$source_root/appliance/guest/seat-privilege-qualification.py:/root")
+  if test "$mode" = password; then
+    copy_args+=(--copy-in "$password_file:/root")
+  fi
+  "${guestfs_command[@]}" virt-customize --add "$overlay" \
+    "${copy_args[@]}" \
+    --run-command "/usr/bin/python3 /root/seat-privilege-qualification.py $mode"
+  "${guestfs_command[@]}" virt-cat -a "$overlay" \
+    /root/seat-privilege-qualification.json >"$result"
+  python3 - "$result" "$mode" "$phase" <<'PYTHON'
+import json
+import sys
+from pathlib import Path
+
+report = json.loads(Path(sys.argv[1]).read_text())
+if report.get("mode") != sys.argv[2] or report.get("passed") is not True:
+    raise SystemExit("guest privilege checks failed")
+checks = report.get("checks")
+if not isinstance(checks, dict) or not checks or not all(value is True for value in checks.values()):
+    raise SystemExit("guest privilege checks are incomplete")
+print(json.dumps({"mode": sys.argv[2], "phase": sys.argv[3], "passed": True, "checks": checks}))
+PYTHON
+}
+
 for mode in event password passwordless; do
   seat_root=$work/$mode
   active_root=$seat_root
   start_args=(--seat-root "$seat_root" "${image_args[@]}")
-  probe_mode=$mode
   if test "$mode" = event; then
     start_args+=(--desktop-mode event)
   else
@@ -73,37 +99,17 @@ for mode in event password passwordless; do
 
   overlay=$seat_root/instances/seat-01.qcow2
   test -f "$overlay"
-  copy_args=(--copy-in "$source_root/appliance/guest/seat-privilege-qualification.py:/root")
-  if test "$mode" = password; then
-    copy_args+=(--copy-in "$password_file:/root")
-  fi
-  "${guestfs_command[@]}" virt-customize --add "$overlay" \
-    "${copy_args[@]}" \
-    --run-command "/usr/bin/python3 /root/seat-privilege-qualification.py $probe_mode"
-  result=$work/$mode.result.json
-  "${guestfs_command[@]}" virt-cat -a "$overlay" \
-    /root/seat-privilege-qualification.json >"$result"
-  python3 - "$result" "$mode" <<'PYTHON'
-import json
-import sys
-from pathlib import Path
-
-report = json.loads(Path(sys.argv[1]).read_text())
-if report.get("mode") != sys.argv[2] or report.get("passed") is not True:
-    raise SystemExit("guest privilege checks failed")
-checks = report.get("checks")
-if not isinstance(checks, dict) or not checks or not all(value is True for value in checks.values()):
-    raise SystemExit("guest privilege checks are incomplete")
-PYTHON
-  if test "$mode" != event; then
-    rm -f -- "$password_file"
-  fi
+  check_guest_privileges "$mode" "$overlay" first-boot
   active_root=$seat_root
   "$aptl_cli" seat start --seat-root "$seat_root" "${image_args[@]}" \
     >"$work/$mode.restart.json"
   "$aptl_cli" seat stop --seat-root "$seat_root" \
     >"$work/$mode.final-stop.json"
   active_root=
+  check_guest_privileges "$mode" "$overlay" restart
+  if test "$mode" != event; then
+    rm -f -- "$password_file"
+  fi
   echo "seat privilege mode passed: $mode"
 done
 

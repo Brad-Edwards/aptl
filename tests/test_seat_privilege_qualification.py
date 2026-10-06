@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -76,3 +78,73 @@ def test_guest_probe_requires_real_mode_invariants(tmp_path: Path, monkeypatch, 
             SimpleNamespace(stdout="aptl docker")
         ))
         assert probe.check()["groups"] is False
+
+
+@pytest.mark.parametrize("restart_passes", [True, False])
+def test_qualifier_checks_permissions_after_restart(tmp_path: Path, restart_passes: bool) -> None:
+    """A permission failure after a real launch sequence must fail qualification."""
+    root = Path(__file__).resolve().parents[1]
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    fixture = binaries / "fixture"
+    fixture.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "from pathlib import Path\n"
+        "name = Path(sys.argv[0]).name\n"
+        "args = sys.argv[1:]\n"
+        "if name == 'aptl':\n"
+        "    seat = Path(args[args.index('--seat-root') + 1])\n"
+        "    if args[1] == 'start':\n"
+        "        overlay = seat / 'instances/seat-01.qcow2'\n"
+        "        overlay.parent.mkdir(parents=True, exist_ok=True)\n"
+        "        overlay.touch()\n"
+        "    print('{}')\n"
+        "elif name == 'virt-customize':\n"
+        "    for index, arg in enumerate(args):\n"
+        "        if arg == '--copy-in' and 'seat-qualification-password:' in args[index + 1]:\n"
+        "            assert Path(args[index + 1].rsplit(':', 1)[0]).is_file()\n"
+        "elif name == 'virt-cat':\n"
+        "    overlay = Path(args[args.index('-a') + 1])\n"
+        "    mode = overlay.parents[1].name\n"
+        "    count_file = overlay.with_suffix('.count')\n"
+        "    count = int(count_file.read_text()) + 1 if count_file.exists() else 1\n"
+        "    count_file.write_text(str(count))\n"
+        "    passed = count == 1 or os.environ['RESTART_PASSES'] == '1'\n"
+        "    print(json.dumps({'mode': mode, 'passed': passed, 'checks': {'sudo': passed}}))\n"
+    )
+    fixture.chmod(0o755)
+    for name in ("aptl", "virt-customize", "virt-cat"):
+        (binaries / name).symlink_to(fixture)
+    environment = {
+        **os.environ,
+        "PATH": str(binaries) + os.pathsep + os.environ["PATH"],
+        "APTL_SEAT_CLI": str(binaries / "aptl"),
+        "APTL_SEAT_LIBGUESTFS_SUDO": "0",
+        "TMPDIR": str(tmp_path),
+        "RESTART_PASSES": "1" if restart_passes else "0",
+    }
+    # Stub only the host KVM prerequisite; the runner and its report validation
+    # execute normally against fake external tools, without launching a VM.
+    result = subprocess.run(
+        ["bash", "-c",
+         'test() { if [[ "$2" == /dev/kvm ]]; then return 0; fi; builtin test "$@"; }; '
+         'source "$1" "$2"',
+         "qualifier-test", str(root / "scripts/appliance/qualify-seat-privileges.sh"),
+         "ghcr.io/example/seat@sha256:" + "a" * 64],
+        cwd=root, env=environment, text=True, capture_output=True, timeout=30,
+    )
+    reports = [json.loads(line) for line in result.stdout.splitlines() if line.startswith("{")]
+    if restart_passes:
+        assert result.returncode == 0, result.stderr
+        assert [(report["mode"], report["phase"]) for report in reports] == [
+            (mode, phase)
+            for mode in ("event", "password", "passwordless")
+            for phase in ("first-boot", "restart")
+        ]
+    else:
+        assert result.returncode != 0
+        assert "guest privilege checks failed" in result.stderr
+        assert [(report["mode"], report["phase"]) for report in reports] == [
+            ("event", "first-boot"),
+        ]

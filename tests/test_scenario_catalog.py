@@ -72,13 +72,31 @@ def test_repository_catalog_projects_validated_pack_identity():
     catalog = load_scenario_catalog(project_root)
 
     assert [entry.id for entry in catalog.scenarios] == [
-        "techvault-participant-study"
+        "techvault"
     ]
-    assert catalog.pack_identity.pack_id == "techvault-participant-study"
+    assert catalog.pack_identity.pack_id == "techvault"
     assert catalog.pack_identity.pack_version == "0.1.1"
     assert catalog.pack_identity.set_digest.startswith("sha256:")
     assert catalog.maturity == "built"
     assert not hasattr(catalog.scenarios[0], "path")
+
+
+def test_participant_study_remains_an_explicit_project_selection(tmp_path):
+    import json
+
+    from aptl.core.scenario_catalog import (
+        load_scenario_catalog,
+        resolve_scenario_selection,
+    )
+
+    (tmp_path / "aptl.json").write_text(json.dumps({
+        "scenario": {"identity": "techvault-participant-study", "source": "env-pack"},
+    }))
+    catalog = load_scenario_catalog(tmp_path)
+    assert catalog.pack_identity.pack_id == "techvault-participant-study"
+    assert resolve_scenario_selection(
+        tmp_path, scenario_id="techvault-participant-study",
+    ) is None
 
 
 def test_rejected_pack_fails_closed_without_local_fallback(mocker, tmp_path):
@@ -155,11 +173,11 @@ def test_resolve_acquired_scenario_returns_same_validated_bundle():
     project_root = Path(__file__).resolve().parents[1]
     catalog = load_scenario_catalog(project_root)
     resolved = resolve_acquired_scenario(
-        project_root, "techvault-participant-study", catalog=catalog
+        project_root, "techvault", catalog=catalog
     )
 
-    assert resolved.entry.id == "techvault-participant-study"
-    assert resolved.scenario.name == "techvault-participant-study"
+    assert resolved.entry.id == "techvault"
+    assert resolved.scenario.name == "techvault"
     assert resolved.bundle is catalog.bundle
 
 

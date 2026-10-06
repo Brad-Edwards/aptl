@@ -388,7 +388,8 @@ reference. `APTL_SEAT_IMAGE_TAG` optionally adds an immutable human-readable tag
 Test the immutable reference with a fresh CLI and empty private cache before
 promoting. The privilege qualifier starts real seats in event mode and both
 administrative password modes, checks guest sudo/PAM and Docker group access
-on each stopped overlay, and verifies a warm restart without a new password:
+on each stopped overlay, and repeats those checks after a warm restart without
+a new password:
 
 ```bash
 scripts/appliance/qualify-seat-privileges.sh ghcr.io/owner/seat@sha256:<published-digest>

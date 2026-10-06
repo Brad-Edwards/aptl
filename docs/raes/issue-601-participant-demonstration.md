@@ -82,9 +82,10 @@ parallel branch, worktree, or live seat.
    identifier; Vertex identifiers may use the `@YYYYMMDD` suffix. When the
    authenticated CLI uses Vertex, provide its region through the host's
    `CLOUD_ML_REGION` environment variable.
-3. Set `scenario.identity` to `techvault-participant-study` and
-   `scenario.source` to `env-pack` in `aptl.json`. Keep the existing deployment
-   and container selection.
+3. Use a separate project for this experiment. Set its `scenario.identity` to
+   `techvault-participant-study` and `scenario.source` to `env-pack` in
+   `aptl.json`. Keep the existing deployment and container selection. The
+   repository configuration and seat images select standard `techvault`.
 4. Run `aptl lab start`. Normal admission validates and compiles the pack,
    realizes TechVault, synchronizes MCP credentials, and then delivers the four
    compiled participant injects in logical-time order. No separate readiness

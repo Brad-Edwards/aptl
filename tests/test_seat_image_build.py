@@ -6,6 +6,7 @@ import json
 import sys
 import tarfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -29,6 +30,45 @@ def _script(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_packaged_seat_config_selects_the_acquired_techvault_pack(tmp_path: Path) -> None:
+    from aptl.core.scenario_bundle import env_pack_bundle
+    from aptl.utils.mcp_packaging import archive_project
+
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "aptl.json").write_bytes((ROOT / "aptl.json").read_bytes())
+    archive_path = tmp_path / "project.tar"
+    archive_project(project, archive_path)
+    with tarfile.open(archive_path) as archive:
+        config_file = archive.extractfile("aptl.json")
+        assert config_file is not None
+        selected = json.load(config_file)["scenario"]
+    bundle = env_pack_bundle(tmp_path / "packs")
+
+    assert selected == {"identity": "techvault", "source": "env-pack"}
+    assert bundle.pack_identity.pack_id == selected["identity"]
+
+
+@pytest.mark.parametrize("selected", [
+    {"identity": "techvault-participant-study", "source": "env-pack"},
+    {"identity": "techvault", "source": "project-tree"},
+])
+def test_seat_profile_refuses_config_that_selects_another_scenario(
+    tmp_path: Path, selected: dict[str, str],
+) -> None:
+    from aptl.appliance.input_profile import _write_full_profile
+    from aptl.core.scenario_bundle import PackIdentity
+
+    (tmp_path / "aptl.json").write_text(json.dumps({"scenario": selected}))
+    bundle = SimpleNamespace(
+        pack_identity=PackIdentity("techvault", "0.1.1", "sha256:" + "a" * 64),
+    )
+
+    with pytest.raises(ValueError, match="scenario differs"):
+        _write_full_profile(tmp_path, bundle, SimpleNamespace(), {})
+    assert not (tmp_path / "participant-profiles").exists()
 
 
 def test_realized_techvault_image_inventory_includes_helpers_and_children(

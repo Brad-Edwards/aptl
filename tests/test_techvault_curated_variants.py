@@ -215,6 +215,6 @@ def test_variant_is_an_explicit_research_fixture(variant: _Variant):
 def test_normal_catalog_selects_only_the_acquired_pack():
     catalog = load_scenario_catalog(PROJECT_ROOT)
     assert [entry.id for entry in catalog.scenarios] == [
-        "techvault-participant-study"
+        "techvault"
     ]
     assert AptlConfig().scenario.source == "env-pack"

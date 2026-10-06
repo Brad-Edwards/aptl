@@ -54,6 +54,7 @@ prose must not accidentally rename them.
 | Extension documentation | `src/aptl_techvault/README.md` | A plugin may be compatible with an exact pack binding; it is neither the pack, RAES, an APTL startup-catalog entry, nor a new catalog authority. |
 | Historical requirements and review evidence | `docs/requirements/SCN-010/requirement.md`, `docs/reviews/962-lilrae-readiness/` | Preserve historical names and exact recorded links. The review's backlog and identity dispositions provide current interpretation without changing the underlying evidence. |
 | Terminology record and navigation labels | `docs/architecture/issue-592-scenario-pack-terminology-preflight.md`, `docs/architecture/index.md`, `mkdocs.yml` | Titles may preserve an issue's or file's historical locator. Descriptive labels for current contracts use the terminology above. |
+| Scenario pack installation guide | `docs/getting-started/installing-packs.md` | Keep the content-pack and adapter distinction and the env-pack identity and source selection; do not rename the pack, RAES, or backend contracts. |
 
 The inventory identified three current-prose hazards for issue #592 to resolve:
 the tautological rename sentence at the start of the issue #589 preflight, the

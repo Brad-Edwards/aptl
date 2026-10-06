@@ -1889,3 +1889,7 @@ containers/_host-identity/aptl-host-identity.service	split-pack-delivery	Invento
 containers/_host-identity/install.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 docs/adrs/adr-062-lilrae-name-and-naming-convention.md	architecture-history	Preserve LilRAE name change and new-code naming decision
 docs/architecture/issue-1232-lilrae-naming-preflight.md	architecture-history	Preserve LilRAE public naming boundary and compatibility guardrails
+changelog.d/+install-scenario-packs-doc.added.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+proxy-addr-cve-2026-90711.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+changelog.d/+techvault-env-packs-621-compat.fixed.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+docs/getting-started/installing-packs.md	docs-follow-owner	Separate current user guidance from historical evidence and scenario-pack-specific docs

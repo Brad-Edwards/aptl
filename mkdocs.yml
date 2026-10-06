@@ -74,6 +74,7 @@ nav:
     - Overview: getting-started/index.md
     - Prerequisites: getting-started/prerequisites.md
     - Install LilRAE: getting-started/installation.md
+    - Install a Scenario Pack: getting-started/installing-packs.md
     - Run Your First Lab: getting-started/quick-start.md
   - Interfaces:
     - CLI: reference/cli.md

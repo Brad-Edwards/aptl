@@ -84,7 +84,7 @@ _RUNTIME_FIELD_BY_KIND = {
     "runtime-software-components": "software_components",
 }
 
-# Canonical projections from raes-env-packs 6.2.0's content-identified
+# Canonical projections from raes-env-packs 6.2.1's content-identified
 # TechVault semantic parent.  Each key is independently pinned so changing one
 # SDL claim cannot borrow the pack-level identity and pass as the old contract.
 _TECHVAULT_PROJECTION_DIGESTS: Mapping[tuple[str, str], str] = {

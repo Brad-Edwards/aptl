@@ -17,9 +17,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
 # Node 22 ships npm 10, whose bundled dependencies carry fixed advisories.
 # Replace it with npm 11 (which supports Node >=22.9) from the registry
 # tarball, verified against its published sha512 integrity (issue #1193).
-# The base image also bundles yarn and corepack; this substrate uses npm only,
-# so remove them. Their bundled dependencies (for example postcss-selector-parser)
-# otherwise keep failing the image vulnerability scan for tooling we never run.
+# Then drop image tooling this substrate never runs, so its bundled
+# dependencies do not fail the image vulnerability scan:
+#   - yarn and corepack (this substrate uses npm only);
+#   - npm's own bundled postcss-selector-parser, which carries a fixed
+#     advisory (CVE-2026-104844) that no npm release has adopted yet. npm's
+#     install/ci path does not use it; removing it before the build below
+#     self-verifies (the build would fail if npm needed it).
 ARG NPM_VERSION=11.21.0
 ARG NPM_SHA512=668bfc2a16a63677a22dd10bb63e5800bb4d9895b82f87c22d3ce37e9cd71b6c3a3121dc7f453181d94ae6e9680ae92c593fbb986514ef08bbf5c3ba46a8af3e
 RUN set -eu; \
@@ -30,7 +34,8 @@ RUN set -eu; \
     tar -xzf /tmp/npm.tgz -C /usr/local/lib/node_modules/npm --strip-components=1; \
     rm /tmp/npm.tgz; \
     rm -rf /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
-        /usr/local/lib/node_modules/corepack /usr/local/bin/corepack; \
+        /usr/local/lib/node_modules/corepack /usr/local/bin/corepack \
+        /usr/local/lib/node_modules/npm/node_modules/postcss-selector-parser; \
     test "$(npm --version)" = "${NPM_VERSION}"
 # This image's offline cache is an APTL-owned build integration. Resolve the
 # exact compatible pack through the normal acquisition/artifact validators;

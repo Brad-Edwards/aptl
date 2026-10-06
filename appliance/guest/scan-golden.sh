@@ -30,7 +30,13 @@ getent passwd aptl >/dev/null
 command -v sudo >/dev/null
 test ! -e /etc/sudoers.d/90-aptl-desktop
 ! id -nG aptl | tr ' ' '\n' | grep -Eq '^(docker|sudo)$'
-if sudo -l -U aptl >/dev/null 2>&1; then
+sudo_listing=$(LC_ALL=C sudo -l -U aptl 2>&1) || {
+    echo 'could not inspect guest desktop sudo authorization' >&2
+    exit 1
+}
+if ! printf '%s\n' "$sudo_listing" |
+    grep -Eq '^User aptl is not allowed to run sudo on .+\.$'
+then
     echo 'guest desktop account has inherited sudo authorization' >&2
     exit 1
 fi

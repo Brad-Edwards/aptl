@@ -99,7 +99,7 @@ esac
         env={
             "PATH": f"{binary}:{os.environ['PATH']}",
             "APTL_SEAT_SIGNING_KEY": str(tmp_path / "fixture.key"),
-            "REPOSITORY_OWNER": "OpenRAE",
+            "REPOSITORY_OWNER": "Brad-Edwards",
             "GHCR_TOKEN": "test-token",
             "GITHUB_ACTOR": "test-actor",
             "APTL_TEST_ORAS_LOG": str(log),
@@ -124,5 +124,5 @@ esac
     assert len((tmp_path / "curl.log").read_text().splitlines()) <= 4
     if fresh_candidate:
         pushed = (tmp_path / "push.log").read_text().splitlines()
-        assert "org.opencontainers.image.source=https://github.com/openrae/lilrae" in pushed
-        assert any(arg.startswith("ghcr.io/openrae/aptl-seat:key-") for arg in pushed)
+        assert "org.opencontainers.image.source=https://github.com/OpenRAE/lilrae" in pushed
+        assert any(arg.startswith("ghcr.io/brad-edwards/aptl-seat:key-") for arg in pushed)

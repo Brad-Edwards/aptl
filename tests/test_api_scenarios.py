@@ -35,7 +35,7 @@ def test_list_reports_validated_acquired_pack_identity(api_client, tmp_path):
     assert body[0]["pack"] == {
         "id": "techvault-participant-study",
         "version": "0.1.1",
-        "set_digest": "sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357",
+        "set_digest": "sha256:03baae367b452527be4affd7f29369bf5aa32a2a3c1c82f73bfbc759d642af14",
         "maturity": "built",
     }
     assert body[0]["validation"]["valid"] is True

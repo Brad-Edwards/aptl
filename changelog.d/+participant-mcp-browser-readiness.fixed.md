@@ -1,0 +1,1 @@
+Fixed Wazuh rule authoring so MCP clients can submit raw XML through the authenticated rules-file endpoint. Participant desktops now open the guide, credentials, and working SOC console URLs as browser tabs, including the canonical MISP hostname.

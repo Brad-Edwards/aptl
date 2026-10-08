@@ -13,6 +13,8 @@ set -uo pipefail
 
 RDP_USER="${APTL_RDP_USER:-ubuntu}"
 RDP_PASS="${APTL_RDP_PASS:-AptlArsenal!2026}"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PARTICIPANT_HOME="$(getent passwd "$RDP_USER" | cut -d: -f6)"
 
 echo "=== setup-rdp starting $(date -u) ==="
 export DEBIAN_FRONTEND=noninteractive
@@ -64,7 +66,119 @@ Icon=utilities-terminal
 Terminal=false
 DESK
 sudo chmod +x "/home/$RDP_USER/Desktop/Start-Claude-Agent.desktop" 2>/dev/null || true
-sudo chown -R "$RDP_USER:$RDP_USER" "/home/$RDP_USER/Desktop"
+
+# Put the participant guide and credentials in the browser at login. Epiphany
+# accepts one URL per invocation; later invocations join the existing process as
+# tabs. MISP redirects to its canonical hostname, so keep that host mapped to
+# the live container address instead of leaving the browser on an unresolved
+# redirect.
+sudo cp "$REPO_ROOT/docs/workshop/arsenal-2026/handout.md" \
+    "$PARTICIPANT_HOME/Desktop/APTL Participant Guide.md"
+sudo python3 - "$PARTICIPANT_HOME/Desktop/APTL Participant Guide.md" \
+    "$PARTICIPANT_HOME/Desktop/APTL Participant Guide.html" <<'PY'
+from html import escape
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1]).read_text()
+body = escape(source)
+Path(sys.argv[2]).write_text(
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+    '<title>APTL Participant Guide</title><style>'
+    'body{font-family:DejaVu Sans,Arial,sans-serif;margin:2rem;color:#172033}'
+    'pre{white-space:pre-wrap;max-width:1000px;line-height:1.45;'
+    'font:15px/1.45 DejaVu Sans,Arial,sans-serif}'
+    '</style></head><body><pre>' + body + '</pre></body></html>\n'
+)
+PY
+sudo tee "$PARTICIPANT_HOME/Desktop/TechVault-Access.html" >/dev/null <<'HTML'
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>TechVault SOC access</title>
+<style>
+body{font-family:DejaVu Sans,Arial,sans-serif;margin:2rem;color:#172033}
+table{border-collapse:collapse;width:100%;max-width:920px}
+th,td{border:1px solid #c8ced8;padding:.6rem .8rem;text-align:left}
+th,code{background:#eef1f6} code{padding:.1rem .3rem;border-radius:3px}
+</style></head><body>
+<h1>TechVault SOC service access</h1>
+<p>Use these accounts in the console tabs.</p>
+<table>
+<tr><th>Service</th><th>URL</th><th>Username</th><th>Password</th></tr>
+<tr><td>Wazuh Dashboard</td><td><a href="https://wazuh.dashboard/">https://wazuh.dashboard/</a></td><td><code>admin</code></td><td><code>SecretPassword</code></td></tr>
+<tr><td>TheHive</td><td><a href="https://localhost:9000/">https://localhost:9000/</a></td><td><code>aptl-svc@thehive.local</code></td><td><code>AptlService2024!</code></td></tr>
+<tr><td>Cortex</td><td><a href="http://localhost:9001/">http://localhost:9001/</a></td><td><code>aptl-svc@cortex.local</code></td><td><code>AptlCortexService2026!</code></td></tr>
+<tr><td>Shuffle</td><td><a href="https://localhost:3443/">https://localhost:3443/</a></td><td><code>admin</code></td><td><code>ShuffleAdmin2024!</code></td></tr>
+<tr><td>MISP</td><td><a href="https://misp.techvault.local/">https://misp.techvault.local/</a></td><td><code>admin@admin.test</code></td><td><code>admin</code></td></tr>
+</table>
+</body></html>
+HTML
+
+sudo tee /usr/local/sbin/aptl-refresh-misp-host.sh >/dev/null <<'HOSTS'
+#!/usr/bin/env bash
+set -euo pipefail
+container="$(docker ps --format '{{.Names}}' | sed -n 's/-misp$//p' | head -1)-misp"
+[ "$container" != '-misp' ]
+ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$container" | awk '{print $1}')"
+[ -n "$ip" ]
+temporary="$(mktemp)"
+awk '$2 != "misp.techvault.local" { print }' /etc/hosts >"$temporary"
+printf '%s\t%s\n' "$ip" misp.techvault.local >>"$temporary"
+cat "$temporary" >/etc/hosts
+shred -u "$temporary"
+HOSTS
+sudo chmod 755 /usr/local/sbin/aptl-refresh-misp-host.sh
+sudo tee /etc/systemd/system/aptl-misp-host.service >/dev/null <<'UNIT'
+[Unit]
+Description=Refresh the APTL MISP desktop hostname
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/aptl-refresh-misp-host.sh
+UNIT
+sudo tee /etc/systemd/system/aptl-misp-host.timer >/dev/null <<'UNIT'
+[Unit]
+Description=Keep the APTL MISP desktop hostname current
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+Unit=aptl-misp-host.service
+
+[Install]
+WantedBy=timers.target
+UNIT
+
+sudo tee /usr/local/bin/aptl-open-participant-browser.sh >/dev/null <<BROWSER
+#!/usr/bin/env bash
+set -u
+urls=(
+  'file://$PARTICIPANT_HOME/Desktop/TechVault-Access.html'
+  'file://$PARTICIPANT_HOME/Desktop/APTL%20Participant%20Guide.html'
+  'https://wazuh.dashboard/'
+  'https://localhost:9000/'
+  'http://localhost:9001/'
+  'https://localhost:3443/'
+  'https://misp.techvault.local/'
+)
+for url in "\${urls[@]}"; do
+  epiphany-browser "\$url" >/tmp/aptl-participant-browser.log 2>&1 &
+  sleep 1
+done
+BROWSER
+sudo chmod 755 /usr/local/bin/aptl-open-participant-browser.sh
+sudo -u "$RDP_USER" mkdir -p "$PARTICIPANT_HOME/.config/autostart"
+sudo -u "$RDP_USER" tee "$PARTICIPANT_HOME/.config/autostart/20-aptl-browser.desktop" >/dev/null <<'DESK'
+[Desktop Entry]
+Type=Application
+Name=APTL guide and SOC consoles
+Comment=Open the credentials, participant guide, and SOC consoles
+Exec=/usr/local/bin/aptl-open-participant-browser.sh
+X-GNOME-Autostart-enabled=true
+DESK
+sudo systemctl daemon-reload
+sudo systemctl enable aptl-misp-host.timer >/dev/null
+sudo chown -R "$RDP_USER:$RDP_USER" "$PARTICIPANT_HOME/Desktop" "$PARTICIPANT_HOME/.config/autostart"
 
 # Responsiveness over internet RDP: 32bpp at 1080p with the xfce compositor is
 # heavy and reads as "the box is slow" even when it is idle. Cap to 16bpp and

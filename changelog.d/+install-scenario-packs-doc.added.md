@@ -1,0 +1,1 @@
+A getting-started guide, "Install a scenario pack and its adapter," documents how LilRAE consumes an external pack (content from `raes-env-packs` by identity) plus its adapter (the `aptl.*` entry points for that pack id), how to select the pack in `aptl.json`, and how to verify and troubleshoot it.

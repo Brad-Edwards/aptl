@@ -40,10 +40,10 @@ if TYPE_CHECKING:
 
 
 TECHVAULT_RUNTIME_ATTESTATION_SET_DIGEST = (
-    "sha256:df00ea2a2672864ad8c711a3eab3a8a7bffff4db058b4a9acde032a61b2a1504"
+    "sha256:1229f94f31bd35d3997d47ef8316ffebb3d2d2919c995838e458420b70456fcf"
 )
 TECHVAULT_STUDY_RUNTIME_ATTESTATION_SET_DIGEST = (
-    "sha256:fdde7b1a8b9377f7ddd473417de1f3fd3e24549e4560d8d6392f1727b3af5357"
+    "sha256:03baae367b452527be4affd7f29369bf5aa32a2a3c1c82f73bfbc759d642af14"
 )
 
 # These are configuration descriptions whose realized implementation is bound
@@ -84,7 +84,7 @@ _RUNTIME_FIELD_BY_KIND = {
     "runtime-software-components": "software_components",
 }
 
-# Canonical projections from raes-env-packs 6.2.0's content-identified
+# Canonical projections from raes-env-packs 6.2.1's content-identified
 # TechVault semantic parent.  Each key is independently pinned so changing one
 # SDL claim cannot borrow the pack-level identity and pass as the old contract.
 _TECHVAULT_PROJECTION_DIGESTS: Mapping[tuple[str, str], str] = {

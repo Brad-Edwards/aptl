@@ -17,6 +17,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
 # Node 22 ships npm 10, whose bundled dependencies carry fixed advisories.
 # Replace it with npm 11 (which supports Node >=22.9) from the registry
 # tarball, verified against its published sha512 integrity (issue #1193).
+# Also drop the unused yarn and corepack tooling (this substrate uses npm only)
+# so their bundled dependencies cannot fail the image vulnerability scan.
 ARG NPM_VERSION=11.21.0
 ARG NPM_SHA512=668bfc2a16a63677a22dd10bb63e5800bb4d9895b82f87c22d3ce37e9cd71b6c3a3121dc7f453181d94ae6e9680ae92c593fbb986514ef08bbf5c3ba46a8af3e
 RUN set -eu; \
@@ -26,7 +28,24 @@ RUN set -eu; \
     mkdir /usr/local/lib/node_modules/npm; \
     tar -xzf /tmp/npm.tgz -C /usr/local/lib/node_modules/npm --strip-components=1; \
     rm /tmp/npm.tgz; \
+    rm -rf /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+        /usr/local/lib/node_modules/corepack /usr/local/bin/corepack; \
     test "$(npm --version)" = "${NPM_VERSION}"
+# npm (through 12.x) bundles postcss-selector-parser 7.1.4, which carries a
+# fixed advisory (CVE-2026-104844, fixed in 7.1.6) that no npm release has
+# adopted. npm's ci path requires the module, so upgrade the bundled copy in
+# place to 7.1.6 (identical runtime deps cssesc/util-deprecate, already present)
+# and verify its published sha512 integrity.
+ARG PCSS_VERSION=7.1.6
+ARG PCSS_SHA512=eea0123f384a17697628b6e8459bb1f0209344c746895d3cbd69b22b33f3db6a99ed98d004e798eeb37336808b49489fb49ec752ad061111e6c70fedd1d09d33
+RUN set -eu; \
+    curl -fsSL "https://registry.npmjs.org/postcss-selector-parser/-/postcss-selector-parser-${PCSS_VERSION}.tgz" -o /tmp/pcss.tgz; \
+    echo "${PCSS_SHA512}  /tmp/pcss.tgz" | sha512sum -c -; \
+    pcss=/usr/local/lib/node_modules/npm/node_modules/postcss-selector-parser; \
+    rm -rf "$pcss"; mkdir -p "$pcss"; \
+    tar -xzf /tmp/pcss.tgz -C "$pcss" --strip-components=1; \
+    rm /tmp/pcss.tgz; \
+    test "$(node -p "require('$pcss/package.json').version")" = "${PCSS_VERSION}"
 # This image's offline cache is an APTL-owned build integration. Resolve the
 # exact compatible pack through the normal acquisition/artifact validators;
 # retain dependency cache + identity evidence, never a second runtime source.

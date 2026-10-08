@@ -45,7 +45,7 @@ def _enum(value: object) -> object:
 def test_released_pack_authors_the_misp_and_cache_contract(tmp_path: Path) -> None:
     """The released pack retains OpenRAE/env-packs#280's MISP contract."""
 
-    assert version("raes-env-packs") == "6.2.0"
+    assert version("raes-env-packs") == "6.2.1"
     scenario = parse_sdl_file(techvault_scenario_path(tmp_path))
 
     application = scenario.nodes["misp"].runtime.platform_applications[0]

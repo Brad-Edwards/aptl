@@ -130,7 +130,7 @@ requires-dist = [
     { name = "pytest-xdist", marker = "extra == 'dev'", specifier = ">=3.6.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "raes", specifier = "==6.0.1" },
-    { name = "raes-env-packs", specifier = "==6.2.0" },
+    { name = "raes-env-packs", specifier = "==6.2.1" },
     { name = "rfc8785", specifier = ">=0.1.4,<0.2.0" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.15.0" },
@@ -2182,7 +2182,7 @@ wheels = [
 
 [[package]]
 name = "raes-env-packs"
-version = "6.2.0"
+version = "6.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -2191,9 +2191,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "raes" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/93/ed/3f4af32d4ee13a687f33c5a1a2751e2673a2705ca553745192c86778b579/raes_env_packs-6.2.0.tar.gz", hash = "sha256:47565e4b77297ef8c908aaad063c213777fd3a96a0fc488c2c0133573f91654c", size = 3023509, upload-time = "2026-10-03T19:51:42.068Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/24/08/a968eeb56a306d42b8ce1bd5b041e3e0d81b6c564b4c5e3aef3bb23054f7/raes_env_packs-6.2.1.tar.gz", hash = "sha256:6a235e6c75697cb8a1afcb011b70b77e6bdc6fa302911aaa607f25856689b657", size = 3027670, upload-time = "2026-10-06T03:12:23.962Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/15/c0/a1ed6badaed1d3aa0dec32822a1c21091feab63dfaf6cb478152dfecef13/raes_env_packs-6.2.0-py3-none-any.whl", hash = "sha256:833f9160dc2ccb0958d2be635c0a901312efbd447888cade6de074b13fe756f5", size = 2726259, upload-time = "2026-10-03T19:51:40.488Z" },
+    { url = "https://files.pythonhosted.org/packages/88/06/dff449d1a47a690228b692d9f98a2129c625031b5e437c3bb9de11fe8ada/raes_env_packs-6.2.1-py3-none-any.whl", hash = "sha256:2144f4460cbcd8a2579820b6962fd59fb714c437b980a11ef4041017b22661b2", size = 2728677, upload-time = "2026-10-06T03:12:22.185Z" },
 ]
 
 [[package]]

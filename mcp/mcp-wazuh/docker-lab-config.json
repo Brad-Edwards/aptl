@@ -64,15 +64,19 @@
       "description": "Search raw log data (archives) before rule processing. Requires logall_json=yes in ossec.conf and the archives fileset enabled in the Filebeat wazuh module. Use Elasticsearch query DSL in body parameter. Example: {\"body\": {\"query\": {\"match\": {\"data.srcip\": \"192.168.1.1\"}}}}"
     },
     "create_detection_rule": {
-      "url": "https://localhost:${APTL_HP_WAZUH_MANAGER_55000}/manager/files",
+      "url": "https://localhost:${APTL_HP_WAZUH_MANAGER_55000}/rules/files/zzz_purple_loop.xml",
       "method": "PUT",
       "auth": {
-        "type": "basic",
+        "type": "wazuh-jwt",
         "username": "${API_USERNAME}",
-        "password": "${API_PASSWORD}"
+        "password": "${API_PASSWORD}",
+        "auth_url": "https://localhost:${APTL_HP_WAZUH_MANAGER_55000}/security/user/authenticate"
       },
       "verify_ssl": false,
-      "description": "Create custom Wazuh detection rule"
+      "params": {
+        "overwrite": "true"
+      },
+      "description": "Create or update custom Wazuh detection rules in zzz_purple_loop.xml. Supply the complete rule XML as a raw string body."
     }
   }
 }

@@ -15,6 +15,10 @@ describe('generateAPIToolDefinitions', () => {
     expect(tools[0].name).toBe('wazuh_api_call');
     expect(tools[1].name).toBe('wazuh_api_info');
     expect(tools[0].description).toContain('Wazuh SIEM');
+    expect(tools[0].inputSchema.properties?.body).toEqual({
+      anyOf: [{ type: 'object' }, { type: 'string' }],
+      description: 'Request body for POST/PUT requests. Use a string for raw payloads such as XML.',
+    });
   });
 
   it('generates predefined query tools', () => {
@@ -37,6 +41,10 @@ describe('generateAPIToolDefinitions', () => {
     expect(tools[2].name).toBe('wazuh_recent_alerts');
     expect(tools[3].name).toBe('wazuh_search_logs');
     expect(tools[2].description).toBe('Get recent alerts');
+    expect(tools[2].inputSchema.properties?.body).toEqual({
+      anyOf: [{ type: 'object' }, { type: 'string' }],
+      description: 'Override request body data. Use a string for raw payloads such as XML.',
+    });
   });
 
   it('works with different server configs', () => {

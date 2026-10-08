@@ -33,8 +33,8 @@ export function generateAPIToolDefinitions(
             description: 'Query parameters as key-value pairs',
           },
           body: {
-            type: 'object',
-            description: 'Request body for POST/PUT requests',
+            anyOf: [{ type: 'object' }, { type: 'string' }],
+            description: 'Request body for POST/PUT requests. Use a string for raw payloads such as XML.',
           },
           headers: {
             type: 'object',
@@ -78,8 +78,8 @@ export function generateAPIToolDefinitions(
               description: 'Override or add query parameters',
             },
             body: {
-              type: 'object',
-              description: 'Override or add request body data',
+              anyOf: [{ type: 'object' }, { type: 'string' }],
+              description: 'Override request body data. Use a string for raw payloads such as XML.',
             },
           },
           required: [],

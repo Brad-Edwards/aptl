@@ -106,7 +106,8 @@ class _FailingRange:
     """A project whose start creates runtime and then fails (#952).
 
     It stands in for the backend's project inventory. The RAES handoff
-    creates containers, networks and volumes, then fails; ``stop`` removes
+    creates containers, networks and volumes, then fails (``start_then_fail``)
+    or succeeds so that a later step can fail (``start``); ``stop`` removes
     containers and networks and keeps volumes unless asked, as
     ``docker compose down`` does. Each stop records whether the start's
     lifecycle lock was still held at that moment.
@@ -128,8 +129,12 @@ class _FailingRange:
             container_count=self.containers, network_count=self.networks
         )
 
-    def start_then_fail(self, *_args, **_kwargs):
+    def start(self, *_args, **_kwargs):
         self.containers, self.networks, self.volumes = 3, 2, 4
+        return _raes_outcome(success=True)
+
+    def start_then_fail(self, *_args, **_kwargs):
+        self.start()
         return _raes_outcome(
             success=False,
             error="RAES runtime handoff failed: backend-contract-invalid",
@@ -147,6 +152,24 @@ class _FailingRange:
         if remove_volumes:
             self.volumes = 0
         return LabResult(success=True)
+
+
+def _breach_contract_after_start(mocker) -> None:
+    """Make the step after the RAES handoff raise ``icontract.ViolationError``.
+
+    ``_LAB_START_STEPS`` is captured at import time, so the breaching step is
+    inserted into the tuple itself, as the contract-mapping test does.
+    """
+    import icontract
+
+    from aptl.core import lab
+
+    def _step_after_start(_ctx):
+        raise icontract.ViolationError("a precondition broke after the range came up")
+
+    steps = list(lab._LAB_START_STEPS)
+    steps.insert(steps.index(lab._step_start_containers) + 1, _step_after_start)
+    mocker.patch.object(lab, "_LAB_START_STEPS", tuple(steps))
 
 
 def _admitted_start_fixture(bundle_root: Path):
@@ -2459,32 +2482,50 @@ class TestOrchestrateLabStart:
         assert result.error == "Appliance guest readiness publication failed."
         assert result.admission_seconds == pytest.approx(4.25)
 
-    def _failing_range(self, mocker, tmp_path, **inventory):
-        """Wire a range that the RAES handoff mutates and then fails (#952)."""
+    def _failing_range(self, mocker, tmp_path, failure="step-error", **inventory):
+        """Wire a range that the start creates and then fails on (#952).
+
+        ``step-error`` fails the RAES handoff after it created the range, which
+        the orchestrator returns as a step error. ``contract-violation`` lets
+        the handoff succeed and breaks a contract in the next step, which the
+        orchestrator returns from its ``icontract.ViolationError`` handler.
+        """
 
         mocks = self._patch_all_steps(mocker, tmp_path)
         project = _FailingRange(tmp_path, **inventory)
         mocks["project_presence"].side_effect = project.observe
         mocks["start"].side_effect = project.start_then_fail
+        if failure == "contract-violation":
+            mocks["start"].side_effect = project.start
+            _breach_contract_after_start(mocker)
         mocker.patch(
             "aptl.core.deployment.docker_compose.DockerComposeBackend.stop",
             side_effect=project.stop,
         )
         return project
 
+    @pytest.mark.parametrize(
+        ("failure", "error"),
+        [
+            ("step-error", "backend-contract-invalid"),
+            ("contract-violation", "contract violated at step '_step_after_start'"),
+        ],
+        ids=["step-error", "contract-violation"],
+    )
     def test_failed_start_names_its_residue_and_leaves_it_running(
-        self, mocker, tmp_path
+        self, mocker, tmp_path, failure, error
     ):
-        """By default the range stays up for diagnosis, and is counted (#952)."""
+        """By default the range stays up for diagnosis, and is counted on both
+        of the orchestrator's failure returns (#952)."""
         from aptl.core.lab import orchestrate_lab_start
         from aptl.core.lab_types import StartResidue
 
-        project = self._failing_range(mocker, tmp_path)
+        project = self._failing_range(mocker, tmp_path, failure=failure)
 
         result = orchestrate_lab_start(tmp_path)
 
         assert result.success is False
-        assert "backend-contract-invalid" in result.error
+        assert error in result.error
         assert result.residue == StartResidue(container_count=3, network_count=2)
         assert (project.containers, project.networks, project.volumes) == (3, 2, 4)
         assert project.stops == []

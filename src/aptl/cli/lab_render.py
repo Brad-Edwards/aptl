@@ -107,15 +107,21 @@ def emit_start_residue(residue: StartResidue) -> None:
         typer.echo(f"Teardown after the failed start {removed}; volumes were kept.")
         typer.echo(f"  `{volumes_command}` {volumes_effect}.")
         return
+    # The post-teardown observation decides what is said: an unanswered one
+    # confirms nothing, so it must not claim the teardown left anything.
     if counts is None:
         typer.echo(
             "The failed start may have left containers or networks running; "
             "they could not be observed."
         )
+        teardown_note = (
+            "--teardown-on-failure ran, but what remains could not be confirmed."
+        )
     else:
         typer.echo(f"The failed start left {counts} running.")
+        teardown_note = "--teardown-on-failure did not remove them."
     if residue.teardown_requested:
-        typer.echo("  --teardown-on-failure did not remove them.")
+        typer.echo(f"  {teardown_note}")
     typer.echo("  To recover, run one of:")
     width = max(len(command) for command, _effect in STOP_RECOVERY_ROUTES)
     for command, effect in STOP_RECOVERY_ROUTES:

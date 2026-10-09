@@ -55,17 +55,19 @@ confirmation unless the explicit non-interactive option shown by `--help` is
 used. It destroys volume-backed lab data but does not prune unrelated Docker
 resources.
 
+`aptl lab start --clean` performs the same project-volume cleanup before a
+fresh start. `aptl kill` and its container option are emergency controls for
+stuck MCP processes or lab containers. They are not a graceful stop, a data
+reset, or a substitute for investigating a failed readiness result.
+
 A failed `aptl lab start` leaves the containers and networks it created
 running so you can diagnose the failure. The failure summary counts them and
 names the two recovery commands: `aptl lab stop` keeps the volumes, and
 `aptl lab stop -v` destroys all lab data. Add `--teardown-on-failure` to the
 start command to stop those containers and networks automatically instead. It
-keeps the volumes.
-
-`aptl lab start --clean` performs the same project-volume cleanup before a
-fresh start. `aptl kill` and its container option are emergency controls for
-stuck MCP processes or lab containers. They are not a graceful stop, a data
-reset, or a substitute for investigating a failed readiness result.
+keeps the volumes. An appliance seat's guest readiness publication runs after
+the lab is up, so if it fails, the summary doesn't count the containers and
+networks and `--teardown-on-failure` doesn't stop them.
 
 ## Configuration And Secrets
 

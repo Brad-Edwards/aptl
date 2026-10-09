@@ -942,8 +942,33 @@ class TestLabStartCommand:
                     ),
                     "  To recover, run one of:",
                 ],
-                [],
+                [
+                    (
+                        "  --teardown-on-failure ran, but what remains could not "
+                        "be confirmed."
+                    )
+                ],
                 id="unobserved",
+            ),
+            pytest.param(
+                {
+                    "container_count": None,
+                    "network_count": None,
+                    "teardown_requested": True,
+                },
+                [
+                    (
+                        "The failed start may have left containers or networks "
+                        "running; they could not be observed."
+                    ),
+                    (
+                        "  --teardown-on-failure ran, but what remains could not "
+                        "be confirmed."
+                    ),
+                    "  To recover, run one of:",
+                ],
+                ["  --teardown-on-failure did not remove them."],
+                id="teardown-unobserved",
             ),
         ],
     )

@@ -95,7 +95,7 @@ You do not need to reserve a fixed list of ports. `aptl lab start` probes each
 host port requested by the realized scenario and remaps a service when its
 default is occupied. Read the start summary or run `aptl lab info` for the
 actual URLs and ports. Pin a port only through the matching documented
-`APTL_HP_*` or `APTL_DNS_HOST_PORT` runtime setting.
+`APTL_HP_*` runtime setting.
 
 ## Python environment
 

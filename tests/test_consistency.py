@@ -288,24 +288,34 @@ class TestKaliContainerLifecycle:
         assert "ssh.service" in unit_names, "kali must run and verify sshd"
         assert "kali-capture-bootstrap.service" not in unit_names
 
-    def test_kali_has_no_scenario_declared_host_proxy(self, compose_config):
+    def test_kali_has_no_scenario_declared_host_proxy(
+        self, compose_config, rendered_techvault
+    ):
         """Kali's host-routable endpoint is backend apparatus, not a scenario node.
 
         The old `kali-ssh-proxy` service published 127.0.0.1:2023 for host-run
         MCP clients. TechVault declares no such node, nothing started it, and it
         has been removed (issue #1006). Operator access is declared as
         `agents.red-team-operator.interactive_access` and is the backend's to
-        provide and disclose; this test pins only that the scenario does not
-        reintroduce a proxy node of its own.
+        provide and disclose; this test pins only that neither the in-tree
+        Compose model nor the realized pack reintroduces a proxy of its own.
+        The `kali` Compose service is a scale-to-zero stub, so kali's own
+        attachments are read from the realization (#954).
         """
         services = compose_config["services"]
         assert "kali-ssh-proxy" not in services
         assert "webapp-proxy" not in services
-        kali = services["kali"]
-        assert "aptl-control" not in kali.get("networks", {}), (
-            "kali must not attach to aptl-control; host-routable operator "
+        nodes = {node.name: node for node in rendered_techvault.nodes}
+        assert not {"kali-ssh-proxy", "webapp-proxy"} & nodes.keys()
+        internal = {
+            network.name for network in rendered_techvault.networks if network.internal
+        }
+        kali = nodes["kali"]
+        assert set(kali.networks) <= internal, (
+            "kali must stay on internal range networks; host-routable operator "
             "access is published by backend apparatus, not by the node"
         )
+        assert not kali.published_ports, "kali must publish no host port itself"
 
 
 class TestCodeReferencesMatchCompose:
@@ -358,13 +368,25 @@ class TestProfileConsistency:
 
 
 class TestNetworkEgressControls:
-    """Validate SAF-002: attack networks must block internet egress."""
+    """Validate SAF-002: attack networks must block internet egress.
+
+    Checked on the in-tree Compose model and on the networks section the
+    planner renders into the generated base Compose file for the pinned
+    TechVault pack, which ``aptl lab start`` creates by default (#954).
+    """
 
     ATTACK_NETWORKS = ["aptl-dmz", "aptl-internal", "aptl-redteam"]
 
-    def test_attack_networks_are_internal(self, compose_config):
+    @pytest.fixture(params=["in-tree", "rendered"])
+    def networks(self, request):
+        if request.param == "in-tree":
+            return request.getfixturevalue("compose_config").get("networks", {})
+        from aptl.core.deployment._compose_node_topology import render_networks
+
+        return render_networks(request.getfixturevalue("rendered_techvault_spec"))
+
+    def test_attack_networks_are_internal(self, networks):
         """Networks carrying attack traffic must use internal: true."""
-        networks = compose_config.get("networks", {})
         not_internal = []
         for name in self.ATTACK_NETWORKS:
             net = networks.get(name, {})
@@ -376,10 +398,10 @@ class TestNetworkEgressControls:
             f"internet, risking autonomous agent attacks on external targets."
         )
 
-    def test_security_network_allows_egress(self, compose_config):
+    def test_security_network_allows_egress(self, networks):
         """Security/management network must NOT be internal (SOC tools need internet)."""
-        networks = compose_config.get("networks", {})
-        security = networks.get("aptl-security", {})
+        assert "aptl-security" in networks
+        security = networks["aptl-security"]
         assert not security.get("internal", False), (
             "aptl-security must not be internal: true. "
             "SOC tools (MISP, Wazuh, Shuffle) require internet for "

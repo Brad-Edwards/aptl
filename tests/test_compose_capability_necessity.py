@@ -43,6 +43,8 @@ import yaml
 
 from aptl.backends import _raes_backend_implementation_profiles as profiles
 from aptl.backends._raes_backend_implementation_images import SAMBA_AD_BASE_IMAGE
+from aptl.backends.raes_node_materialization import realize_node
+from aptl.core.deployment.docker_compose import DockerComposeBackend
 
 PROJECT_ROOT = Path(__file__).parents[1]
 
@@ -73,16 +75,60 @@ def test_the_samba_capability_rationale_is_recorded_beside_the_grant():
     assert "955" in source
 
 
-def test_the_compose_ad_stub_carries_no_privilege():
-    """`ad` in Compose is a scale-to-zero stub; the grant lives on the provider."""
+class _StartRecorder:
+    """A backend that records the base container the materializer starts.
 
-    service = yaml.safe_load((PROJECT_ROOT / "docker-compose.yml").read_text())[
-        "services"
-    ]["ad"]
+    Raising from the start stops materialization there, so nothing else runs
+    and no Docker daemon is needed.
+    """
 
-    assert not service.get("cap_add")
-    assert not service.get("security_opt")
-    assert service.get("cgroup") != "host"
+    def __init__(self) -> None:
+        self.started = []
+        self.copied = []
+
+    def start_base_container(self, spec) -> None:
+        self.started.append(spec)
+        raise RuntimeError("recorded, not started")
+
+    def copy_into_container(self, *args, **kwargs) -> None:
+        self.copied.append((args, kwargs))
+
+
+# `docker run` flags that would give the container more than its added capability.
+_PRIVILEGE_FLAGS = frozenset(
+    {"--privileged", "--security-opt", "--cgroupns", "--userns", "--pid", "--ipc"}
+)
+
+
+def test_the_realized_ad_node_carries_only_the_provider_capability(
+    rendered_techvault, tmp_path
+):
+    """`ad` in Compose is a scale-to-zero stub; the grant lives on the provider.
+
+    So the check drives the pinned pack's realized `ad` node through the
+    materializer to the base container it starts, and renders that
+    container's `docker run` command (#954). The Samba provider adds
+    SYS_ADMIN and nothing else, the scenario authors no capability of its
+    own, and no security option or namespace flag comes with it.
+    """
+
+    ad = next(node for node in rendered_techvault.nodes if node.name == "ad")
+    backend = _StartRecorder()
+
+    result = realize_node(ad, backend)
+
+    assert len(backend.started) == 1, result
+    assert not backend.copied, result
+    (started,) = backend.started
+    argv = DockerComposeBackend(tmp_path)._base_container_create_command(
+        started, None, started.image_ref
+    )
+    # Docker reads both `--cap-add X` and `--cap-add=X`.
+    added = [argv[index + 1] for index, flag in enumerate(argv) if flag == "--cap-add"]
+    added += [flag.split("=", 1)[1] for flag in argv if flag.startswith("--cap-add=")]
+    assert ad.runtime is None or ad.runtime.linux_capabilities is None
+    assert added == ["SYS_ADMIN"]
+    assert not {flag.split("=", 1)[0] for flag in argv} & _PRIVILEGE_FLAGS, argv
 
 
 def _write_security_xattr(*cap_flags: str) -> subprocess.CompletedProcess:

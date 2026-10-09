@@ -5,15 +5,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from aptl.core.certs import CertResult
-from aptl.core.credentials import (
-    _atomic_write_secure,
-    _canonical_generated_path,
-    _ensure_secure_dir,
-)
 from aptl.core.deployment._compose_stateful_constants import CERTIFICATE_PROVENANCE
 from aptl.core.deployment._compose_stateful_model import (
     artifact_environment_file_path,
     artifact_source_path,
+)
+from aptl.core.deployment._realization_primitives import (
+    EnvironmentDeliveryRefused,
+    environment_file_line,
 )
 from aptl.core.deployment._stateful_certificates import validate_certificate_bundle
 from aptl.core.deployment.realization import (
@@ -21,6 +20,7 @@ from aptl.core.deployment.realization import (
     valid_environment_variable_name,
 )
 from aptl.core.lab_types import LabResult
+from aptl.utils.pathsafe import PathContainmentError, replace_private_nofollow
 
 
 def artifacts_in_dependency_order(
@@ -94,21 +94,31 @@ def write_artifact_environment_files(
     scenario_root: Path,
     by_service: dict[str, list[tuple[str, Path]]],
 ) -> None:
-    """Write validated output bindings as owner-only Compose env files."""
+    """Write validated output bindings as exact, owner-only Compose env files.
 
+    Each file is replaced whole through the no-follow private writer, so a
+    symlinked or non-regular target is refused and an existing file's mode
+    never carries over. A value Compose's env-file reader would alter is
+    refused rather than written (#966).
+    """
+
+    root = scenario_root.resolve()
     for service_name, bindings in by_service.items():
         target = artifact_environment_file_path(scenario_root, artifact, service_name)
-        relative = target.relative_to(scenario_root.resolve())
-        target = _canonical_generated_path(scenario_root, relative)
-        _ensure_secure_dir(target.parent)
         lines = []
         for variable, source in sorted(bindings):
             value = source.read_text(encoding="utf-8").strip()
-            if not value or "\n" in value or "\r" in value:
-                raise ValueError("invalid generated environment value")
-            lines.append(f"{variable}={value}")
-        _atomic_write_secure(target, "\n".join(lines) + "\n")
-        target.chmod(0o600)
+            if not value:
+                raise ValueError("empty generated environment value")
+            lines.append(environment_file_line(variable, value, compose=True))
+        try:
+            replace_private_nofollow(
+                root, target.relative_to(root).as_posix(), "".join(lines).encode()
+            )
+        except PathContainmentError as exc:
+            raise EnvironmentDeliveryRefused(
+                f"refusing unsafe generated environment file ({exc.reason})"
+            ) from exc
 
 
 def certificate_bundle_failure(

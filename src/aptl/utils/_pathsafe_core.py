@@ -29,6 +29,7 @@ REASON_NOT_FOUND = "not_found"
 REASON_NOT_REGULAR_FILE = "not_regular_file"
 REASON_BASE_DIR_UNAVAILABLE = "base_dir_unavailable"
 REASON_OPEN_FAILED = "open_failed"
+REASON_NOT_PRIVATE = "not_private"
 
 
 class PathContainmentError(Exception):

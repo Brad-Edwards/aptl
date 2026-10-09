@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import subprocess
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -19,6 +22,13 @@ from cryptography.x509.oid import NameOID
 from aptl.core.credentials import PathContainmentError
 from aptl.core.certs import CertResult
 from aptl.core.deployment.docker_compose import DockerComposeBackend
+from aptl.core.deployment._compose_stateful_artifact_helpers import (
+    write_artifact_environment_files,
+)
+from aptl.core.deployment._compose_stateful_model import (
+    artifact_environment_file_path,
+)
+from aptl.core.deployment._realization_primitives import EnvironmentDeliveryRefused
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
     stateful_override_payload,
@@ -428,9 +438,10 @@ def test_base_environment_file_rejects_value_line_injection(tmp_path: Path) -> N
         environment_defaults=(("SAFE", "value\nINJECTED=1"),),
     )
 
-    with pytest.raises(BackendSeedError, match="environment value"):
+    with pytest.raises(BackendSeedError, match="cannot carry SAFE exactly") as excinfo:
         backend._append_base_environment(argv, spec)
 
+    assert "INJECTED" not in str(excinfo.value)
     assert argv == []
     assert not (tmp_path / ".aptl/realization/env/aptl-kali.env").exists()
 
@@ -461,6 +472,113 @@ def test_base_container_environment_binding_rejects_variable_name_injection(
     assert failure.success is False
     assert operations == {}
     assert backend._base_container_generated_environment == {}
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["has$HOME", "has #hash", "it's", 'say"hi"', "back\\slash"],
+    ids=["dollar", "hash", "single-quote", "double-quote", "backslash"],
+)
+def test_generated_environment_value_compose_would_alter_is_refused(
+    tmp_path: Path, value: str
+) -> None:
+    """Compose would interpolate, cut or unquote these, so none is written (#966)."""
+
+    artifact = _cortex_credentials_spec().generated_artifacts[0]
+    source = tmp_path / "generated-output"
+    source.write_text(f"{value}\n", encoding="utf-8")
+
+    with pytest.raises(
+        EnvironmentDeliveryRefused, match="cannot carry TH_CORTEX_KEYS exactly"
+    ) as excinfo:
+        write_artifact_environment_files(
+            artifact, tmp_path, {"thehive": [("TH_CORTEX_KEYS", source)]}
+        )
+
+    assert value not in str(excinfo.value)
+    assert not (tmp_path / ".aptl").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+def test_generated_environment_file_refuses_a_symlinked_target_and_says_why(
+    tmp_path: Path,
+) -> None:
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    artifact = _cortex_credentials_spec().generated_artifacts[0]
+    outside = tmp_path / "outside.env"
+    outside.write_text("keep\n", encoding="utf-8")
+    planted = artifact_environment_file_path(tmp_path, artifact, "thehive")
+    planted.parent.mkdir(parents=True)
+    planted.symlink_to(outside)
+
+    failure = backend._realize_one_generated_artifact(
+        artifact, tmp_path, _EMPTY_REALIZATION
+    )
+
+    assert failure is not None
+    assert failure.success is False
+    assert "unsafe generated environment file (symlink)" in str(failure.error)
+    assert outside.read_text(encoding="utf-8") == "keep\n"
+
+
+# Generated values Compose's env_file reader keeps byte for byte (#966):
+# token_urlsafe output, inner blanks, "=", braces, punctuation and non-ASCII.
+_COMPOSE_EXACT_VALUES = {
+    "TOKEN_VALUE": "Zx-_09azAZ",
+    "INNER_TEXT": "in ner\ttab=eq{}!*?&;|()[]<>^~%@,.:/+",
+    "UNICODE_VALUE": "pässwörd-✓",
+}
+
+
+def _compose_ready() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    probe = subprocess.run(
+        ["docker", "compose", "version"], capture_output=True, check=False
+    )
+    return probe.returncode == 0
+
+
+@pytest.mark.integration
+def test_compose_reads_the_generated_env_file_back_exactly(tmp_path: Path) -> None:
+    """Value readback through Compose's own env_file reader (#966).
+
+    ``docker compose config`` resolves a service's environment without a
+    daemon, so the check needs only the Compose CLI and leaves nothing behind.
+    """
+
+    if not _compose_ready():
+        pytest.skip("requires the Docker Compose CLI")
+    artifact = _cortex_credentials_spec().generated_artifacts[0]
+    bindings = []
+    for variable, value in _COMPOSE_EXACT_VALUES.items():
+        source = tmp_path / f"{variable}.out"
+        source.write_text(f"{value}\n", encoding="utf-8")
+        bindings.append((variable, source))
+    write_artifact_environment_files(artifact, tmp_path, {"thehive": bindings})
+    env_file = artifact_environment_file_path(tmp_path, artifact, "thehive")
+    compose_file = tmp_path / "compose.yml"
+    compose_file.write_text(
+        yaml.safe_dump(
+            {
+                "services": {
+                    "thehive": {"image": "lilrae-env:none", "env_file": [str(env_file)]}
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolved = subprocess.run(
+        ["docker", "compose", "-p", "lilrae-env-readback", "-f", str(compose_file)]
+        + ["config", "--format", "json"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    services = json.loads(resolved.stdout)["services"]
+    assert services["thehive"]["environment"] == _COMPOSE_EXACT_VALUES
 
 
 def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:

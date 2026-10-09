@@ -30,8 +30,9 @@ The implementation is split across three modules to stay within the
 per-file size budget while keeping one public import surface: the shared
 validation/walk primitives live in :mod:`aptl.utils._pathsafe_core`, the
 read/list operations in :mod:`aptl.utils._pathsafe_read`, and the
-create-once write path below. All public names are re-exported here — always
-import from ``aptl.utils.pathsafe``, never from the private sibling modules.
+create-once and private-replace write paths below. All public names are
+re-exported here — always import from ``aptl.utils.pathsafe``, never from the
+private sibling modules.
 """
 
 from __future__ import annotations
@@ -47,6 +48,7 @@ from aptl.utils._pathsafe_core import (
     REASON_DOT_COMPONENT,
     REASON_EMPTY_COMPONENT,
     REASON_NOT_FOUND,
+    REASON_NOT_PRIVATE,
     REASON_NOT_REGULAR_FILE,
     REASON_NOT_RELATIVE,
     REASON_NUL_BYTE,
@@ -72,6 +74,7 @@ __all__ = [
     "REASON_DOT_COMPONENT",
     "REASON_EMPTY_COMPONENT",
     "REASON_NOT_FOUND",
+    "REASON_NOT_PRIVATE",
     "REASON_NOT_REGULAR_FILE",
     "REASON_NOT_RELATIVE",
     "REASON_NUL_BYTE",
@@ -85,6 +88,7 @@ __all__ = [
     "open_dir_contained_nofollow",
     "read_contained_nofollow",
     "remove_contained_nofollow",
+    "replace_private_nofollow",
     "write_all",
 ]
 
@@ -92,6 +96,11 @@ __all__ = [
 #: with the PID it makes create-once temp inodes collision-free without needing
 #: a wall clock or randomness.
 _TMP_COUNTER = itertools.count()
+
+#: Mode bits that let anyone but the owner reach a private directory, and the
+#: owner-only mode :func:`replace_private_nofollow` holds a parent to.
+_GROUP_OR_OTHER_ACCESS = 0o077
+_PRIVATE_DIRECTORY_MODE = 0o700
 
 
 def write_all(fd: int, data: bytes) -> None:
@@ -159,6 +168,77 @@ def create_exclusive_nofollow(
         os.close(base_fd)
 
 
+def replace_private_nofollow(
+    base_dir: Path | str, relative_path: str | Path, data: bytes
+) -> None:
+    """Atomically create or replace one owner-only file under ``base_dir``.
+
+    The rewrite counterpart of :func:`create_exclusive_nofollow`, for host
+    transport state that is regenerated on every run, such as a generated
+    environment file. Directory components are walked, and created ``0o700``
+    when missing, exactly as that function does, so a symlinked component is
+    refused (``REASON_SYMLINK``) and never followed. Then:
+
+    - the leaf's parent must belong to the caller. A group- or world-accessible
+      mode is tightened to ``0o700`` through the opened descriptor; a parent
+      owned by someone else, or one whose mode will not stay private, is
+      refused (``REASON_NOT_PRIVATE``). ``base_dir`` itself is trusted and is
+      never re-moded, so a leaf directly inside it gets no such treatment.
+    - an existing leaf must be a regular file. A symlink (``REASON_SYMLINK``)
+      or any other file type (``REASON_NOT_REGULAR_FILE``) is refused and left
+      in place.
+    - ``data`` is written in full and ``fsync``-ed to a fresh ``0o600``
+      temporary inode, which is renamed over the leaf relative to the same
+      parent descriptor. ``rename`` replaces a directory entry and never
+      follows it, so a leaf swapped in after the check is replaced rather than
+      written through, and the old file's mode, owner and other hard links
+      never carry over to the new content.
+
+    A failed or interrupted write removes the temporary inode and leaves the
+    previous file, if any, unchanged.
+    """
+    components = _split_components(relative_path)
+    leaf_component = components[-1]
+    base_fd = _open_base_fd(base_dir)
+    parent_fd = base_fd
+    try:
+        parent_fd = _walk_to_parent(
+            components[:-1], base_fd, open_dir=_open_dir_nofollow_or_create
+        )
+        if parent_fd != base_fd:
+            _make_directory_private(parent_fd)
+        _existing_regular_leaf(parent_fd, leaf_component, "replace")
+        tmp_name = _write_temp_leaf(parent_fd, leaf_component, data)
+        try:
+            os.rename(
+                tmp_name, leaf_component, src_dir_fd=parent_fd, dst_dir_fd=parent_fd
+            )
+        except BaseException:
+            _discard_temp_leaf(tmp_name, parent_fd)
+            raise
+        os.fsync(parent_fd)
+    finally:
+        if parent_fd != base_fd:
+            os.close(parent_fd)
+        os.close(base_fd)
+
+
+def _make_directory_private(dir_fd: int) -> None:
+    """Hold an opened directory to owner-only access, or refuse it."""
+
+    status = os.fstat(dir_fd)
+    if status.st_uid != os.geteuid():
+        raise PathContainmentError(
+            REASON_NOT_PRIVATE, "directory is not owned by the current user"
+        )
+    if stat.S_IMODE(status.st_mode) & _GROUP_OR_OTHER_ACCESS:
+        os.fchmod(dir_fd, _PRIVATE_DIRECTORY_MODE)
+        if stat.S_IMODE(os.fstat(dir_fd).st_mode) & _GROUP_OR_OTHER_ACCESS:
+            raise PathContainmentError(
+                REASON_NOT_PRIVATE, "directory mode cannot be made owner-only"
+            )
+
+
 def remove_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -> bool:
     """Durably remove one regular file under ``base_dir``, walked no-follow.
 
@@ -197,24 +277,32 @@ def remove_contained_nofollow(base_dir: Path | str, relative_path: str | Path) -
 def _unlink_regular_leaf(parent_fd: int, leaf_component: str) -> bool:
     """Unlink a regular leaf relative to ``parent_fd``; absent is ``False``."""
 
+    if not _existing_regular_leaf(parent_fd, leaf_component, "remove"):
+        return False
+    try:
+        os.unlink(leaf_component, dir_fd=parent_fd)
+    except FileNotFoundError:
+        return False
+    os.fsync(parent_fd)
+    return True
+
+
+def _existing_regular_leaf(parent_fd: int, leaf_component: str, action: str) -> bool:
+    """Return whether a regular leaf exists; refuse a symlink or other type."""
+
     try:
         status = os.stat(leaf_component, dir_fd=parent_fd, follow_symlinks=False)
     except FileNotFoundError:
         return False
     if stat.S_ISLNK(status.st_mode):
         raise PathContainmentError(
-            REASON_SYMLINK, f"refusing to remove symlinked leaf {leaf_component!r}"
+            REASON_SYMLINK, f"refusing to {action} symlinked leaf {leaf_component!r}"
         )
     if not stat.S_ISREG(status.st_mode):
         raise PathContainmentError(
             REASON_NOT_REGULAR_FILE,
-            f"refusing to remove non-regular leaf {leaf_component!r}",
+            f"refusing to {action} non-regular leaf {leaf_component!r}",
         )
-    try:
-        os.unlink(leaf_component, dir_fd=parent_fd)
-    except FileNotFoundError:
-        return False
-    os.fsync(parent_fd)
     return True
 
 
@@ -227,14 +315,8 @@ def _atomic_publish(parent_fd: int, leaf_component: str, data: bytes) -> None:
     the final link (the leaf already exists) propagates unwrapped for the
     create-once caller's idempotency policy.
     """
-    tmp_name = f".{leaf_component}.{os.getpid()}.{next(_TMP_COUNTER)}.tmp"
-    tmp_fd, tmp_name = _create_temp_leaf(tmp_name, parent_fd)
+    tmp_name = _write_temp_leaf(parent_fd, leaf_component, data)
     try:
-        try:
-            write_all(tmp_fd, data)
-            os.fsync(tmp_fd)
-        finally:
-            os.close(tmp_fd)
         # Atomic, no-replace publication: linkat fails with EEXIST if the final
         # name already exists, so two racing writers cannot clobber each other
         # and a create-once conflict surfaces as FileExistsError.
@@ -246,10 +328,36 @@ def _atomic_publish(parent_fd: int, leaf_component: str, data: bytes) -> None:
             follow_symlinks=False,
         )
     finally:
+        _discard_temp_leaf(tmp_name, parent_fd)
+
+
+def _write_temp_leaf(parent_fd: int, leaf_component: str, data: bytes) -> str:
+    """Write and fsync ``data`` to a fresh temp inode beside ``leaf_component``.
+
+    Returns the temporary name. If writing fails or is interrupted, the
+    temporary inode is removed before the error propagates.
+    """
+    tmp_name = f".{leaf_component}.{os.getpid()}.{next(_TMP_COUNTER)}.tmp"
+    tmp_fd, tmp_name = _create_temp_leaf(tmp_name, parent_fd)
+    try:
         try:
-            os.unlink(tmp_name, dir_fd=parent_fd)
-        except FileNotFoundError:
-            pass
+            write_all(tmp_fd, data)
+            os.fsync(tmp_fd)
+        finally:
+            os.close(tmp_fd)
+    except BaseException:
+        _discard_temp_leaf(tmp_name, parent_fd)
+        raise
+    return tmp_name
+
+
+def _discard_temp_leaf(tmp_name: str, parent_fd: int) -> None:
+    """Remove a temporary publish inode; an already-absent one is fine."""
+
+    try:
+        os.unlink(tmp_name, dir_fd=parent_fd)
+    except FileNotFoundError:
+        pass
 
 
 def _create_temp_leaf(tmp_name: str, parent_fd: int) -> tuple[int, str]:

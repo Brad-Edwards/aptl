@@ -40,6 +40,7 @@ from aptl.core.deployment._compose_stateful_model import (
     stateful_override_payload as _stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_override import write_stateful_override
+from aptl.core.deployment._realization_primitives import EnvironmentDeliveryRefused
 from aptl.core.deployment._cortex_service_credentials import (
     CORTEX_SERVICE_CREDENTIALS_PROFILE,
     realize_cortex_service_credentials,
@@ -312,10 +313,14 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             try:
                 by_service = _artifact_environment_bindings(artifact, scenario_root)
                 _write_artifact_environment_files(artifact, scenario_root, by_service)
-            except (OSError, ValueError):
+            except (OSError, ValueError) as exc:
+                # A refusal names the variable or the unsafe target, never a value.
+                reason = (
+                    f": {exc}" if isinstance(exc, EnvironmentDeliveryRefused) else "."
+                )
                 failure = LabResult(
                     success=False,
-                    error=f"Generated artifact {artifact.address} environment delivery failed.",
+                    error=f"Generated artifact {artifact.address} environment delivery failed{reason}",
                 )
         return failure
 

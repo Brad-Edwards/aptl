@@ -47,9 +47,9 @@ _log = logging.getLogger("aptl.capture.writer")
 
 # ---------------------------------------------------------------------------
 # ID validation — must match the canonical OBS-003 contract:
-#   src/aptl/core/runstore.py  _ID_RE
+#   src/aptl/core/runstore_internals.py  _ID_RE
 #   mcp/aptl-mcp-common/src/runs.ts  ID_RE
-#   containers/kali/scripts/aptl-wrap-shell.sh  valid_id()
+#   containers/kali-capture/broker.py  _ID_RE
 # ---------------------------------------------------------------------------
 _ID_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9._-]*$")
 

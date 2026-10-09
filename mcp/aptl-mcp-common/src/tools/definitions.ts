@@ -7,11 +7,11 @@ import { LabConfig } from '../config.js';
  * Canonical `session_id` validation schema, shared across every tool
  * argument that accepts one (OBS-003 / ADR-033 / codex pre-push cycle
  * 3 finding-4 + finding-10). Matches the Python `_ID_RE` in
- * `src/aptl/core/runstore.py`, the TS `ID_RE` in
- * `mcp/aptl-mcp-common/src/runs.ts`, and the shell `valid_id()` in
- * `containers/kali/scripts/aptl-wrap-shell.sh`. Enforcing the
- * contract at MCP ingress means downstream layers (PTY tee, Kali
- * wrapper, harvest) all see the same id — no more split-brain where
+ * `src/aptl/core/runstore_internals.py`, the TS `ID_RE` in
+ * `mcp/aptl-mcp-common/src/runs.ts`, and the capture broker's `_ID_RE` in
+ * `containers/kali-capture/broker.py`. Enforcing the
+ * contract at MCP ingress means downstream layers (PTY tee, capture
+ * broker, harvest) all see the same id — no more split-brain where
  * each layer applies its own fallback substitution and captures end
  * up under different paths.
  *

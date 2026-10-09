@@ -153,7 +153,6 @@ containers/kali-capture/sshd_config	backend-substrate	Post-baseline capture appa
 containers/kali-capture/writer.py	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/kali/audit/aptl.rules	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/kali/scripts/aptl-capture-client	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
-containers/kali/scripts/aptl-wrap-shell.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/keys/aptl_lab_key.pub	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/keys/authorized_keys	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity
 containers/mailserver/setup.sh	split-pack-delivery	Inventory exact content owner; retain reusable delivery/evidence tools, retire static duplication after parity

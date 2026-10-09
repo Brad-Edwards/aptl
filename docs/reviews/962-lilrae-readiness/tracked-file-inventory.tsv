@@ -1024,6 +1024,7 @@ src/aptl/core/deployment/_compose_capture_config.py	backend-substrate	Post-basel
 src/aptl/core/deployment/_compose_content_mounts.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_content_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_direct_network.py	backend-substrate	Post-baseline direct network ownership mechanism; retain with deployment authority
+src/aptl/core/deployment/_compose_environment.py	backend-substrate	Post-baseline runtime credential delivery; retain with deployment authority
 src/aptl/core/deployment/_compose_generic_base_images.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_image_fetch.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/deployment/_compose_base_container_realization.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1399,6 +1400,7 @@ tests/test_collectors.py	tests-follow-owner	Retain meaningful boundary and parit
 tests/test_compose_autoremove.py	tests-follow-owner	Retain exact autoremove lifecycle and fail-closed receipt coverage
 tests/test_compose_base_substrate.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_boundary_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
+tests/test_compose_environment_bindings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_platform_boundary.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_port_realization.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_compose_resource_ownership.py	tests-follow-owner	Retain backend ownership and cross-workspace isolation tests with deployment authority

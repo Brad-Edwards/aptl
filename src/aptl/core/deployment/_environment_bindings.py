@@ -37,7 +37,6 @@ from aptl.core.deployment._realization_primitives import (
     valid_environment_variable_name,
 )
 from aptl.core.env import load_dotenv
-from aptl.core.lab_types import LabResult
 from aptl.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -188,7 +187,7 @@ def _bind_one(
             )
         binding = EnvironmentBinding(name, GENERATED_SOURCE, generated[name])
     elif name in declared.sourced:
-        binding = _out_of_band(context, consumer, name)
+        binding = out_of_band_binding(context, consumer, name)
     else:
         binding = EnvironmentBinding(
             name, AUTHORED_SOURCE, declared.authored.get(name, "")
@@ -196,7 +195,7 @@ def _bind_one(
     return binding
 
 
-def _out_of_band(
+def out_of_band_binding(
     context: EnvironmentBindingContext, consumer: str, name: str
 ) -> EnvironmentBinding:
     """Bind a value that lives outside the scenario: a grant, then the adapter."""
@@ -421,43 +420,3 @@ def sourced_names(
         if node.address in addresses
         for name in declared_environment(node.runtime).sourced
     )
-
-
-class ComposeEnvironmentBindingMixin:
-    """Check every declared variable has an explicit source before mutation."""
-
-    _project_dir: Path
-    _environment_grants: tuple[EnvironmentGrant, ...] = ()
-
-    def use_environment_grants(self, grants: Sequence[EnvironmentGrant]) -> None:
-        """Adopt the operator's environment grants from ``aptl.json``."""
-
-        self._environment_grants = tuple(grants)
-
-    def _environment_binding_preflight(
-        self, realization: "DeploymentRealizationSpec"
-    ) -> LabResult | None:
-        """Bind the request's base-container environment, or refuse it.
-
-        Runs with the other backend preflights, before any scenario mutation.
-        The context it records is what each node's environment is later read
-        from, so a grant or adapter value that is missing now never becomes a
-        silently omitted variable after containers have changed.
-        """
-
-        from aptl.core.deployment._compose_base_container_realization import (
-            _base_container_node_addresses,
-        )
-
-        context = binding_context(
-            realization, self._environment_grants, self._project_dir
-        )
-        self._environment_binding_context = context
-        self._environment_consumers = {
-            node.address: node.name for node in realization.nodes
-        }
-        addresses = _base_container_node_addresses(realization)
-        error = unbound_environment_error(context, realization, addresses)
-        if error is None:
-            warn_unused_grants(context, sourced_names(realization, addresses))
-        return LabResult(success=False, error=error) if error is not None else None

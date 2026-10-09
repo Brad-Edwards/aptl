@@ -3,6 +3,7 @@
 from pathlib import Path
 import shutil
 import subprocess
+import uuid
 
 import pytest
 import yaml
@@ -24,7 +25,10 @@ def engine(tmp_path, monkeypatch):
     asset = _ROOT / "docker-compose.observability.yml"
     if asset.exists():
         shutil.copyfile(asset, root / asset.name)
-    monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", "local-fixture-password-992")
+    (root / ".env").write_text(
+        f"GRAFANA_ADMIN_PASSWORD=fixture-{uuid.uuid4().hex[:12]}\n", encoding="utf-8"
+    )
+    monkeypatch.delenv("GRAFANA_ADMIN_PASSWORD", raising=False)
     return root
 
 
@@ -87,10 +91,12 @@ def test_reserved_ownership_collision_rejects_before_backend_mutation(
 def test_missing_or_placeholder_operator_credential_rejects_before_mutation(
     engine, tmp_path, monkeypatch, password
 ):
-    if password is None:
-        monkeypatch.delenv("GRAFANA_ADMIN_PASSWORD", raising=False)
-    else:
-        monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", password)
+    (engine / ".env").write_text(
+        "" if password is None else f"GRAFANA_ADMIN_PASSWORD={password}\n",
+        encoding="utf-8",
+    )
+    # An ambient value no longer reaches Compose, so it cannot satisfy this check.
+    monkeypatch.setenv("GRAFANA_ADMIN_PASSWORD", f"ambient-{uuid.uuid4().hex[:12]}")
     scenario = tmp_path / "pack"
     scenario.mkdir()
     backend = DockerComposeBackend(engine)

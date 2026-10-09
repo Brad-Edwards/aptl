@@ -771,13 +771,15 @@ def test_pinned_address_in_the_dynamic_half_fails_loudly():
         _dynamic_ip_range("172.20.0.0/24", "172.20.0.1", {"172.20.0.200"})
 
 
-def test_operator_secret_env_is_emitted_as_a_compose_interpolation_reference():
-    """An operator_secret env var becomes NAME=${NAME}, not its empty SDL value.
+def test_operator_secret_env_is_left_to_its_bound_env_file():
+    """An operator_secret env var is not inlined, and is no ``${NAME}`` reference.
 
-    A real deployment credential is authored empty and supplied by the operator
-    .env; the image-node path must emit a Compose interpolation reference so
-    Docker resolves it at up time, while planted secret_fixture credentials keep
-    their authored value as content (issue #875).
+    A real deployment credential is authored empty. The backend binds it from an
+    explicit grant or the pack's startup adapter and delivers it through the
+    service's own env file (issue #965), so the generated environment map
+    carries no interpolation hole that Compose could fill from its own
+    environment. A planted secret_fixture credential keeps its authored value as
+    content (issue #875).
     """
 
     from raes.runtime_configuration import RuntimeConfiguration
@@ -805,8 +807,8 @@ def test_operator_secret_env_is_emitted_as_a_compose_interpolation_reference():
     env = _operational_config(runtime)["environment"]
 
     assert env["INDEXER_URL"] == "https://wazuh.indexer:9200"
-    # operator secret -> interpolation reference, resolved from the operator .env
-    assert env["INDEXER_PASSWORD"] == "${INDEXER_PASSWORD}"
+    # operator secret -> delivered by the service's bound env file, not inline
+    assert "INDEXER_PASSWORD" not in env
     # planted range credential -> authored value carried as content
     assert env["DB_PASSWORD"] == "changeme123"
 

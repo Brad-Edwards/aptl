@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-_ENVIRONMENT_BOUND_CLASSIFICATIONS = frozenset({"operator_secret", "secret_fixture"})
+from aptl.core.deployment._environment_bindings import declared_environment
+
 _CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "dns", "group_add")
 _UNSUPPORTED_CONTAINER_FIELDS = (
     "masked_paths",
@@ -34,24 +35,23 @@ def _enum_value(value: object) -> str:
 
 
 def _environment_config(runtime: object) -> dict[str, str]:
-    """Return the declared Compose environment map."""
+    """Return the declared Compose environment map.
 
-    environment: dict[str, str] = {}
-    for variable in getattr(runtime, "environment", ()):
-        name = getattr(variable, "name", "")
-        if not name or getattr(variable, "value_from", None) is not None:
-            continue
-        classification = _enum_value(getattr(variable, "value_classification", ""))
-        environment[name] = (
-            f"${{{name}}}"
-            if classification == "operator_secret"
-            or (
-                classification in _ENVIRONMENT_BOUND_CLASSIFICATIONS
-                and not variable.value
-            )
-            else variable.value
-        )
-    return environment
+    Only authored values appear here, with ``$`` escaped as ``$$`` so Compose
+    delivers them exactly instead of interpolating part of them from its own
+    environment. A declaration without a value is delivered empty. A
+    ``value_from`` variable reaches the service through its generated env file
+    and an out-of-band one through its bound env file (issue #965), so neither
+    is a ``${NAME}`` reference that any value in Compose's environment could
+    fill.
+    """
+
+    declared = declared_environment(runtime)
+    return {
+        name: declared.authored.get(name, "").replace("$", "$$")
+        for name in dict.fromkeys(declared.names)
+        if name not in declared.generated and name not in declared.sourced
+    }
 
 
 def _policy_config(runtime: object) -> dict[str, object]:

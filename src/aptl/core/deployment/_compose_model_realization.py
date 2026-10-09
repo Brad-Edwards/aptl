@@ -88,6 +88,10 @@ class ComposeRealizationModelMixin:
                 realization_root,
                 container_name_for_semantic=self._ensure_resource_ownership().container_name,
             )
+        # Each service's out-of-band values, bound by the preflight (#965).
+        sourced_override = self._write_sourced_environment_override(
+            realization, realization_root
+        )
         overrides = tuple(
             path
             for path in (
@@ -96,6 +100,7 @@ class ComposeRealizationModelMixin:
                 content_override,
                 startup_override,
                 service_override,
+                sourced_override,
             )
             if path is not None
         )

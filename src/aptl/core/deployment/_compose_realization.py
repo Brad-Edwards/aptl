@@ -179,7 +179,7 @@ class ComposeRealizationMixin(
     ) -> LabResult | None:
         """Run ordered backend preflights before any scenario mutation."""
 
-        failure = self._environment_binding_preflight(realization)
+        failure = self._environment_binding_preflight(realization, scenario_root)
         if failure is None:
             failure = self._capture_apparatus_preflight(realization, scenario_root)
         if failure is None:

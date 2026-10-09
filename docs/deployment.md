@@ -69,11 +69,13 @@ admitted scenario, not APTL control-plane or operator login credentials.
 
 ### Scenario Environment Grants
 
-A scenario node can declare runtime environment variables. These rules cover a
-base-container node: a node that declares runtime desired state and has no node
-image of its own, so APTL starts it from a base image (see
-[Node Realization Routes](components/node-realization.md)). On such a node,
-APTL delivers each variable from a single explicit source:
+A scenario node can declare runtime environment variables. These rules cover
+both node realization routes (see
+[Node Realization Routes](components/node-realization.md)): a base-container
+node, which declares runtime desired state and has no node image of its own, so
+APTL starts it from a base image, and an image-backed node, which runs as a
+service of the Compose model that APTL generates for the scenario. On either
+route, APTL delivers each variable from a single explicit source:
 
 - A value the scenario authors is delivered exactly as written.
 - A generated-artifact output reaches only the node that declares it with
@@ -88,14 +90,33 @@ APTL delivers each variable from a single explicit source:
 **This changes earlier behavior.** APTL used to fill a declared variable from
 any same-named variable in its own process environment or in `.env`, and a
 shell variable overrode an authored value. A matching name is not authority to
-read a credential, so neither happens now. If you passed a value to a
-base-container node by exporting it before `aptl lab start`, or by adding it to
-`.env`, add a grant. A value-less variable that is not `operator_secret`,
-`redacted` or `secret_fixture` takes no grant, so the scenario must author its
-value or give it one of those classifications. A missing or empty source stops
+read a credential, so neither happens now. If you passed a value to a scenario
+node by exporting it before `aptl lab start`, or by adding it to `.env`, add a
+grant. A value-less variable that is not `operator_secret`, `redacted` or
+`secret_fixture` takes no grant, so the scenario must author its value or give
+it one of those classifications. A missing or empty source stops
 `aptl lab start` before realization creates or changes any scenario network,
 volume or container. The error names the node and the variable, and either the
 pack, when no grant or adapter value applies, or the source that has no value.
+
+**The `docker compose` process no longer inherits APTL's whole environment.**
+It keeps the Docker client's own settings, such as `PATH`, `HOME`,
+`DOCKER_HOST`, `DOCKER_CONTEXT`, `SSL_CERT_FILE`, Compose client options like
+`COMPOSE_HTTP_TIMEOUT`, and proxy variables. It also keeps the `APTL_*`
+settings, such as the `APTL_HP_*` host-port pins, and the `BUILDKIT_*` and
+`BUILDX_*` build settings. Any other `${NAME}` in a Compose file therefore
+resolves only from the project `.env`. A shell variable no longer overrides a
+`.env` value such as `GRAFANA_ADMIN_PASSWORD` or `INDEXER_PASSWORD`, so change
+the value in `.env` instead.
+
+A Compose service receives each grant or startup-adapter value through its own
+owner-only env file under `.aptl/realization/sourced-environment/`, which a
+generated override attaches to that service alone. The value is never written
+as a `${NAME}` reference. Compose resolves those references from one
+environment that every service and every Compose file of the project share, so
+a reference would let a value granted to one node reach another service, or
+APTL's own Grafana. An in-tree scenario that ships its own `docker-compose.yml`
+keeps its own references, resolved from `.env`.
 
 A grant names the admitted pack's identifier, the consuming node, the variable
 that node declares, and the source. The source is either an exact variable of

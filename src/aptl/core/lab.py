@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from time import monotonic
@@ -4202,7 +4202,8 @@ def orchestrate_lab_start(
         for supervise in after_start:
             failure = supervise()
             if failure is not None:
-                return replace(failure, admission_seconds=result.admission_seconds)
+                failure.admission_seconds = result.admission_seconds
+                return failure
     return result
 
 
@@ -4303,7 +4304,8 @@ def _orchestrate_lab_start_owned(
     else:
         readiness_failure = _publish_appliance_guest_readiness(ctx)
     if readiness_failure is not None:
-        return replace(readiness_failure, admission_seconds=ctx.admission_seconds)
+        readiness_failure.admission_seconds = ctx.admission_seconds
+        return readiness_failure
     outcome = derive_startup_outcome(ctx.diagnostics, fatal=False)
     if outcome is StartupOutcome.READY:
         log.info("APTL lab started successfully!")

@@ -128,10 +128,12 @@ def write_artifact_environment_files(
 ) -> None:
     """Write validated output bindings as exact, owner-only Compose env files.
 
-    Every service's file is built and checked first, so a refusal leaves the
-    whole set as it was. Each file is then replaced whole through the
-    no-follow private writer: a symlinked or non-regular target is refused
-    and an existing file's mode never carries over (#966).
+    Every service's file is built and its values checked first, so a value
+    refusal leaves the whole set as it was. Each file is then replaced whole
+    through the no-follow private writer: a symlinked or non-regular target is
+    refused and an existing file's mode never carries over (#966). A target
+    refused that way stops the loop, but files replaced before it keep their
+    new contents.
     """
 
     root = scenario_root.resolve()

@@ -40,9 +40,12 @@ def environment_file_line(name: str, value: str, *, compose: bool = False) -> st
 
     Docker's ``--env-file`` reads ``NAME=value`` raw, line by line. Compose's
     ``env_file`` would trim, unquote, cut at a comment or interpolate a raw
-    value, so a Compose line single-quotes it: Compose reads a single-quoted
-    value literally, line breaks included. ``compose`` selects the reader. The
-    value either survives that reader unchanged or is refused with
+    value, so a Compose line single-quotes it. Compose reads a single-quoted
+    value literally, line breaks included, except that a backslash before a
+    single quote escapes that quote. A Compose value therefore cannot contain a
+    single quote or end in an odd number of backslashes, whose last one would
+    escape the closing quote. ``compose`` selects the reader. The value either
+    survives that reader unchanged or is refused with
     :class:`EnvironmentDeliveryRefused`. It is never trimmed, escaped or cut.
     """
 
@@ -95,9 +98,20 @@ def _docker_env_file_problem(line: str) -> str | None:
 
 
 def _compose_env_file_problem(value: str) -> str | None:
-    """Return what Compose's single-quoted env-file value cannot hold."""
+    """Return what Compose's single-quoted env-file value cannot hold.
 
-    return "the value contains a single quote" if "'" in value else None
+    Compose's reader (compose-go ``dotenv``) skips a backslash-escaped quote
+    while it looks for the closing one. An unpaired final backslash would run
+    the value into the next line, or leave it unterminated on the last one.
+    """
+
+    trailing_backslashes = len(value) - len(value.rstrip("\\"))
+    problem = None
+    if "'" in value:
+        problem = "the value contains a single quote"
+    elif trailing_backslashes % 2:
+        problem = "the value ends in an odd number of backslashes"
+    return problem
 
 
 @dataclass(frozen=True)

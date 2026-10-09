@@ -135,13 +135,20 @@ def _write_output(scenario_root: Path, relative: str, content: str) -> None:
 
 
 def _read_valid_token(path: Path) -> str | None:
-    """Read the existing credential only when its bytes match the contract."""
+    """Return the credential only when its file holds exactly the bytes written here.
+
+    That is the token and one line feed. MISP receives the file through
+    environment delivery, which keeps any other byte, such as padding or a
+    carriage return, while the server config carries the bare token. A file
+    that differs is therefore regenerated rather than reused (#966).
+    """
 
     try:
-        token = path.read_text(encoding="utf-8").strip()
+        data = path.read_bytes()
     except OSError:
         return None
-    return token if _TOKEN.fullmatch(token) else None
+    token = data.removesuffix(b"\n").decode("ascii", errors="replace")
+    return token if data.endswith(b"\n") and _TOKEN.fullmatch(token) else None
 
 
 def _config_matches(path: Path, password: str) -> bool:

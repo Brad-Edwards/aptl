@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from dataclasses import replace
@@ -308,6 +309,36 @@ def test_cortex_credentials_are_generated_distinctly_and_reused(tmp_path: Path) 
     assert (root / "cortex/connector-api-key").read_text().strip() == connector
 
 
+@pytest.mark.parametrize("rewrite", ["  {key}\n", "{key}\r\n"], ids=["padded", "crlf"])
+def test_a_padded_cortex_key_is_regenerated_rather_than_reused(
+    tmp_path: Path, rewrite: str
+) -> None:
+    """Delivery keeps padding, so a reused padded key would reach TheHive (#966)."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    backend._docker_daemon_id = "test-daemon"
+    artifact = _cortex_credentials_spec().generated_artifacts[0]
+    root = tmp_path / ".aptl/realization/cortex-service-credentials"
+    key_file = root / "cortex/connector-api-key"
+    assert (
+        backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+        is None
+    )
+    old_key = key_file.read_bytes().removesuffix(b"\n").decode()
+    key_file.write_bytes(rewrite.format(key=old_key).encode())
+
+    assert (
+        backend._realize_one_generated_artifact(artifact, tmp_path, _EMPTY_REALIZATION)
+        is None
+    )
+
+    new_key = key_file.read_bytes().removesuffix(b"\n").decode()
+    assert re.fullmatch(r"[A-Za-z0-9_-]{43,128}", new_key)
+    assert new_key != old_key
+    env_file = artifact_environment_file_path(tmp_path, artifact, "thehive")
+    assert env_file.read_text(encoding="utf-8") == f"TH_CORTEX_KEYS='{new_key}'\n"
+
+
 def test_cortex_credentials_bind_only_declared_environment_names(
     tmp_path: Path,
 ) -> None:
@@ -489,16 +520,29 @@ def _write_cortex_outputs(root: Path, **values: str):
     return artifact, sources
 
 
-def test_a_generated_value_with_a_single_quote_is_refused_and_unwritten(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    ("value", "problem"),
+    [
+        ("it's", "the value contains a single quote"),
+        ("key\\", "the value ends in an odd number of backslashes"),
+        ("key\\\\\\", "the value ends in an odd number of backslashes"),
+    ],
+    ids=["single-quote", "one-trailing-backslash", "three-trailing-backslashes"],
+)
+def test_a_generated_value_compose_would_misread_is_refused_and_unwritten(
+    tmp_path: Path, value: str, problem: str
 ) -> None:
-    """Compose reads the value single-quoted, so only a quote cannot travel."""
+    """Compose reads the value single-quoted, and a backslash escapes a quote.
 
-    artifact, sources = _write_cortex_outputs(tmp_path, connector_api_key="it's")
+    So a quote cannot travel, and neither can a final unpaired backslash: it
+    would escape the closing quote and run the value into the next line.
+    """
+
+    artifact, sources = _write_cortex_outputs(tmp_path, connector_api_key=value)
 
     with pytest.raises(
         EnvironmentDeliveryRefused,
-        match="cannot carry TH_CORTEX_KEYS exactly: the value contains a single quote",
+        match=f"cannot carry TH_CORTEX_KEYS exactly: {problem}",
     ) as excinfo:
         write_artifact_environment_files(
             artifact,
@@ -506,12 +550,18 @@ def test_a_generated_value_with_a_single_quote_is_refused_and_unwritten(
             {"thehive": [("TH_CORTEX_KEYS", sources["connector-api-key"])]},
         )
 
-    assert "it's" not in str(excinfo.value)
+    assert value not in str(excinfo.value)
     assert not artifact_environment_file_path(tmp_path, artifact, "thehive").exists()
 
 
-def test_generated_values_are_single_quoted_and_never_trimmed(tmp_path: Path) -> None:
-    value = '  p$ss #1 "q" \\ end  '
+@pytest.mark.parametrize(
+    "value",
+    ['  p$ss #1 "q" \\ end  ', "key\\\\", "in\\\\\\ner"],
+    ids=["markup-and-padding", "two-trailing-backslashes", "inner-backslashes"],
+)
+def test_generated_values_are_single_quoted_and_never_trimmed(
+    tmp_path: Path, value: str
+) -> None:
     artifact, sources = _write_cortex_outputs(tmp_path, connector_api_key=value)
 
     write_artifact_environment_files(
@@ -662,7 +712,8 @@ def test_generated_environment_file_refuses_a_symlinked_target_and_says_why(
 
 # Generated values Compose's env_file reader keeps byte for byte (#966). The
 # writer single-quotes each value, so interpolation markers, comment marks,
-# quotes, backslashes, padding and line breaks all arrive as written.
+# double quotes, backslashes, padding and line breaks all arrive as written. A
+# value may end in backslashes only in pairs; an odd run is refused.
 _COMPOSE_EXACT_VALUES = {
     "TOKEN_VALUE": "Zx-_09azAZ",
     "INNER_TEXT": "in ner\ttab=eq{}!*?&;|()[]<>^~%@,.:/+",
@@ -670,6 +721,7 @@ _COMPOSE_EXACT_VALUES = {
     "MARKUP_VALUE": 'p$ss ${HOME} #hash "dq" \\back',
     "PADDED_VALUE": "  padded  ",
     "MULTILINE_VALUE": "first\nsecond\r",
+    "TRAILING_BACKSLASHES": "ends\\\\",
 }
 
 

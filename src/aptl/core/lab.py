@@ -1515,25 +1515,31 @@ def _step_reject_preexisting_range(ctx: _LabStartContext) -> LabResult | None:
 
 
 def _step_refuse_rootless_daemon(ctx: _LabStartContext) -> LabResult | None:
-    """Refuse a rootless Docker daemon before any lab mutation (#1053).
+    """Refuse a rootless Docker daemon by name, for every scenario (#1053).
 
     LilRAE does not support rootless Docker. The substrate gate's refusal runs
     only when a selected node needs writable cgroups, and the Wazuh certificate
     generator ran before it, so this asks the selected backend's daemon for
-    every scenario: after the endpoint is bound and before any key, volume,
-    certificate, image pull or Compose change.
+    every scenario, before any SSH key, credential render, volume, certificate,
+    image pull or Compose change. It cannot run earlier: the backend, and so
+    the daemon that must answer, is known only after ``_step_load_config``
+    binds the endpoint. ``.env`` hydration and an explicit ``--clean``
+    teardown still run first.
     """
 
     from aptl.core.deployment._compose_substrate_gate import require_rootful_daemon
     from aptl.core.deployment.errors import BackendSeedError
 
     assert ctx.backend is not None
+    refusal: str | None = None
     try:
         require_rootful_daemon(ctx.backend._run)
     except BackendSeedError as exc:
-        log.error("Lab start refused: %s", exc)
-        return LabResult(success=False, error=str(exc))
-    return None
+        refusal = str(exc)
+    if refusal is None:
+        return None
+    log.error("Lab start refused: %s", refusal)
+    return LabResult(success=False, error=refusal)
 
 
 def _configure_verified_appliance_launch(

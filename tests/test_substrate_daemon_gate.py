@@ -259,8 +259,9 @@ class TestRootfulDaemonForEveryScenario:
         ]
 
     def test_an_unanswered_probe_is_refused_without_daemon_stderr(self):
+        run = _runner(fail=("security",))
         with pytest.raises(BackendSeedError) as excinfo:
-            require_rootful_daemon(_runner(fail=("security",)))
+            require_rootful_daemon(run)
 
         message = str(excinfo.value)
         assert "rootful" in message

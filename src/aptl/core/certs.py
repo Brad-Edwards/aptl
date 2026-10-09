@@ -277,8 +277,9 @@ def _cert_generator_command(
     :func:`ensure_ssl_certs` before this point, so ``exist_ok`` here only ever
     finds a fresh, host-owned directory. Docker Desktop needs no ``--user``
     because its file-sharing layer maps output ownership back to the host user.
-    Rootless Docker is unsupported; ``aptl lab start`` refuses it before any
-    mutation (#1053).
+    Rootless Docker is unsupported: ``aptl lab start`` refuses it before any SSH
+    key, credential render, volume, certificate, image pull or Compose change
+    (#1053), as soon as ``_step_load_config`` has bound the daemon to ask.
     """
     host_user = _native_linux_user()
     if host_user is not None:

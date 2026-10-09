@@ -157,6 +157,32 @@ def aptl_state_dir(tmp_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# Rendered runtime fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def rendered_techvault(tmp_path_factory):
+    """The pinned TechVault pack, realized by the planner `aptl lab start` uses.
+
+    No Docker and no boot. Several TechVault nodes appear in the root
+    ``docker-compose.yml`` only as scale-to-zero stubs, so a runtime property of
+    those nodes is read from this realization instead (#954). Realizing the
+    pack takes over ten seconds, so one realization is shared per session
+    (per worker under pytest-xdist).
+    """
+    from tests.test_env_pack_realization import _realize_pack
+
+    return _realize_pack(tmp_path_factory.mktemp("rendered-techvault"))
+
+
+@pytest.fixture(scope="session")
+def rendered_techvault_spec(rendered_techvault):
+    """The deployment spec the realization hands the Compose backend."""
+    return rendered_techvault.deployment_spec(sorted(rendered_techvault.profiles))
+
+
+# ---------------------------------------------------------------------------
 # Unified scenario with attack steps fixture
 # ---------------------------------------------------------------------------
 

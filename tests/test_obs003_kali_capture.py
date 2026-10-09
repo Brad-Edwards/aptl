@@ -16,10 +16,8 @@ because the container's runtime doesn't grant audit caps).
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
 import pytest
-import yaml
 
 from tests.helpers import (
     LIVE_LAB,
@@ -27,16 +25,6 @@ from tests.helpers import (
     kali_capture_exec,
     kali_exec,
 )
-
-# ---------------------------------------------------------------------------
-# Helper: load docker-compose.yml once for compose-consistency tests
-# ---------------------------------------------------------------------------
-_COMPOSE_PATH = Path(__file__).parent.parent / "docker-compose.yml"
-
-
-def _load_compose() -> dict:
-    with _COMPOSE_PATH.open() as fh:
-        return yaml.safe_load(fh)
 
 pytestmark = [
     LIVE_LAB,

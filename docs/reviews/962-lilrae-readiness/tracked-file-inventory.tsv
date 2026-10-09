@@ -953,6 +953,7 @@ src/aptl/backends/scenario_startup.py	core-candidate	Generic content-identified 
 src/aptl/backends/scenario_startup_policy.py	core-candidate	Generic content-identified startup readiness policy; retain behind scenario-independent contract
 src/aptl/cli/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/_common.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/_start_residue.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/config.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/container.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/continuity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

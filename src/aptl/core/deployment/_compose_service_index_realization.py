@@ -17,10 +17,45 @@ from pathlib import Path
 from aptl.core.deployment._compose_service_health import wait_for_realized_health
 from aptl.core.deployment._service_index_materialization import (
     MATERIALIZATION_TIMEOUT,
+    UNOWNED_COLLISION,
+    ServiceIndexMaterializationResult,
     materialize_search_index_schema,
+    native_index_name,
 )
 from aptl.core.deployment.realization import DeploymentRealizationSpec
 from aptl.core.lab_types import LabResult
+
+
+def _materialization_error(
+    address: str, container: str, result: ServiceIndexMaterializationResult
+) -> str:
+    """Describe one failed schema without any native response content.
+
+    An unowned collision also names the index and its container and says why
+    APTL refused it. Materialization validated the adapter-bound index name
+    before it queried the service, and ``container`` is the realized target, so
+    neither carries content read from the existing index. What the operator
+    runs next is added at the lab-start edge (``_lab_start_failure_error``).
+    Within the 512-character RAES diagnostic message limit, the provisioner's
+    diagnostic stays contract-valid, so RAES does not reject it as "Backend
+    returned invalid diagnostic fields.". In both cases RAES drops it from the
+    failed apply result, and ``_with_backend_failure_diagnostics`` re-attaches
+    it first for the handoff.
+    """
+
+    error = f"service materialization failed for {address} (reason={result.reason})"
+    index = (
+        native_index_name(result.content_name)
+        if result.reason == UNOWNED_COLLISION
+        else None
+    )
+    if index is None:
+        return error
+    return (
+        f"{error}: search index {index} in container {container} lacks this "
+        "content's ownership marker, so APTL cannot prove it owns the index, "
+        "and it did not adopt, delete or overwrite it."
+    )
 
 
 def _validate_service_index_targets(
@@ -165,10 +200,7 @@ class ComposeRealizationServiceIndexMixin(object):
             if not result.ok:
                 return LabResult(
                     success=False,
-                    error=(
-                        f"service materialization failed for {schema.address} "
-                        f"(reason={result.reason})"
-                    ),
+                    error=_materialization_error(schema.address, container, result),
                 )
             evidence[schema.address] = result.evidence()
 

@@ -17,7 +17,9 @@ Contract points enforced here (RAES ADR-088 / OpenRAE/rae#1011, APTL preflight):
 - **Ownership (``reject-unowned-collision``).** An existing same-name index is
   adopted only when its ``_meta`` marker binds it to the exact portable content
   address. An unmarked or foreign-owned index is an unowned collision even when
-  empty — never deleted, recreated, or adopted.
+  empty — never deleted, recreated, or adopted. The realization error names the
+  index from the adapter binding, never from the native response, so the
+  operator can find it.
 - **Proof is fresh native readback.** Success requires a new ``_mapping`` query
   after any mutation, projected to the declared portable semantics, whose
   canonical digest equals the declared digest. A create/PUT response, the stored
@@ -62,6 +64,9 @@ _CORTEX_MAPPING_RELPATH = "config/cortex/index-mapping.json"
 _NATIVE_INDEX_RE = re.compile(r"^[a-z0-9_][a-z0-9_.-]*$")
 
 _ES_BASE = "http://localhost:9200"
+
+# Failure reason for a same-name index without this content's ownership marker.
+UNOWNED_COLLISION = "unowned-collision"
 
 # Bounded timeout for one native materialization/readback exec; the backend step
 # binds this into its ``run_script`` closure.
@@ -239,7 +244,7 @@ def _check_ownership(body: str, index: str, address: str) -> None:
     meta = mappings.get("_meta") if isinstance(mappings, Mapping) else None
     owner, _owned_digest = sis.owner_marker(meta if isinstance(meta, Mapping) else {})
     if owner != address:
-        raise _MaterializationFailure("unowned-collision")
+        raise _MaterializationFailure(UNOWNED_COLLISION)
 
 
 def _desired_native_mapping(

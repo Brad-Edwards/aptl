@@ -2548,11 +2548,11 @@ class TestOrchestrateLabStart:
         ],
         ids=["step-error", "contract-violation"],
     )
-    def test_failed_start_names_its_residue_and_leaves_it_running(
+    def test_failed_start_names_its_residue_and_leaves_it_in_place(
         self, mocker, tmp_path, failure, error
     ):
-        """By default the range stays up for diagnosis, and is counted on both
-        of the orchestrator's failure returns (#952)."""
+        """By default the range is left in place for diagnosis, and is counted
+        on both of the orchestrator's failure returns (#952)."""
         from aptl.core.lab import orchestrate_lab_start
         from aptl.core.lab_types import StartResidue
 

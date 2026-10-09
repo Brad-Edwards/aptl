@@ -87,9 +87,10 @@ class StartupDiagnostic:
     operator_action: str = ""
 
 
-# The project-scoped recovery routes for a range that stays up, with what each
+# The project-scoped recovery routes for a range left in place, with what each
 # does to lab data (#952). Start failures and the existing-range refusal name
-# the same two commands.
+# the same two commands. They act on the current directory's project, so the
+# CLI failure summary adds ``--project-dir`` when the start named another one.
 STOP_RECOVERY_ROUTES: tuple[tuple[str, str], ...] = (
     (
         "aptl lab stop",

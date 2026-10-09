@@ -128,8 +128,8 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         "--teardown-on-failure",
         help=(
             "If the start fails, stop the containers and networks it created "
-            "and keep the volumes. By default a failed start stays up for "
-            "diagnosis."
+            "and keep the volumes. By default a failed start leaves them in "
+            "place for diagnosis."
         ),
     ),
     offline_staged: bool = typer.Option(
@@ -268,7 +268,7 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
             **appliance_kwargs,
         )
 
-    render_start_result(result)
+    render_start_result(result, project_dir)
     if result.success:
         emit_lab_access_summary(
             project_dir,

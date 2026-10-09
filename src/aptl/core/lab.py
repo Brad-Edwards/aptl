@@ -4275,7 +4275,7 @@ def orchestrate_lab_start(
 ) -> LabResult:
     """Own and orchestrate the complete lab startup process.
 
-    A failed start leaves what it created running for diagnosis and names it
+    A failed start leaves what it created in place for diagnosis and names it
     in ``LabResult.residue``. ``teardown_on_failure`` instead stops it, without
     removing volumes, inside this same lifecycle lock (#952).
     """

@@ -889,7 +889,7 @@ class TestLabStartCommand:
             pytest.param(
                 {"container_count": 3, "network_count": 2},
                 [
-                    "The failed start left 3 containers and 2 networks running.",
+                    "The failed start left 3 containers and 2 networks in the project.",
                     "  To recover, run one of:",
                     (
                         "    aptl lab stop     removes the project's containers and "
@@ -901,7 +901,7 @@ class TestLabStartCommand:
                     ),
                 ],
                 ["--teardown-on-failure did not remove them."],
-                id="left-running",
+                id="left-in-project",
             ),
             pytest.param(
                 {
@@ -926,7 +926,7 @@ class TestLabStartCommand:
             pytest.param(
                 {"container_count": 1, "network_count": 0, "teardown_requested": True},
                 [
-                    "The failed start left 1 container and 0 networks running.",
+                    "The failed start left 1 container and 0 networks in the project.",
                     "  --teardown-on-failure did not remove them.",
                     "  To recover, run one of:",
                 ],
@@ -938,7 +938,7 @@ class TestLabStartCommand:
                 [
                     (
                         "The failed start may have left containers or networks "
-                        "running; they could not be observed."
+                        "in the project; they could not be observed."
                     ),
                     "  To recover, run one of:",
                 ],
@@ -959,7 +959,7 @@ class TestLabStartCommand:
                 [
                     (
                         "The failed start may have left containers or networks "
-                        "running; they could not be observed."
+                        "in the project; they could not be observed."
                     ),
                     (
                         "  --teardown-on-failure ran, but what remains could not "
@@ -995,6 +995,52 @@ class TestLabStartCommand:
         lines = result.stdout.splitlines()
         assert all(line in lines for line in expected), result.stdout
         assert not any(line in lines for line in absent), result.stdout
+
+    @pytest.mark.parametrize(
+        ("cwd", "names_project"),
+        [("lab dir/sub", False), ("elsewhere", True)],
+        ids=["inside-project", "elsewhere"],
+    )
+    def test_failed_start_recovery_reaches_the_started_project(
+        self, runner, mocker, monkeypatch, tmp_path, cwd, names_project
+    ):
+        """After `start -d DIR` from elsewhere, the routes name DIR (#952)."""
+        import shlex
+
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartResidue
+
+        lab_dir = tmp_path / "lab dir"
+        (lab_dir / "sub").mkdir(parents=True)
+        (lab_dir / "aptl.json").write_text("{}")
+        (tmp_path / "elsewhere").mkdir()
+        monkeypatch.chdir(tmp_path / cwd)
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error="RAES runtime handoff failed",
+                residue=StartResidue(container_count=3, network_count=2),
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start", "--project-dir", str(lab_dir)])
+
+        target = (
+            f" --project-dir {shlex.quote(str(lab_dir.resolve()))}"
+            if names_project
+            else ""
+        )
+        routes = [
+            line[4:].split("  ", 1)[0]
+            for line in result.stdout.splitlines()
+            if line.startswith("    aptl lab stop")
+        ]
+        assert routes == [
+            f"aptl lab stop{target}",
+            f"aptl lab stop -v{target}",
+        ], result.stdout
 
     def test_start_clean_aborts_without_confirmation(self, runner, mocker, tmp_path):
         """--clean is destructive: declining the prompt aborts before any boot."""

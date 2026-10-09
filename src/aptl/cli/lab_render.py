@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -19,6 +20,7 @@ from aptl.core.lab_types import (
     StartupDiagnostic,
     StartupOutcome,
 )
+from aptl.core.lifecycle_guard import canonical_lifecycle_project_root
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -61,13 +63,17 @@ _OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
 }
 
 
-def render_start_result(result: LabResult) -> None:
-    """Print a structured summary of a lab-start result."""
+def render_start_result(result: LabResult, project_dir: Path | None = None) -> None:
+    """Print a structured summary of a lab-start result.
+
+    ``project_dir`` is the start's ``--project-dir``. Recovery commands name it
+    when the current directory resolves to another project (#952).
+    """
     typer.echo(_OUTCOME_HEADLINES[result.outcome])
     if result.outcome is StartupOutcome.FAILED and result.error:
         typer.echo(f"  error: {result.error}")
     emit_execution_boundary_summary(result.execution_boundary)
-    _emit_start_notes(result)
+    _emit_start_notes(result, project_dir)
     if not result.diagnostics:
         return
     typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
@@ -86,21 +92,43 @@ def render_start_result(result: LabResult) -> None:
                 typer.echo(f"      action: {diag.operator_action}")
 
 
-def _emit_start_notes(result: LabResult) -> None:
+def _emit_start_notes(result: LabResult, project_dir: Path | None) -> None:
     """Print the admission time (#953) and any failed-start residue (#952)."""
 
     if result.admission_seconds is not None:
         typer.echo(f"Scenario admission: {result.admission_seconds:.1f}s")
     if result.residue is not None:
-        emit_start_residue(result.residue)
+        emit_start_residue(result.residue, stop_recovery_routes(project_dir))
 
 
-def emit_start_residue(residue: StartResidue) -> None:
-    """Say what a failed start left running and how to recover (#952)."""
+def stop_recovery_routes(project_dir: Path | None) -> tuple[tuple[str, str], ...]:
+    """Return the stop routes, aimed at ``project_dir`` when it is elsewhere.
+
+    ``aptl lab stop`` acts on the project the current directory resolves to.
+    After ``aptl lab start -d DIR`` from outside that project, both routes
+    name its root with ``--project-dir`` (#952).
+    """
+
+    if project_dir is None:
+        return STOP_RECOVERY_ROUTES
+    root = canonical_lifecycle_project_root(project_dir)
+    if root == canonical_lifecycle_project_root(Path(".")):
+        return STOP_RECOVERY_ROUTES
+    target = f" --project-dir {shlex.quote(str(root))}"
+    return tuple(
+        (f"{command}{target}", effect) for command, effect in STOP_RECOVERY_ROUTES
+    )
+
+
+def emit_start_residue(
+    residue: StartResidue,
+    routes: tuple[tuple[str, str], ...] = STOP_RECOVERY_ROUTES,
+) -> None:
+    """Say what a failed start left in the project and how to recover (#952)."""
 
     counts = residue.describe()
     if residue.torn_down:
-        volumes_command, volumes_effect = STOP_RECOVERY_ROUTES[-1]
+        volumes_command, volumes_effect = routes[-1]
         removed = (
             f"removed {counts}" if counts else "left no project containers or networks"
         )
@@ -111,20 +139,20 @@ def emit_start_residue(residue: StartResidue) -> None:
     # confirms nothing, so it must not claim the teardown left anything.
     if counts is None:
         typer.echo(
-            "The failed start may have left containers or networks running; "
-            "they could not be observed."
+            "The failed start may have left containers or networks in the "
+            "project; they could not be observed."
         )
         teardown_note = (
             "--teardown-on-failure ran, but what remains could not be confirmed."
         )
     else:
-        typer.echo(f"The failed start left {counts} running.")
+        typer.echo(f"The failed start left {counts} in the project.")
         teardown_note = "--teardown-on-failure did not remove them."
     if residue.teardown_requested:
         typer.echo(f"  {teardown_note}")
     typer.echo("  To recover, run one of:")
-    width = max(len(command) for command, _effect in STOP_RECOVERY_ROUTES)
-    for command, effect in STOP_RECOVERY_ROUTES:
+    width = max(len(command) for command, _effect in routes)
+    for command, effect in routes:
         typer.echo(f"    {command.ljust(width)}  {effect}")
 
 

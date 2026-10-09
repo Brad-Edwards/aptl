@@ -34,6 +34,7 @@ import pytest
 from aptl.core.deployment._compose_substrate_gate import (
     SUBSTRATE_MIN_DOCKER_ENGINE,
     compose_services_requesting_writable_cgroups,
+    require_rootful_daemon,
     require_substrate_daemon_support,
 )
 from aptl.core.deployment.errors import BackendSeedError
@@ -215,6 +216,56 @@ class TestOrdering:
             return "cgroup" if "info" in cmd else "version"
 
         assert [kind(cmd) for cmd in run.calls] == ["cgroup", "version", "mode"]
+
+
+class TestRootfulDaemonForEveryScenario:
+    """Lab start refuses a rootless daemon whatever the scenario selects (#1053).
+
+    LilRAE does not support rootless Docker, so this refusal cannot wait for a
+    systemd node to need writable cgroups. It asks only the daemon-mode
+    question: a scenario without systemd nodes is not newly held to the
+    substrate's cgroup v2, engine and userns-remap requirements.
+    """
+
+    def test_a_rootless_daemon_is_refused_by_name(self):
+        run = _runner(
+            security_options='["name=seccomp,profile=builtin","name=rootless"]'
+        )
+
+        with pytest.raises(BackendSeedError) as excinfo:
+            require_rootful_daemon(run)
+
+        assert "rootless" in str(excinfo.value)
+
+    @pytest.mark.parametrize(
+        "security_options",
+        [
+            pytest.param(_ROOTFUL, id="rootful"),
+            pytest.param('["name=seccomp,profile=builtin","name=userns"]', id="userns"),
+            pytest.param("null", id="no-security-options"),
+        ],
+    )
+    def test_only_the_daemon_mode_is_asked(self, security_options):
+        run = _runner(
+            cgroup_version="1",
+            engine_version="20.10.0",
+            security_options=security_options,
+        )
+
+        require_rootful_daemon(run)  # does not raise
+
+        assert run.calls == [
+            ["docker", "info", "--format", "{{json .SecurityOptions}}"]
+        ]
+
+    def test_an_unanswered_probe_is_refused_without_daemon_stderr(self):
+        with pytest.raises(BackendSeedError) as excinfo:
+            require_rootful_daemon(_runner(fail=("security",)))
+
+        message = str(excinfo.value)
+        assert "rootful" in message
+        assert "substrate" not in message
+        assert "daemon unreachable" not in message
 
 
 class TestComposePathSelection:

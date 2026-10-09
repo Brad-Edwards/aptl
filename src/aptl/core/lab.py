@@ -1514,6 +1514,28 @@ def _step_reject_preexisting_range(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+def _step_refuse_rootless_daemon(ctx: _LabStartContext) -> LabResult | None:
+    """Refuse a rootless Docker daemon before any lab mutation (#1053).
+
+    LilRAE does not support rootless Docker. The substrate gate's refusal runs
+    only when a selected node needs writable cgroups, and the Wazuh certificate
+    generator ran before it, so this asks the selected backend's daemon for
+    every scenario: after the endpoint is bound and before any key, volume,
+    certificate, image pull or Compose change.
+    """
+
+    from aptl.core.deployment._compose_substrate_gate import require_rootful_daemon
+    from aptl.core.deployment.errors import BackendSeedError
+
+    assert ctx.backend is not None
+    try:
+        require_rootful_daemon(ctx.backend._run)
+    except BackendSeedError as exc:
+        log.error("Lab start refused: %s", exc)
+        return LabResult(success=False, error=str(exc))
+    return None
+
+
 def _configure_verified_appliance_launch(
     ctx: _LabStartContext,
 ) -> LabResult | None:
@@ -3889,6 +3911,7 @@ _LAB_START_STEPS = (
     _step_load_env,
     _step_load_config,
     _step_reject_preexisting_range,
+    _step_refuse_rootless_daemon,
     _step_resolve_host_ports,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
@@ -3981,6 +4004,7 @@ _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
     "_step_load_config": "Loading lab configuration.",
     "_step_reject_preexisting_range": "Checking for an existing lab range.",
+    "_step_refuse_rootless_daemon": "Checking the Docker daemon mode.",
     "_step_resolve_host_ports": "Checking host port availability.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",

@@ -74,6 +74,13 @@ def _admitted_surface(
     )
 
 
+def _mcp_build_fails(cmd, **_kwargs):
+    """Fail only the MCP build script; the Docker daemon still answers."""
+    if cmd[0] == "docker":
+        return MagicMock(returncode=0, stdout="", stderr="")
+    return MagicMock(returncode=1, stdout="", stderr="npm error")
+
+
 def _admitted_start_fixture(bundle_root: Path):
     """Model a non-pack admission without invoking scenario-specific adapters."""
     from aptl.core.scenario_bundle import project_tree_bundle
@@ -2068,9 +2075,7 @@ class TestOrchestrateLabStart:
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        mocks["mcp_subprocess"].return_value = MagicMock(
-            returncode=1, stdout="", stderr="npm error"
-        )
+        mocks["mcp_subprocess"].side_effect = _mcp_build_fails
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2176,6 +2181,42 @@ class TestOrchestrateLabStart:
         assert "suricata runtime volume seeding failed" in (result.error or "").lower()
         mocks["certs"].assert_not_called()
         mocks["start"].assert_not_called()
+
+    @pytest.mark.parametrize("env_pack", [False, True], ids=["project-tree", "env-pack"])
+    def test_rootless_daemon_is_refused_before_any_mutation(
+        self, mocker, tmp_path, env_pack
+    ):
+        """A rootless daemon fails start by name for every scenario (#1053).
+
+        The env-pack admission selects no certificate stage, so a refusal tied
+        to the Wazuh path would never run there.
+        """
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        pack_root = mocks["admitted_surface"].bundle_root
+        mocks["admit"].return_value = (
+            _admitted_start_fixture(pack_root),
+            _admitted_surface(pack_root, env_pack=env_pack, selected_profiles=("wazuh",)),
+        )
+
+        def rootless_daemon(cmd, **_kwargs):
+            options = '["name=seccomp,profile=builtin","name=rootless"]'
+            stdout = options if "{{json .SecurityOptions}}" in cmd else ""
+            return MagicMock(returncode=0, stdout=stdout, stderr="")
+
+        mocks["mcp_subprocess"].side_effect = rootless_daemon
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert "rootless mode" in (result.error or "")
+        for mutation in ("ssh", "dashboard_creds", "suricata_seed_volumes", "certs"):
+            mocks[mutation].assert_not_called()
+        mocks["start"].assert_not_called()
+        issued = [call.args[0] for call in mocks["mcp_subprocess"].call_args_list]
+        assert ["docker", "info", "--format", "{{json .SecurityOptions}}"] in issued
+        assert all(cmd[:2] in (["docker", "info"], ["docker", "context"]) for cmd in issued)
 
     def test_handles_empty_profiles(self, mocker, tmp_path):
         """Should work when all containers are disabled (C6)."""
@@ -4184,9 +4225,7 @@ class TestOrchestrateLabStartOutcome:
         from aptl.core.lab_types import DiagnosticImpact, StartupOutcome
 
         mocks = self._patch_happy(mocker, tmp_path)
-        mocks["mcp_subprocess"].return_value = MagicMock(
-            returncode=1, stdout="", stderr="npm error"
-        )
+        mocks["mcp_subprocess"].side_effect = _mcp_build_fails
 
         result = orchestrate_lab_start(tmp_path)
 

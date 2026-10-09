@@ -1051,11 +1051,11 @@ def test_local_backend_defaults_to_system_socket_without_docker_host(
     assert backend.revalidate_local_docker_socket().success is True
 
 
-def test_local_backend_honors_unix_docker_host_for_rootless(
+def test_local_backend_honors_non_default_unix_docker_host(
     tmp_path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path)
-    rootless_host = "unix:///run/user/1234/docker.sock"
+    custom_host = "unix:///srv/docker/docker.sock"
     socket_stat = SimpleNamespace(st_mode=stat.S_IFSOCK, st_dev=7, st_ino=11)
     seen: dict[str, str] = {}
 
@@ -1065,8 +1065,8 @@ def test_local_backend_honors_unix_docker_host_for_rootless(
 
     monkeypatch.setattr(os, "lstat", _lstat)
     monkeypatch.setattr(os, "access", lambda _path, _mode: True)
-    monkeypatch.setenv("DOCKER_HOST", rootless_host)
-    monkeypatch.setenv("DOCKER_CONTEXT", "rootless")
+    monkeypatch.setenv("DOCKER_HOST", custom_host)
+    monkeypatch.setenv("DOCKER_CONTEXT", "custom")
     run = MagicMock(
         return_value=subprocess.CompletedProcess([], 0, stdout="daemon-r\n", stderr="")
     )
@@ -1075,10 +1075,10 @@ def test_local_backend_honors_unix_docker_host_for_rootless(
     result = backend.bind_local_docker_socket()
 
     assert result.success is True
-    # The rootless socket path is what gets stat'd and driven, not the default.
-    assert seen["lstat"] == "/run/user/1234/docker.sock"
+    # The non-default socket path is what gets stat'd and driven, not the default.
+    assert seen["lstat"] == "/srv/docker/docker.sock"
     kwargs = run.call_args.kwargs
-    assert kwargs["env"]["DOCKER_HOST"] == rootless_host
+    assert kwargs["env"]["DOCKER_HOST"] == custom_host
     assert "DOCKER_CONTEXT" not in kwargs["env"]
     assert backend.revalidate_local_docker_socket().success is True
 

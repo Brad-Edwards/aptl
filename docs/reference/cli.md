@@ -43,7 +43,7 @@ and direct calls into Python modules are not supported interfaces.
 | List containers | `aptl container list` | Lists containers owned by the realized project. |
 | Inspect runs | `aptl runs list` | Lists recent run records in the project-local run store. |
 | Stop | `aptl lab stop` | Stops the project while preserving volumes. |
-| Reset | `aptl lab stop -v` | Stops the project and, after confirmation, destroys its volumes. |
+| Reset | `aptl lab reset` | After confirmation, removes the project's containers, networks, and volumes and finishes pending host cleanup; `aptl lab stop -v` does the same. |
 
 The CLI result is authoritative. Do not infer readiness from `docker ps`, use a
 hard-coded port, or substitute raw `docker compose up` for `aptl lab start`.
@@ -52,22 +52,23 @@ selection, readiness, MCP setup, and run recording.
 
 ## Exit Status And JSON Output
 
-`aptl doctor`, `aptl lab start`, `aptl lab status`, and `aptl lab stop` share
-one exit status contract. Tests lock it.
+`aptl doctor`, `aptl lab start`, `aptl lab status`, `aptl lab stop`, and
+`aptl lab reset` share one exit status contract. Tests lock it.
 
 | Exit status | Meaning |
 | --- | --- |
-| `0` | The command did what it reports. `aptl doctor` found no failed check, `aptl lab start` brought the lab up, `aptl lab status` observed the project, and `aptl lab stop` left it stopped, including when it was not running. |
-| `1` | The command could not do it. A doctor check failed, the start failed, the project state could not be observed, or the stop failed. |
-| `2` | Invalid usage, such as an unknown option, conflicting scenario selectors, or `--json` with `--clean` or `--volumes` but without `--yes`. |
+| `0` | The command did what it reports. `aptl doctor` found no failed check, `aptl lab start` brought the lab up, `aptl lab status` observed the project, `aptl lab stop` left it stopped, and `aptl lab reset` reset it, including when it was not running. |
+| `1` | The command could not do it. A doctor check failed, the start failed, the project state could not be observed, the stop failed, or the reset failed or left host cleanup pending. |
+| `2` | Invalid usage, such as an unknown option, conflicting scenario selectors, or `--json` with `--clean`, `--volumes`, or `aptl lab reset` but without `--yes`. |
 
 A start that ends `degraded_usable` or `degraded_unusable` still exits with
-status 0; read its outcome. Declining the confirmation that `--clean` or
-`--volumes` asks for prints `Aborted.`, changes nothing, and also exits with
-status 0.
+status 0; read its outcome. Declining the confirmation that `--clean`,
+`--volumes`, or `aptl lab reset` asks for prints `Aborted.`, changes nothing,
+and also exits with status 0.
 
-With `--json`, `aptl doctor`, `aptl lab start`, and `aptl lab stop` print one
-JSON object on standard output, and start progress goes to standard error.
+With `--json`, `aptl doctor`, `aptl lab start`, `aptl lab stop`, and
+`aptl lab reset` print one JSON object on standard output, and start progress
+goes to standard error.
 Exit status 2 prints no JSON object; the usage error goes to standard error.
 Each object has `command`, `schema_version` (now `1`), and `ok`, which is
 `true` exactly when the exit status is `0`. A new field keeps the schema
@@ -81,6 +82,7 @@ as `[REDACTED]`.
 | `aptl doctor --json` | `counts`, the number of checks per status (`pass`, `warn`, `fail`, `skip`); `checks`, a list of `id`, `status`, `summary`, and `fix`. |
 | `aptl lab start --json` | `outcome` (`ready`, `degraded_usable`, `degraded_unusable`, or `failed`); `error`, a string or `null`; `execution_boundary`, the observed boundary or `null`; `admission_seconds`, a number or `null`; `diagnostics`, a list of `step`, `component`, `impact`, `severity`, `message`, and `operator_action`; `published_ports`, a list of `service`, `default_port`, `host_port`, `protocols`, `host_ip`, and `remapped`; `published_ports_observed`, whether Docker reported those ports; `residue`, `null` or the `container_count`, `network_count`, `teardown_requested`, and `torn_down` of a failed start. |
 | `aptl lab stop --json` | `volumes`, whether `--volumes` was requested; `error`, a string or `null`. |
+| `aptl lab reset --json` | `containers_found` and `networks_found`, the project containers and networks observed before the reset, or `null` when they couldn't be observed; `error`, a string or `null`. |
 
 `execution_boundary` is the observation behind the text summary's
 `Execution boundary:` line. It carries its own `schema_version`,
@@ -106,10 +108,10 @@ snapshot can't be captured.
 
 ## Destructive And Emergency Operations
 
-`aptl lab stop -v` is the supported full cleanup for one project. It requires
-confirmation unless the explicit non-interactive option shown by `--help` is
-used. It destroys volume-backed lab data but does not prune unrelated Docker
-resources.
+`aptl lab reset` and `aptl lab stop -v` are the supported full cleanup for one
+project. They require confirmation unless the explicit non-interactive option
+shown by `--help` is used. They destroy volume-backed lab data and finish
+pending host cleanup, but don't prune unrelated Docker resources.
 
 `aptl lab start --clean` performs the same project-volume cleanup before a
 fresh start. `aptl kill` and its container option are emergency controls for

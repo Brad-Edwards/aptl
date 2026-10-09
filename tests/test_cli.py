@@ -1708,8 +1708,9 @@ class TestJsonOutputAndExitStatus:
         [
             (["lab", "start", "--clean", "--json"], "--clean", "clean_boot_lab"),
             (["lab", "stop", "--volumes", "--json"], "--volumes", "stop_lab"),
+            (["lab", "reset", "--json"], "aptl lab reset", "reset_lab"),
         ],
-        ids=["start-clean", "stop-volumes"],
+        ids=["start-clean", "stop-volumes", "reset"],
     )
     def test_json_never_prompts_for_a_destructive_option(
         self, runner, mocker, args, option, entry_point
@@ -1804,6 +1805,108 @@ class TestJsonOutputAndExitStatus:
             "config_hashes",
             "services",
             "ssh",
+        }
+
+
+class TestLabResetCommand:
+    """`aptl lab reset` is explicit, reports what it reset, and repeats (#1218)."""
+
+    @staticmethod
+    def _outcome(success=True, containers=3, networks=2, error=""):
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import LabResetResult
+
+        return LabResetResult(
+            LabResult(success=success, error=error), containers, networks
+        )
+
+    @pytest.mark.parametrize(
+        ("outcome_args", "exit_code", "line"),
+        [
+            (
+                {},
+                0,
+                (
+                    "Lab reset: removed 3 containers and 2 networks and the "
+                    "project's volumes, and finished pending host cleanup."
+                ),
+            ),
+            (
+                {"containers": 0, "networks": 0},
+                0,
+                (
+                    "Lab reset: removed 0 containers and 0 networks and the "
+                    "project's volumes, and finished pending host cleanup."
+                ),
+            ),
+            (
+                {"containers": None, "networks": None},
+                0,
+                (
+                    "Lab reset: removed the project's containers and networks and "
+                    "the project's volumes, and finished pending host cleanup."
+                ),
+            ),
+            (
+                {"success": False, "error": "[lifecycle-host-cleanup-pending] retry"},
+                1,
+                "Lab reset failed: [lifecycle-host-cleanup-pending] retry",
+            ),
+        ],
+        ids=["reset", "already-clean", "unobserved", "cleanup-pending"],
+    )
+    def test_reset_output_and_exit_status(
+        self, runner, mocker, tmp_path, outcome_args, exit_code, line
+    ):
+        from aptl.cli.main import app
+
+        reset = mocker.patch(
+            "aptl.cli.lab.reset_lab", return_value=self._outcome(**outcome_args)
+        )
+
+        result = runner.invoke(app, ["lab", "reset", "--yes", "-d", str(tmp_path)])
+
+        assert result.exit_code == exit_code
+        reset.assert_called_once_with(tmp_path)
+        assert line in result.stdout.splitlines()
+
+    @pytest.mark.parametrize(
+        ("answer", "called"), [("n\n", False), ("y\n", True)], ids=["no", "yes"]
+    )
+    def test_reset_asks_before_destroying_lab_data(
+        self, runner, mocker, answer, called
+    ):
+        from aptl.cli.main import app
+
+        reset = mocker.patch("aptl.cli.lab.reset_lab", return_value=self._outcome())
+
+        result = runner.invoke(app, ["lab", "reset"], input=answer)
+
+        assert result.exit_code == 0
+        assert "WARNING: This will destroy all lab data" in result.stdout
+        assert reset.called is called
+
+    @pytest.mark.parametrize("succeeded", [True, False], ids=["reset", "failed"])
+    def test_reset_json_and_exit_status(self, runner, mocker, succeeded):
+        from aptl.cli.main import app
+
+        mocker.patch(
+            "aptl.cli.lab.reset_lab",
+            return_value=self._outcome(
+                success=succeeded, error="" if succeeded else "docker not found"
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "reset", "--yes", "--json"])
+
+        assert result.exit_code == (0 if succeeded else 1)
+        assert _json_result(result) == {
+            "command": "lab reset",
+            "schema_version": 1,
+            "ok": succeeded,
+            "containers_found": 3,
+            "networks_found": 2,
+            "error": None if succeeded else "docker not found",
         }
 
 

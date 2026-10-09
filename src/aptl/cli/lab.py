@@ -31,9 +31,15 @@ from aptl.core.lab import (
     clean_boot_lab,
     lab_status,
     orchestrate_lab_start,
+    reset_lab,
     stop_lab,
 )
-from aptl.core.lab_types import LabResult, LabStatus
+from aptl.core.lab_types import (
+    LabResetResult,
+    LabResult,
+    LabStatus,
+    describe_project_runtime,
+)
 from aptl.core.scenario_catalog import (
     load_scenario_catalog,
     resolve_scenario_selection,
@@ -485,6 +491,70 @@ def stop(
         typer.echo("Lab stopped successfully.")
     else:
         typer.echo(f"Lab stop failed: {result.error}")
+    raise exit_status(result.success)
+
+
+@app.command()
+def reset(
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        "-y",
+        help="Skip the confirmation prompt.",
+    ),
+    project_dir: Path = typer.Option(
+        Path("."),
+        "--project-dir",
+        "-d",
+        help="Path to the APTL project directory.",
+    ),
+    output_json: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print the result as one JSON object.",
+    ),
+) -> None:
+    """Reset the lab: remove its containers, networks and volumes.
+
+    It also finishes pending host-side cleanup, so the next `aptl lab start`
+    begins clean. Configuration, .env, SSH keys, certificates and run records
+    are kept. Exit status: 0 when the project is reset, also when nothing was
+    running, 1 when the reset failed or host cleanup is still pending, 2 for
+    invalid options.
+    """
+    if not _confirm_destructive(yes, output_json=output_json, option="aptl lab reset"):
+        raise typer.Exit(code=0)
+    log.info("Resetting lab")
+    _report_reset_result(reset_lab(project_dir), output_json)
+
+
+def _report_reset_result(outcome: LabResetResult, output_json: bool) -> None:
+    """Print the reset result as text or JSON and exit with its status."""
+    result = outcome.result
+    if output_json:
+        emit_json_result(
+            "lab reset",
+            result.success,
+            {
+                "containers_found": outcome.containers_found,
+                "networks_found": outcome.networks_found,
+                "error": result.error or None,
+            },
+        )
+    elif result.success:
+        found = (
+            describe_project_runtime(outcome.containers_found, outcome.networks_found)
+            if outcome.containers_found is not None
+            and outcome.networks_found is not None
+            else "the project's containers and networks"
+        )
+        typer.echo(
+            f"Lab reset: removed {found} and the project's volumes, and finished "
+            "pending host cleanup."
+        )
+    else:
+        typer.echo(f"Lab reset failed: {result.error}")
     raise exit_status(result.success)
 
 

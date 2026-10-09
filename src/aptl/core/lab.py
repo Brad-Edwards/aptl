@@ -54,6 +54,7 @@ from aptl.core.lab_types import (
     STOP_RECOVERY_ROUTES,
     DiagnosticImpact as DiagnosticImpact,
     DiagnosticSeverity as DiagnosticSeverity,
+    LabResetResult as LabResetResult,
     LabResult as LabResult,
     LabStatus as LabStatus,
     StartResidue,
@@ -516,6 +517,46 @@ def _stop_lab_owned(
     if result is stop_result and capture_failure is not None:
         result = capture_failure
     return result
+
+
+def reset_lab(
+    project_dir: Path,
+    backend: Optional["DeploymentBackend"] = None,
+) -> LabResetResult:
+    """Return the lab to a clean, stopped state (#1218).
+
+    Inside the lifecycle lock it observes the project, then runs the same
+    project-scoped teardown as ``aptl lab stop -v``: the project's containers,
+    networks and volumes go, and every pending host-side cleanup record runs
+    (``aptl.core.lifecycle_cleanup``). Other host files, such as ``aptl.json``,
+    ``.env``, SSH keys, certificates and run records, stay. Repeating it is
+    safe: a reset project has nothing left to remove, and a cleanup record that
+    failed is retried.
+    """
+
+    try:
+        with lifecycle_mutation_lock(project_dir) as project_root:
+            return _reset_lab_owned(project_root, backend)
+    except LifecycleBusyError:
+        return LabResetResult(_lifecycle_busy_result("reset"))
+    except LifecycleLockUnavailableError:
+        return LabResetResult(_lifecycle_lock_unavailable_result())
+
+
+def _reset_lab_owned(
+    project_root: Path, backend: Optional["DeploymentBackend"]
+) -> LabResetResult:
+    """Observe the project, then reset it while the caller holds the lock."""
+
+    config, _profiles, failure = _stop_recovery_configuration(project_root, backend)
+    if failure is not None:
+        return LabResetResult(failure)
+    selected = backend or _get_backend(project_root, config)
+    presence = selected.observe_project_runtime()
+    result = _stop_lab_owned(True, project_root, selected)
+    if presence.error:
+        return LabResetResult(result)
+    return LabResetResult(result, presence.container_count, presence.network_count)
 
 
 def _stop_recovery_configuration(

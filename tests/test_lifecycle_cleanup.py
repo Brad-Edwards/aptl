@@ -506,6 +506,171 @@ def test_repeat_stop_finishes_pending_cleanup_when_docker_is_already_gone(
     assert len(list((tmp_path / LEGACY_DONE_DIR).iterdir())) == 1
 
 
+class _Project(_Backend):
+    """A project the backend can observe and tear down, as Compose does."""
+
+    def __init__(
+        self, containers: int = 3, networks: int = 2, *, observed: bool = True
+    ) -> None:
+        super().__init__(LabResult(success=True))
+        self.containers = containers
+        self.networks = networks
+        self.observed = observed
+
+    def observe_project_runtime(self):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+
+        if not self.observed:
+            return ProjectRuntimePresence(error="container observation failed")
+        return ProjectRuntimePresence(
+            container_count=self.containers, network_count=self.networks
+        )
+
+    def stop(self, profiles: list[str], remove_volumes: bool = False) -> LabResult:
+        result = super().stop(profiles, remove_volumes)
+        self.containers = self.networks = 0
+        return result
+
+
+def _kept_host_files(root: Path) -> dict[Path, bytes]:
+    """Write the host files a reset must keep, and return their bytes."""
+
+    files = {
+        root / "aptl.json": b'{"lab": {"name": "reset"}}\n',
+        root / ".env": b"APTL_LAB_LABEL=keep-me\n",
+        root / "containers" / "keys" / "aptl_lab_key": b"lab-key-fixture\n",
+        root / ".aptl" / "runs" / "run-1" / "record.json": b'{"run": "1"}\n',
+    }
+    for path, content in files.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(content)
+    return files
+
+
+def test_reset_removes_the_project_and_finishes_pending_cleanup(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """`aptl lab reset` is the project-scoped `stop -v` with its records (#1218)."""
+    from aptl.core.lab import reset_lab
+    from aptl.core.startup_reset_state import load_pending_cleanup
+
+    _no_installed_providers(monkeypatch)
+    kept = _kept_host_files(tmp_path)
+    _legacy(tmp_path)
+    baseline = _baseline(tmp_path)
+    project = _Project()
+
+    outcome = reset_lab(tmp_path, backend=project)
+
+    assert outcome.result.success is True
+    assert (outcome.containers_found, outcome.networks_found) == (3, 2)
+    assert [remove_volumes for _profiles, remove_volumes in project.calls] == [True]
+    assert not baseline.exists()
+    runnable, rejected = load_pending_cleanup(tmp_path)
+    assert (runnable, rejected) == ((), ())
+    assert {path: path.read_bytes() for path in kept} == kept
+
+
+def test_repeated_reset_is_safe(tmp_path: Path, monkeypatch) -> None:
+    from aptl.core.lab import reset_lab
+
+    _no_installed_providers(monkeypatch)
+    _legacy(tmp_path)
+    _baseline(tmp_path)
+    project = _Project()
+
+    first = reset_lab(tmp_path, backend=project)
+    second = reset_lab(tmp_path, backend=project)
+
+    assert first.result.success is True
+    assert second.result.success is True
+    assert (second.containers_found, second.networks_found) == (0, 0)
+    assert len(list((tmp_path / LEGACY_DONE_DIR).iterdir())) == 1
+
+
+def test_repeated_stop_is_safe(tmp_path: Path, monkeypatch) -> None:
+    """A second plain stop finds nothing to remove and still succeeds (#1218)."""
+    from aptl.core.lab import stop_lab
+
+    _no_installed_providers(monkeypatch)
+    project = _Project()
+
+    first = stop_lab(project_dir=tmp_path, backend=project)
+    second = stop_lab(project_dir=tmp_path, backend=project)
+
+    assert first.success is True
+    assert second.success is True
+    assert [remove_volumes for _profiles, remove_volumes in project.calls] == [
+        False,
+        False,
+    ]
+
+
+def test_reset_reports_cleanup_it_could_not_finish(tmp_path: Path, monkeypatch) -> None:
+    from aptl.core.lab import reset_lab
+
+    _install(monkeypatch, ("2.0.0", _provider(reset=lambda _context: None)))
+    _legacy(
+        tmp_path,
+        pack_id="otherpack",
+        digest=OTHER_DIGEST,
+        distribution="otherpack-adapter",
+        version="1.0.0",
+    )
+
+    outcome = reset_lab(tmp_path, backend=_Project())
+
+    assert outcome.result.success is False
+    assert outcome.result.error.startswith("[lifecycle-host-cleanup-pending]")
+    assert "pack.reset for otherpack 1.0.0" in outcome.result.error
+    assert (outcome.containers_found, outcome.networks_found) == (3, 2)
+
+
+def test_reset_of_an_unobservable_project_still_resets(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from aptl.core.lab import reset_lab
+
+    _no_installed_providers(monkeypatch)
+    project = _Project(observed=False)
+
+    outcome = reset_lab(tmp_path, backend=project)
+
+    assert outcome.result.success is True
+    assert (outcome.containers_found, outcome.networks_found) == (None, None)
+    assert [remove_volumes for _profiles, remove_volumes in project.calls] == [True]
+
+
+def test_reset_waits_for_another_lifecycle_owner(tmp_path: Path) -> None:
+    import threading
+
+    from aptl.core.lab import reset_lab
+    from aptl.core.lifecycle_guard import lifecycle_mutation_lock
+
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with lifecycle_mutation_lock(tmp_path):
+            held.set()
+            release.wait(timeout=10)
+
+    owner = threading.Thread(target=hold)
+    owner.start()
+    assert held.wait(timeout=10)
+    project = _Project()
+    try:
+        outcome = reset_lab(tmp_path, backend=project)
+    finally:
+        release.set()
+        owner.join(timeout=10)
+
+    assert outcome.result.success is False
+    assert outcome.result.error.startswith("[lifecycle-owner-busy]")
+    assert "`aptl lab reset`" in outcome.result.error
+    assert project.calls == []
+
+
 def test_start_persists_aptl_owned_and_declared_pack_cleanup(tmp_path: Path) -> None:
     from aptl.backends.scenario_startup import (
         ScenarioStartupPlan,

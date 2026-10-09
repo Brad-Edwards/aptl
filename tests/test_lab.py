@@ -641,6 +641,42 @@ class TestPreexistingRangeAdmission:
         assert _step_reject_preexisting_range(ctx) is None
         assert ctx.range_was_absent is True
 
+    def test_workspace_scoped_range_blocks_start(self, tmp_path, monkeypatch):
+        """The check counts the project a previous start labelled (#1173).
+
+        Start labels its containers and networks with the workspace-scoped
+        name (`aptl-w<id>`), but the backend this check runs on is newly built
+        and holds the logical name until the workspace scope loads.
+        """
+        import subprocess
+
+        from aptl.core.deployment._compose_resource_ownership import (
+            WorkspaceOwnership,
+        )
+        from aptl.core.deployment.docker_compose import DockerComposeBackend
+        from aptl.core.lab import _LabStartContext, _step_reject_preexisting_range
+
+        scoped = WorkspaceOwnership.ensure(tmp_path, "aptl").project_name
+        resources = {"ps": "c1\nc2\nc3\n", "network": "n1\nn2\n"}
+
+        def run(cmd, *, timeout):
+            del timeout
+            found = cmd[cmd.index("--filter") + 1].endswith(f"={scoped}")
+            return subprocess.CompletedProcess(
+                cmd, 0, resources[cmd[1]] if found else "", ""
+            )
+
+        backend = DockerComposeBackend(tmp_path)
+        monkeypatch.setattr(backend, "_run", run)
+        ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
+
+        result = _step_reject_preexisting_range(ctx)
+
+        assert result is not None
+        assert "[lifecycle-range-present]" in result.error
+        assert "3 containers and 2 networks" in result.error
+        assert ctx.range_was_absent is False
+
 
 class TestCleanBootLab:
     """Tests for the RNG-001 clean-boot lifecycle mode.
@@ -2610,6 +2646,63 @@ class TestOrchestrateLabStart:
         assert result.residue is None
         assert (project.containers, project.networks, project.volumes) == (2, 1, 1)
         assert project.stops == []
+
+    def test_teardown_on_failure_never_stops_a_workspace_scoped_range(
+        self, mocker, tmp_path
+    ):
+        """An earlier start's range under `aptl-w<id>` is refused and kept (#1173).
+
+        The backend is built with the logical name `aptl`, the daemon answers
+        only for the label an earlier start applied, and the RAES handoff
+        loads the workspace scope before it fails, as the real one does. The
+        existing-range check has to count that range, or the failed start
+        would count it as its own residue and stop it.
+        """
+        import subprocess
+
+        from aptl.core.deployment._compose_resource_ownership import (
+            WorkspaceOwnership,
+        )
+        from aptl.core.deployment._compose_runtime_inventory import (
+            ComposeRuntimeInventoryMixin,
+        )
+        from aptl.core.deployment.docker_compose import DockerComposeBackend
+        from aptl.core.lab import orchestrate_lab_start
+
+        project = self._failing_range(
+            mocker, tmp_path, containers=5, networks=2, volumes=3
+        )
+        scoped = WorkspaceOwnership.ensure(tmp_path, "aptl").project_name
+
+        def daemon(_backend, cmd, *, timeout=None):
+            del timeout
+            listed = {"ps": project.containers, "network": project.networks}
+            scoped_query = "--filter" in cmd and cmd[
+                cmd.index("--filter") + 1
+            ].endswith(f"={scoped}")
+            count = listed.get(cmd[1], 0) if scoped_query else 0
+            stdout = "".join(f"{cmd[1]}-{index}\n" for index in range(count))
+            return subprocess.CompletedProcess(cmd, 0, stdout, "")
+
+        def scope_then_fail(_project_dir, _config, backend, *_args, **_kwargs):
+            backend._ensure_resource_ownership()
+            return _raes_outcome(success=False, error="RAES runtime handoff failed")
+
+        mocker.patch.object(
+            DockerComposeBackend,
+            "observe_project_runtime",
+            ComposeRuntimeInventoryMixin.observe_project_runtime,
+        )
+        mocker.patch.object(DockerComposeBackend, "_run", daemon)
+        mocker.patch("aptl.core.lab.start_raes_scenario", side_effect=scope_then_fail)
+
+        result = orchestrate_lab_start(tmp_path, teardown_on_failure=True)
+
+        assert "[lifecycle-range-present]" in result.error
+        assert "5 containers and 2 networks" in result.error
+        assert result.residue is None
+        assert project.stops == []
+        assert (project.containers, project.networks, project.volumes) == (5, 2, 3)
 
     def test_failure_that_left_nothing_reports_no_residue(self, mocker, tmp_path):
         """A start that fails before creating runtime has nothing to stop."""

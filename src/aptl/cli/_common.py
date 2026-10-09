@@ -9,7 +9,10 @@ across CLI surfaces. Subcommand-specific logic stays in the respective
 ``aptl/cli/<command>.py``.
 """
 
+import json
+from collections.abc import Mapping
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 
@@ -18,6 +21,49 @@ from aptl.core.runstore import LocalRunStore
 
 
 _NO_CONFIG_TEMPLATE = "no aptl.json found in {project_dir}"
+
+# The exit status `aptl doctor` and the lab lifecycle commands share (#1218):
+# 0 when the command did what it reports, 1 when it could not, 2 for invalid
+# usage. Click already exits with 2 for an unknown option or a bad value.
+EXIT_OK = 0
+EXIT_FAILED = 1
+EXIT_USAGE = 2
+# Shape version of every `--json` result. A new field keeps it; removing or
+# retyping a field raises it.
+JSON_SCHEMA_VERSION = 1
+
+
+def emit_json_result(command: str, ok: bool, fields: Mapping[str, object]) -> None:
+    """Print one JSON result object for ``command`` on standard output.
+
+    ``ok`` is true exactly when the command exits with status 0, so a script
+    can read either one.
+    """
+
+    payload = {
+        "command": command,
+        "schema_version": JSON_SCHEMA_VERSION,
+        "ok": ok,
+        **fields,
+    }
+    typer.echo(json.dumps(payload, indent=2))
+
+
+def exit_status(ok: bool) -> typer.Exit:
+    """Return the exit that reports ``ok`` under the shared contract."""
+
+    return typer.Exit(code=EXIT_OK if ok else EXIT_FAILED)
+
+
+def refuse_json_prompt(option: str) -> NoReturn:
+    """Stop before a destructive action that JSON output cannot confirm."""
+
+    typer.echo(
+        f"error: --json with {option} needs --yes, because JSON output cannot "
+        "prompt for confirmation",
+        err=True,
+    )
+    raise typer.Exit(code=EXIT_USAGE)
 
 
 def resolve_config_for_cli(

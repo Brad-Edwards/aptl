@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import typer
 
+from aptl.cli._common import emit_json_result, exit_status
+
 if TYPE_CHECKING:
     from aptl.core.doctor import DoctorReport
 
@@ -22,17 +24,44 @@ def doctor(
         "-d",
         help="Path to the APTL project directory.",
     ),
+    output_json: bool = typer.Option(
+        False,
+        "--json",
+        "-j",
+        help="Print the result as one JSON object.",
+    ),
 ) -> None:
     """Check the host and Docker runtime before a lab start. Changes nothing.
 
     Exit status: 0 when no check failed (warnings are allowed), 1 when at
-    least one check failed.
+    least one check failed, 2 for invalid options.
     """
     from aptl.core.doctor import run_doctor
 
     report = run_doctor(project_dir)
-    render_doctor_report(report)
-    raise typer.Exit(code=0 if report.ok else 1)
+    if output_json:
+        emit_json_result("doctor", report.ok, doctor_result_fields(report))
+    else:
+        render_doctor_report(report)
+    raise exit_status(report.ok)
+
+
+def doctor_result_fields(report: DoctorReport) -> dict[str, object]:
+    """Return the ``--json`` fields; they carry what the text lines show."""
+    from aptl.core.doctor import CheckStatus
+
+    return {
+        "counts": {status.value: report.count(status) for status in CheckStatus},
+        "checks": [
+            {
+                "id": check.check_id,
+                "status": check.status.value,
+                "summary": check.summary,
+                "fix": check.fix,
+            }
+            for check in report.checks
+        ],
+    }
 
 
 def render_doctor_report(report: DoctorReport) -> None:

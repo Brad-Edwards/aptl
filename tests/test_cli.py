@@ -1324,6 +1324,300 @@ class TestLabStartCommand:
         assert "128" in result.stdout
 
 
+_ENVELOPE = {"command", "schema_version", "ok"}
+
+
+def _json_result(result):
+    """Parse a command's standard output as exactly one JSON object."""
+    import json
+
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, dict)
+    assert payload["schema_version"] == 1
+    # `ok` mirrors the exit status, so a script can read either one (#1218).
+    assert payload["ok"] is (result.exit_code == 0)
+    return payload
+
+
+class TestJsonOutputAndExitStatus:
+    """The `--json` shapes and exit statuses that scripts rely on (#1218)."""
+
+    @pytest.mark.parametrize("failed", [False, True], ids=["passed", "failed"])
+    def test_doctor_json_is_the_report_the_text_shows(
+        self, runner, mocker, tmp_path, failed
+    ):
+        from aptl.cli.main import app
+        from aptl.core.doctor import CheckStatus, DoctorCheck, DoctorReport
+
+        report = DoctorReport(
+            (
+                DoctorCheck("docker-cli", CheckStatus.PASSED, "The CLI is on PATH."),
+                DoctorCheck(
+                    "docker-daemon",
+                    CheckStatus.FAILED if failed else CheckStatus.WARNING,
+                    "The daemon did not answer.",
+                    "Start Docker.",
+                ),
+            )
+        )
+        mocker.patch("aptl.core.doctor.run_doctor", return_value=report)
+
+        result = runner.invoke(app, ["doctor", "-d", str(tmp_path), "--json"])
+
+        assert result.exit_code == (1 if failed else 0)
+        payload = _json_result(result)
+        assert set(payload) == _ENVELOPE | {"counts", "checks"}
+        assert payload["command"] == "doctor"
+        assert payload["counts"] == {
+            "pass": 1,
+            "warn": 0 if failed else 1,
+            "fail": 1 if failed else 0,
+            "skip": 0,
+        }
+        assert payload["checks"] == [
+            {
+                "id": check.check_id,
+                "status": check.status.value,
+                "summary": check.summary,
+                "fix": check.fix,
+            }
+            for check in report.checks
+        ]
+
+    @pytest.mark.parametrize("succeeded", [True, False], ids=["started", "failed"])
+    def test_lab_start_json_carries_the_whole_result_on_stdout(
+        self, runner, mocker, succeeded
+    ):
+        from aptl.cli.main import app
+        from aptl.core.execution_boundary import ExecutionBoundaryObservation
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartResidue,
+            StartupDiagnostic,
+            StartupOutcome,
+        )
+
+        result_in = LabResult(
+            success=succeeded,
+            error="" if succeeded else "RAES runtime handoff failed",
+            outcome=StartupOutcome.DEGRADED_USABLE if succeeded else StartupOutcome.FAILED,
+            diagnostics=[
+                StartupDiagnostic(
+                    step="build_mcp",
+                    impact=DiagnosticImpact.CAPABILITY,
+                    severity=DiagnosticSeverity.WARNING,
+                    message="MCP servers were not built",
+                    operator_action="Install Node.js 20 or newer",
+                )
+            ],
+            resolved_ports=[
+                ResolvedPort(
+                    service="wazuh.dashboard",
+                    env_var="APTL_HP_WAZUH_DASHBOARD",
+                    default_port=443,
+                    resolved_port=8443,
+                    protos=("tcp",),
+                    host_ip="127.0.0.1",
+                    remapped=True,
+                )
+            ],
+            execution_boundary=ExecutionBoundaryObservation(
+                transport="local-unix",
+                override_source="none",
+                daemon_runtime="native-linux",
+                host_containment="native-docker",
+                observation_status="observed",
+                host_os="linux",
+                docker_version="28.0.4",
+            ),
+            admission_seconds=1.25,
+            residue=None if succeeded else StartResidue(3, 2),
+        )
+
+        def start(*_args, progress, **_kwargs):
+            progress("Loading lab configuration.")
+            return result_in
+
+        mocker.patch("aptl.cli.lab.orchestrate_lab_start", side_effect=start)
+        mocker.patch("aptl.cli.lab.emit_lab_access_summary")
+
+        result = runner.invoke(app, ["lab", "start", "--json"])
+
+        assert result.exit_code == (0 if succeeded else 1)
+        assert "[lab start] Loading lab configuration." in result.stderr
+        payload = _json_result(result)
+        assert set(payload) == _ENVELOPE | {
+            "outcome",
+            "error",
+            "execution_boundary",
+            "admission_seconds",
+            "diagnostics",
+            "published_ports",
+            "residue",
+        }
+        assert payload["command"] == "lab start"
+        assert payload["outcome"] == result_in.outcome.value
+        assert payload["error"] == (None if succeeded else result_in.error)
+        assert payload["execution_boundary"]["host_containment"] == "native-docker"
+        assert payload["admission_seconds"] == pytest.approx(1.25)
+        assert payload["diagnostics"] == [
+            {
+                "step": "build_mcp",
+                "component": "",
+                "impact": "capability",
+                "severity": "warning",
+                "message": "MCP servers were not built",
+                "operator_action": "Install Node.js 20 or newer",
+            }
+        ]
+        assert payload["published_ports"] == [
+            {
+                "service": "wazuh.dashboard",
+                "default_port": 443,
+                "host_port": 8443,
+                "protocols": ["tcp"],
+                "host_ip": "127.0.0.1",
+                "remapped": True,
+            }
+        ]
+        assert payload["residue"] == (
+            None
+            if succeeded
+            else {
+                "container_count": 3,
+                "network_count": 2,
+                "teardown_requested": False,
+                "torn_down": False,
+            }
+        )
+
+    def test_lab_start_json_and_text_describe_the_same_failure(self, runner, mocker):
+        """One result, two renderings: counts and error agree (#1218)."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartResidue
+
+        failure = LabResult(
+            success=False,
+            error="RAES runtime handoff failed",
+            residue=StartResidue(container_count=4, network_count=1),
+        )
+        mocker.patch("aptl.cli.lab.orchestrate_lab_start", return_value=failure)
+
+        text = runner.invoke(app, ["lab", "start"])
+        machine = runner.invoke(app, ["lab", "start", "--json"])
+
+        assert text.exit_code == machine.exit_code == 1
+        payload = _json_result(machine)
+        assert f"  error: {payload['error']}" in text.stdout.splitlines()
+        assert "Lab start failed." in text.stdout.splitlines()
+        assert payload["outcome"] == "failed"
+        assert (
+            "The failed start left 4 containers and 1 network in the project."
+            in text.stdout.splitlines()
+        )
+        assert payload["residue"]["container_count"] == 4
+        assert payload["residue"]["network_count"] == 1
+
+    @pytest.mark.parametrize(
+        ("args", "option", "entry_point"),
+        [
+            (["lab", "start", "--clean", "--json"], "--clean", "clean_boot_lab"),
+            (["lab", "stop", "--volumes", "--json"], "--volumes", "stop_lab"),
+        ],
+        ids=["start-clean", "stop-volumes"],
+    )
+    def test_json_never_prompts_for_a_destructive_option(
+        self, runner, mocker, args, option, entry_point
+    ):
+        from aptl.cli.main import app
+
+        mocked = mocker.patch(f"aptl.cli.lab.{entry_point}")
+
+        result = runner.invoke(app, args)
+
+        assert result.exit_code == 2
+        assert f"--json with {option} needs --yes" in result.stderr
+        assert result.stdout == ""
+        mocked.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("succeeded", "volumes"),
+        [(True, False), (True, True), (False, False)],
+        ids=["stopped", "stopped-with-volumes", "failed"],
+    )
+    def test_lab_stop_json_and_exit_status(self, runner, mocker, succeeded, volumes):
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mocker.patch(
+            "aptl.cli.lab.stop_lab",
+            return_value=LabResult(
+                success=succeeded, error="" if succeeded else "docker not found"
+            ),
+        )
+        args = ["lab", "stop", "--json", *(["--volumes", "--yes"] if volumes else [])]
+
+        result = runner.invoke(app, args)
+
+        assert result.exit_code == (0 if succeeded else 1)
+        payload = _json_result(result)
+        assert payload == {
+            "command": "lab stop",
+            "schema_version": 1,
+            "ok": succeeded,
+            "volumes": volumes,
+            "error": None if succeeded else "docker not found",
+        }
+
+    @pytest.mark.parametrize(
+        ("running", "error", "exit_code"),
+        [(True, "", 0), (False, "", 0), (False, "Docker daemon is not reachable", 1)],
+        ids=["running", "not-running", "unobservable"],
+    )
+    def test_lab_status_exit_status_follows_the_observation(
+        self, runner, mocker, running, error, exit_code
+    ):
+        """Not running is a state; failing to observe it is a failure (#1218)."""
+        from aptl.cli.main import app
+        from aptl.core.lab_types import LabStatus
+
+        mocker.patch(
+            "aptl.cli.lab.lab_status",
+            return_value=LabStatus(running=running, error=error),
+        )
+
+        result = runner.invoke(app, ["lab", "status"])
+
+        assert result.exit_code == exit_code
+
+    def test_lab_status_json_keeps_the_range_snapshot_shape(self, runner, mocker):
+        """Existing consumers parse these keys (the curated live gate script)."""
+        import json
+
+        from aptl.cli.main import app
+        from aptl.core.snapshot import RangeSnapshot
+
+        mocker.patch("aptl.core.snapshot.capture_snapshot", return_value=RangeSnapshot())
+
+        result = runner.invoke(app, ["lab", "status", "--json"])
+
+        assert result.exit_code == 0
+        assert set(json.loads(result.stdout)) == {
+            "timestamp",
+            "software",
+            "containers",
+            "wazuh_rules",
+            "networks",
+            "config_hashes",
+            "services",
+            "ssh",
+        }
+
+
 class TestLabStopCommand:
     """Tests for the aptl lab stop CLI command."""
 

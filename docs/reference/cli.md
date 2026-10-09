@@ -50,6 +50,36 @@ hard-coded port, or substitute raw `docker compose up` for `aptl lab start`.
 The control plane owns scenario realization, generated configuration, port
 selection, readiness, MCP setup, and run recording.
 
+## Exit Status And JSON Output
+
+`aptl doctor`, `aptl lab start`, `aptl lab status`, and `aptl lab stop` share
+one exit status contract. Tests lock it.
+
+| Exit status | Meaning |
+| --- | --- |
+| `0` | The command did what it reports. `aptl doctor` found no failed check, `aptl lab start` brought the lab up, `aptl lab status` observed the project, and `aptl lab stop` left it stopped, including when it was not running. |
+| `1` | The command could not do it. A doctor check failed, the start failed, the project state could not be observed, or the stop failed. |
+| `2` | Invalid usage, such as an unknown option, conflicting scenario selectors, or `--json` with `--clean` or `--volumes` but without `--yes`. |
+
+A start that ends `degraded_usable` or `degraded_unusable` still exits with
+status 0; read its outcome. With `--json`, `aptl doctor`, `aptl lab start`, and
+`aptl lab stop` print one JSON object on standard output, and start progress
+goes to standard error. Each object has `command`, `schema_version` (now `1`),
+and `ok`, which is `true` exactly when the exit status is `0`. A new field keeps
+the schema version; removing or retyping a field raises it. The JSON and text
+outputs render the same result.
+
+| Command | Fields after `command`, `schema_version`, and `ok` |
+| --- | --- |
+| `aptl doctor --json` | `counts`, the number of checks per status (`pass`, `warn`, `fail`, `skip`); `checks`, a list of `id`, `status`, `summary`, and `fix`. |
+| `aptl lab start --json` | `outcome` (`ready`, `degraded_usable`, `degraded_unusable`, or `failed`); `error`, a string or `null`; `execution_boundary`, the observed boundary or `null`; `admission_seconds`, a number or `null`; `diagnostics`, a list of `step`, `component`, `impact`, `severity`, `message`, and `operator_action`; `published_ports`, a list of `service`, `default_port`, `host_port`, `protocols`, `host_ip`, and `remapped`; `residue`, `null` or the `container_count`, `network_count`, `teardown_requested`, and `torn_down` of a failed start. |
+| `aptl lab stop --json` | `volumes`, whether `--volumes` was requested; `error`, a string or `null`. |
+
+`aptl lab status --json` keeps its existing output, the redacted range
+snapshot with `timestamp`, `software`, `containers`, `wazuh_rules`, `networks`,
+`config_hashes`, `services`, and `ssh`. It exits with status 1 when the
+snapshot can't be captured.
+
 ## Destructive And Emergency Operations
 
 `aptl lab stop -v` is the supported full cleanup for one project. It requires

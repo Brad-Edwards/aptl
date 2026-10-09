@@ -506,17 +506,41 @@ def _stop_lab_owned(
     assert profiles is not None
     if backend is None:
         backend = _get_backend(search_dir, config)
+    return _tear_down_owned(
+        search_dir, backend, profiles, remove_volumes=remove_volumes
+    )
+
+
+def _tear_down_owned(
+    search_dir: Path,
+    backend: "DeploymentBackend",
+    profiles: list[str],
+    *,
+    remove_volumes: bool,
+    retry_command: str | None = None,
+) -> LabResult:
+    """Stop the project and, when its volumes go, finish pending host cleanup.
+
+    ``retry_command`` is the command a cleanup failure names for the retry.
+    ``None`` names ``aptl lab stop -v --yes``.
+    """
 
     capture_failure = _finalize_required_transcript_capture(search_dir, backend)
     stop_result = backend.stop(profiles, remove_volumes=remove_volumes)
     result = stop_result
     if remove_volumes:
-        cleanup_failure = _run_pending_host_cleanup(search_dir, backend, stop_result)
+        cleanup_failure = _run_pending_host_cleanup(
+            search_dir, backend, stop_result, retry_command
+        )
         if cleanup_failure is not None:
             result = cleanup_failure
     if result is stop_result and capture_failure is not None:
         result = capture_failure
     return result
+
+
+#: The command a failed reset names for the retry (#1218).
+_RESET_RETRY_COMMAND = "aptl lab reset --yes"
 
 
 def reset_lab(
@@ -548,21 +572,36 @@ def _reset_lab_owned(
 ) -> LabResetResult:
     """Observe the project, then reset it while the caller holds the lock."""
 
-    config, _profiles, failure = _stop_recovery_configuration(project_root, backend)
+    config, profiles, failure = _stop_recovery_configuration(
+        project_root, backend, command="reset"
+    )
     if failure is not None:
         return LabResetResult(failure)
+    assert profiles is not None
     selected = backend or _get_backend(project_root, config)
     presence = selected.observe_project_runtime()
-    result = _stop_lab_owned(True, project_root, selected)
+    result = _tear_down_owned(
+        project_root,
+        selected,
+        profiles,
+        remove_volumes=True,
+        retry_command=_RESET_RETRY_COMMAND,
+    )
     if presence.error:
         return LabResetResult(result)
     return LabResetResult(result, presence.container_count, presence.network_count)
 
 
 def _stop_recovery_configuration(
-    search_dir: Path, backend: Optional["DeploymentBackend"]
+    search_dir: Path,
+    backend: Optional["DeploymentBackend"],
+    *,
+    command: str = "stop",
 ) -> tuple[AptlConfig | None, list[str] | None, LabResult | None]:
-    """Resolve safe teardown profiles and any blocking recovery failure."""
+    """Resolve safe teardown profiles and any blocking recovery failure.
+
+    ``command`` names the blocked ``aptl lab`` command in the failure text.
+    """
 
     configured_profiles: list[str] = []
     config_path = find_config(search_dir)
@@ -578,7 +617,7 @@ def _stop_recovery_configuration(
                 failure = LabResult(
                     success=False,
                     error=(
-                        "[lifecycle-invalid-configuration] Lab stop blocked: "
+                        f"[lifecycle-invalid-configuration] Lab {command} blocked: "
                         "invalid configuration; refusing to guess the deployment "
                         "project identity. Repair aptl.json and retry."
                     ),
@@ -592,7 +631,10 @@ def _stop_recovery_configuration(
         except (OSError, ValueError):
             failure = LabResult(
                 success=False,
-                error="[lifecycle-state-invalid] Lab stop blocked: invalid operator-group recovery state.",
+                error=(
+                    f"[lifecycle-state-invalid] Lab {command} blocked: invalid "
+                    "operator-group recovery state."
+                ),
             )
         else:
             profiles = (
@@ -607,30 +649,38 @@ def _run_pending_host_cleanup(
     project_dir: Path,
     backend: object,
     stop_result: LabResult,
+    retry_command: str | None = None,
 ) -> LabResult | None:
     """Finish pending host cleanup once Docker volume removal is verified.
 
     A Docker failure leaves host state untouched, because it still describes
     retained volumes, and says what remains pending. After verified teardown
     every pending action runs, including on a repeat reset whose Docker
-    resources were already gone.
+    resources were already gone. A failure names ``retry_command``, or
+    ``aptl lab stop -v --yes`` when it is ``None``.
     """
 
     from aptl.core.lifecycle_cleanup import (
+        RETRY_COMMAND,
         docker_teardown_failed_message,
         pending_cleanup_message,
         run_pending_cleanup,
     )
 
+    retry = retry_command or RETRY_COMMAND
     if not stop_result.success:
         return LabResult(
             success=False,
-            error=docker_teardown_failed_message(project_dir, stop_result.error),
+            error=docker_teardown_failed_message(
+                project_dir, stop_result.error, retry_command=retry
+            ),
         )
     report = run_pending_cleanup(project_dir, backend)
     if report.ok:
         return None
-    return LabResult(success=False, error=pending_cleanup_message(report))
+    return LabResult(
+        success=False, error=pending_cleanup_message(report, retry_command=retry)
+    )
 
 
 def _finalize_required_transcript_capture(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -533,13 +534,21 @@ class _Project(_Backend):
 
 
 def _kept_host_files(root: Path) -> dict[Path, bytes]:
-    """Write the host files a reset must keep, and return their bytes."""
+    """Write the host files a reset must keep, and return their bytes.
 
+    The run record goes where ``aptl runs list`` reads it: the run store that
+    ``aptl.json`` configures, ``./runs`` by default.
+    """
+    from aptl.cli._common import resolve_run_store
+
+    config = b'{"lab": {"name": "reset"}}\n'
+    (root / "aptl.json").write_bytes(config)
+    run_record = resolve_run_store(root).get_run_path("run-1") / "manifest.json"
     files = {
-        root / "aptl.json": b'{"lab": {"name": "reset"}}\n',
+        root / "aptl.json": config,
         root / ".env": b"APTL_LAB_LABEL=keep-me\n",
         root / "containers" / "keys" / "aptl_lab_key": b"lab-key-fixture\n",
-        root / ".aptl" / "runs" / "run-1" / "record.json": b'{"run": "1"}\n',
+        run_record: b'{"run": "1"}\n',
     }
     for path, content in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -610,7 +619,7 @@ def test_reset_reports_cleanup_it_could_not_finish(tmp_path: Path, monkeypatch) 
     from aptl.core.lab import reset_lab
 
     _install(monkeypatch, ("2.0.0", _provider(reset=lambda _context: None)))
-    _legacy(
+    record = _legacy(
         tmp_path,
         pack_id="otherpack",
         digest=OTHER_DIGEST,
@@ -621,8 +630,14 @@ def test_reset_reports_cleanup_it_could_not_finish(tmp_path: Path, monkeypatch) 
     outcome = reset_lab(tmp_path, backend=_Project())
 
     assert outcome.result.success is False
-    assert outcome.result.error.startswith("[lifecycle-host-cleanup-pending]")
-    assert "pack.reset for otherpack 1.0.0" in outcome.result.error
+    assert outcome.result.error == (
+        "[lifecycle-host-cleanup-pending] Docker teardown completed and the "
+        "project volumes were removed, but 1 host-side cleanup action remains "
+        "pending: pack.reset for otherpack 1.0.0 "
+        f"({LEGACY_DIR.name}/{record.name[:12]}): "
+        "provider-reset-authority-unavailable. The pending records were kept. "
+        "Resolve the cause, then retry with `aptl lab reset --yes`."
+    )
     assert (outcome.containers_found, outcome.networks_found) == (3, 2)
 
 
@@ -641,7 +656,9 @@ def test_reset_of_an_unobservable_project_still_resets(
     assert [remove_volumes for _profiles, remove_volumes in project.calls] == [True]
 
 
-def test_reset_waits_for_another_lifecycle_owner(tmp_path: Path) -> None:
+def test_reset_refuses_while_another_lifecycle_owner_holds_the_lock(
+    tmp_path: Path,
+) -> None:
     import threading
 
     from aptl.core.lab import reset_lab
@@ -669,6 +686,135 @@ def test_reset_waits_for_another_lifecycle_owner(tmp_path: Path) -> None:
     assert outcome.result.error.startswith("[lifecycle-owner-busy]")
     assert "`aptl lab reset`" in outcome.result.error
     assert project.calls == []
+
+
+class _Daemon:
+    """Docker's answers for one workspace-scoped project and a foreign one.
+
+    It answers the project observation queries by the exact label value, as
+    the daemon filters them. ``stop`` stands in for the Compose teardown,
+    which needs ownership receipts this fake does not hold.
+    """
+
+    def __init__(self, project: str) -> None:
+        self.project = project
+        self.projects = {
+            project: (["c1", "c2", "c3"], ["n1", "n2"]),
+            # An unscoped project from before workspace scoping (#1054).
+            "aptl": (["legacy-c"], ["legacy-n"]),
+        }
+        self.stops: list[bool] = []
+
+    def run(self, cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
+        del timeout
+        label = cmd[cmd.index("--filter") + 1].removeprefix("label=")
+        containers, networks = self.projects.get(label.partition("=")[2], ([], []))
+        if cmd[:3] == ["docker", "ps", "-aq"]:
+            return subprocess.CompletedProcess(cmd, 0, "\n".join(containers), "")
+        if cmd[:3] == ["docker", "network", "ls"]:
+            return subprocess.CompletedProcess(cmd, 0, "\n".join(networks), "")
+        raise AssertionError(f"unexpected Docker command: {cmd}")
+
+    def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
+        del profiles
+        self.stops.append(remove_volumes)
+        self.projects[self.project] = ([], [])
+        return LabResult(success=True)
+
+
+def test_reset_counts_the_project_that_start_labelled(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A newly built Compose backend counts the workspace-scoped project.
+
+    `aptl lab start` binds the workspace-scoped name (`aptl-w<id>`) and labels
+    every container and network with it. A backend built as `reset_lab` builds
+    one holds the logical name `aptl` until the workspace scope loads, so the
+    count must not run before that (#1218).
+    """
+    from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+    from aptl.core.lab import reset_lab
+
+    _no_installed_providers(monkeypatch)
+    daemon = _Daemon(WorkspaceOwnership.ensure(tmp_path, "aptl").project_name)
+    backend = DockerComposeBackend(tmp_path)
+    monkeypatch.setattr(backend, "_run", daemon.run)
+    monkeypatch.setattr(backend, "stop", daemon.stop)
+
+    outcome = reset_lab(tmp_path, backend=backend)
+
+    assert outcome.result.success is True
+    assert (outcome.containers_found, outcome.networks_found) == (3, 2)
+    assert daemon.stops == [True]
+
+
+def test_reset_with_unreadable_workspace_state_counts_nothing_and_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Unreadable workspace state is an observation failure, never `0` (#1218)."""
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+    from aptl.core.lab import reset_lab
+
+    _no_installed_providers(monkeypatch)
+    state = tmp_path / ".aptl" / "lifecycle" / "workspace-ownership-v1.json"
+    state.parent.mkdir(parents=True)
+    state.write_text("{}\n", encoding="utf-8")
+    commands: list[list[str]] = []
+
+    def run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
+        commands.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    backend = DockerComposeBackend(tmp_path)
+    monkeypatch.setattr(backend, "_run", run)
+
+    outcome = reset_lab(tmp_path, backend=backend)
+
+    assert (outcome.containers_found, outcome.networks_found) == (None, None)
+    assert outcome.result.error == (
+        "[lifecycle-docker-teardown-failed] Docker teardown failed: Backend "
+        "resource ownership conflict before Compose cleanup. Host-side cleanup "
+        "was not attempted; 0 actions remain pending. Resolve the Docker failure, "
+        "then retry with `aptl lab reset --yes`."
+    )
+    assert commands == []
+
+
+@pytest.mark.parametrize(
+    ("state_file", "content", "error"),
+    [
+        (
+            "aptl.json",
+            "{not json\n",
+            "[lifecycle-invalid-configuration] Lab reset blocked: invalid "
+            "configuration; refusing to guess the deployment project identity. "
+            "Repair aptl.json and retry.",
+        ),
+        (
+            ".aptl/lifecycle/operator-groups-v1/not-a-receipt.json",
+            "{}\n",
+            "[lifecycle-state-invalid] Lab reset blocked: invalid operator-group "
+            "recovery state.",
+        ),
+    ],
+    ids=["invalid-configuration", "invalid-operator-groups"],
+)
+def test_reset_blocked_before_teardown_names_reset(
+    tmp_path: Path, state_file: str, content: str, error: str
+) -> None:
+    """A reset refused before teardown names `Lab reset`, not `Lab stop`."""
+    from aptl.core.lab import reset_lab
+
+    path = tmp_path / state_file
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+    outcome = reset_lab(tmp_path)
+
+    assert outcome.result.success is False
+    assert outcome.result.error == error
+    assert (outcome.containers_found, outcome.networks_found) == (None, None)
 
 
 def test_start_persists_aptl_owned_and_declared_pack_cleanup(tmp_path: Path) -> None:

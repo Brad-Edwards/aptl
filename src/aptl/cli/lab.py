@@ -67,8 +67,8 @@ lifecycle.register(app)
 app.command("qualify-profile")(qualify_profile)
 
 
-# Shared destructive-data warning. Both `stop --volumes` and
-# `start --clean` remove Compose-managed volumes, so the operator sees one
+# Shared destructive-data warning. `lab stop --volumes`, `lab start --clean`
+# and `lab reset` all remove Compose-managed volumes, so the operator sees one
 # canonical statement of what gets destroyed.
 _DESTRUCTIVE_DATA_WARNING = (
     "\n  WARNING: This will destroy all lab data including:\n"
@@ -95,10 +95,11 @@ def _confirm_destructive(
 ) -> bool:
     """Confirm a volume-destroying action; return False if the operator aborts.
 
-    Centralizes the destructive-action gate shared by ``stop --volumes`` and
-    ``start --clean``: print the canonical warning and require an explicit
-    ``y`` unless ``skip_prompt`` (``--yes``) was passed. JSON output cannot
-    prompt, so it requires ``--yes`` and otherwise exits with status 2.
+    Centralizes the destructive-action gate shared by ``lab stop --volumes``,
+    ``lab start --clean`` and ``lab reset``: print the canonical warning and
+    require an explicit ``y`` unless ``skip_prompt`` (``--yes``) was passed.
+    JSON output cannot prompt, so it requires ``--yes`` and otherwise exits
+    with status 2.
     """
     if skip_prompt:
         return True

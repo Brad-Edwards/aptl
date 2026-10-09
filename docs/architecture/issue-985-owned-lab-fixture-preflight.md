@@ -1,7 +1,7 @@
 # Issue #985 Owned Lab Fixture Preflight
 
 This is architecture guidance, not an implementation plan. The issue is the
-contract; no Ground Control requirement is attached. Existing decisions in
+contract; no formal requirement is attached. Existing decisions in
 [the #969 preflight](issue-969-platform-safety-gates-preflight.md),
 [the #993 preflight](issue-993-boot-realization-regressions-preflight.md), and
 [boot coverage](../testing/boot-realization-coverage.md) remain authoritative.

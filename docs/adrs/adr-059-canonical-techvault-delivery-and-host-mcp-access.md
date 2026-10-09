@@ -21,8 +21,8 @@ capture, signing, and qualification requirements remain binding.
 
 Issue #868 makes the packaged full TechVault deployment the shared input to
 normal local use, the participant workbench, and optional appliance delivery.
-It must merge before #1022 builds and qualifies real seats. There is no Ground
-Control requirement; the issue is the acceptance contract.
+It must merge before #1022 builds and qualifies real seats. There is no formal
+requirement; the issue is the acceptance contract.
 
 Before this change, the contracts could not satisfy this by changing a scenario name:
 

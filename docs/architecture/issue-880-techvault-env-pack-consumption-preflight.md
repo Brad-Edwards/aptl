@@ -1,7 +1,7 @@
 # Issue #880 TechVault Env-Pack Consumption Preflight
 
 Reconciled against the current working tree on 2026-09-21. The supplied issue is
-the contract; there is no Ground Control requirement. This is boundary guidance,
+the contract; there is no formal requirement. This is boundary guidance,
 not an implementation plan or completion claim. TechVault already belongs in
 `OpenRAE/env-packs`; do not move it again.
 

@@ -33,6 +33,7 @@ path	proposed_owner	migration_rule
 .serena/project.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .vale.ini	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 .vale/styles/AptlProject/EmDashDensity.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
+.vale/styles/AptlProject/WorkflowPlatformName.yml	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 AGENTS.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 CHANGELOG.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied
 CLAUDE.md	repository-metadata	Inspect identity/content owner during #934; no runtime capability implied

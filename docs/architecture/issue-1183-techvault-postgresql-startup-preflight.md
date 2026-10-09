@@ -1,6 +1,6 @@
 # Issue #1183: TechVault PostgreSQL Startup Preflight
 
-The supplied issue is the contract; no Ground Control requirement is attached.
+The supplied issue is the contract; no formal requirement is attached.
 This note sets design guardrails, not an implementation plan. Existing ADR-029,
 ADR-046/051, ADR-037, and ADR-060/061 already establish the relevant boundaries;
 no new ADR or framework is needed.

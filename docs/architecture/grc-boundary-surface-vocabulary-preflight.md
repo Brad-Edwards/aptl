@@ -88,8 +88,8 @@ remains the canonical workflow metadata surface for this repo.
   touch FastAPI auth, web session handling, terminal auth, MCP command
   execution, or runtime lab controls to fix metadata routing.
 - **Persistence boundary:** no new runstore, inventory, or application
-  persistence is needed. If evidence is saved, it should be a normal Ground
-  Control report artifact or a concise docs note, not a new APTL evidence
+  persistence is needed. If evidence is saved, it should be a normal GRC
+  workflow platform report artifact or a concise docs note, not a new APTL evidence
   format.
 
 ## Extensibility Seam

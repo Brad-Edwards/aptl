@@ -156,8 +156,8 @@ Implementation has to reconcile these repository and runtime surfaces:
   `src/aptl/utils/{pathsafe,redaction,logging,curl_safe}.py`, and MCP redaction
   parity;
 - `docker-compose.yml`, `.mcp.json.example`, `.gitignore`,
-  `.gitguardian.yaml`, secret-protection hooks, Vale/MkDocs, and the Ground
-  Control host/range boundary declarations;
+  `.gitguardian.yaml`, secret-protection hooks, Vale/MkDocs, and the
+  `.ground-control.yaml` host/range boundary declarations;
 - AWS STS, EC2/AMI/EBS/ENI, VPC/subnet/routes, security groups, public
   addressing, Route 53, IAM/instance profiles, S3 license access, IMDS, and
   user data;

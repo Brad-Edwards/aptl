@@ -17,7 +17,7 @@ The project shall maintain documentation that is verified accurate against the c
 
 ## Rationale
 
-APTL's documentation has drifted: the mkdocs nav references 12 pages that do not exist, lists only 12 of 38 ADRs, and omits entire sections (SDL, ACES, testing, most components); no prose linting exists and the docs are not published anywhere. A research lab whose docs are stale or unreachable undermines adoption and reproducibility. Ground-Control's Vale apparatus provides a proven pattern to port.
+APTL's documentation has drifted: the mkdocs nav references 12 pages that do not exist, lists only 12 of 38 ADRs, and omits entire sections (SDL, ACES, testing, most components); no prose linting exists and the docs are not published anywhere. A research lab whose docs are stale or unreachable undermines adoption and reproducibility. An upstream workflow platform's Vale apparatus provides a proven pattern to port.
 
 ## Traceability
 

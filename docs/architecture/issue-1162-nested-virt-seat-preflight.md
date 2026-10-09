@@ -1,7 +1,7 @@
 # Issue #1162: Nested Virt Seat Preflight
 
 Architecture guidance for [#1162](https://github.com/Brad-Edwards/aptl/issues/1162),
-whose supplied issue body is the delivery contract; no Ground Control requirement
+whose supplied issue body is the delivery contract; no formal requirement
 is attached. This is not an implementation plan or a working-VM attestation.
 Inspection used repository commit `0bdd55b87f59` and cached remote-tracking refs.
 

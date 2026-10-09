@@ -294,8 +294,8 @@ surface. It must leave one active path:
   `ScenarioDefinition` references may remain only when explicitly marked as
   historical or reference-only and unreachable from catalog/default startup,
   static/live gates, and runtime loaders. Unlabeled references are drift.
-- If any legacy local SDL code is intentionally retained, this ADR and Ground
-  Control status must say why. It must not parse, validate, or model RAES SDL,
+- If any legacy local SDL code is intentionally retained, this ADR and the GRC
+  workflow platform status must say why. It must not parse, validate, or model RAES SDL,
   and it must not reintroduce APTL-local SDL semantics as a source of truth.
 - The parity inventory and historical preflight notes remain audit/history
   surfaces. They must not become runtime inputs, alternate schema authorities,

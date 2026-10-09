@@ -1,7 +1,7 @@
 # Issue #1186: Desktop Seat Privilege Preflight
 
 The supplied [issue #1186](https://github.com/Brad-Edwards/aptl/issues/1186)
-is the delivery contract; no Ground Control requirement is attached.
+is the delivery contract; no formal requirement is attached.
 Inspection used repository commit `980f4076`. This guidance defines boundaries
 and acceptance risks, not an implementation plan or qualification evidence.
 Keep [ADR-060](../adrs/adr-060-vm-only-seat-containment.md)'s VM boundary,

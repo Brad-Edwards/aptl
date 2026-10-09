@@ -1,0 +1,14 @@
+# Public docs refer to the requirements and planning tool generically
+# (for example "the GRC workflow platform" or "the planning rules"),
+# not by its product name (#1243). Literal configuration names stay
+# allowed: `.ground-control.yaml` is excluded below, and `.gc/` and
+# `gc_*` never match. The raw scope also catches a name that wraps
+# across lines inside a list item or blockquote. AGENTS.md and the
+# other agent-facing paths are outside Vale (see .vale.ini).
+extends: existence
+message: "Use neutral wording such as 'the GRC workflow platform' instead of the product name '%s'."
+level: error
+ignorecase: true
+scope: raw
+tokens:
+  - '(?<!\.)ground[\s>*-]*control(?!\.ya?ml)'

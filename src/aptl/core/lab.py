@@ -749,6 +749,13 @@ def _clean_boot_lab_owned(
     preflight_failure, selected_backend = _preflight_clean_appliance_boundary(
         project_root, appliance, backend
     )
+    if preflight_failure is None:
+        # LilRAE does not support rootless Docker (#1053), so --clean asks the
+        # daemon its teardown would use before it removes any container or
+        # volume, not only once the start path runs.
+        preflight_failure = _clean_boot_rootless_refusal(
+            project_root, selected_backend
+        )
     if preflight_failure is not None:
         return preflight_failure
     if progress is not None:
@@ -825,6 +832,28 @@ def _preflight_clean_appliance_boundary(
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return LabResult(success=False, error="Verified appliance launch preflight failed."), backend
     return None, selected
+
+
+def _clean_boot_rootless_refusal(
+    project_root: Path, backend: "DeploymentBackend | None"
+) -> LabResult | None:
+    """Refuse a rootless daemon before ``--clean`` removes anything (#1053).
+
+    Asks the daemon the teardown would use: the caller's backend or the
+    verified appliance backend when there is one, otherwise the backend
+    :func:`stop_lab` builds from ``aptl.json``, or from the defaults when there
+    is no ``aptl.json``. An ``aptl.json`` that does not load is left to
+    :func:`stop_lab`, which refuses it before any teardown.
+    """
+
+    if backend is None:
+        config_path = find_config(project_root)
+        try:
+            config = load_config(config_path) if config_path is not None else None
+        except (FileNotFoundError, ValueError):
+            return None
+        backend = _get_backend(project_root, config)
+    return _rootless_daemon_refusal(backend)
 
 
 def lab_status(
@@ -1523,17 +1552,29 @@ def _step_refuse_rootless_daemon(ctx: _LabStartContext) -> LabResult | None:
     every scenario, before any SSH key, credential render, volume, certificate,
     image pull or Compose change. It cannot run earlier: the backend, and so
     the daemon that must answer, is known only after ``_step_load_config``
-    binds the endpoint. ``.env`` hydration and an explicit ``--clean``
-    teardown still run first.
+    binds the endpoint. ``.env`` hydration, scenario selection and admission
+    still run first. ``--clean`` asks the same question before its teardown
+    (:func:`_clean_boot_rootless_refusal`).
+    """
+
+    assert ctx.backend is not None
+    return _rootless_daemon_refusal(ctx.backend)
+
+
+def _rootless_daemon_refusal(backend: "DeploymentBackend") -> LabResult | None:
+    """Return the named refusal when ``backend``'s daemon runs rootless (#1053).
+
+    The probe goes through the backend's own runner, so an explicitly selected
+    endpoint is the daemon that answers. A daemon that does not answer is
+    refused as well.
     """
 
     from aptl.core.deployment._compose_substrate_gate import require_rootful_daemon
     from aptl.core.deployment.errors import BackendSeedError
 
-    assert ctx.backend is not None
     refusal: str | None = None
     try:
-        require_rootful_daemon(ctx.backend._run)
+        require_rootful_daemon(backend._run)
     except BackendSeedError as exc:
         refusal = str(exc)
     if refusal is None:

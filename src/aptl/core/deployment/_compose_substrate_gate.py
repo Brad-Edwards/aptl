@@ -42,8 +42,9 @@ mutation instead of letting the create fail with an opaque start error.
 not support rootless Docker at all, not only for systemd nodes, so
 :func:`require_rootful_daemon` asks the same security-options question before
 any SSH key, credential render, volume, certificate, image pull or Compose
-change, whatever the scenario selects. userns-remap stays refused only where
-the substrate posture needs writable cgroups.
+change, and before ``aptl lab start --clean`` tears anything down, whatever the
+scenario selects. userns-remap stays refused only where the substrate posture
+needs writable cgroups.
 
 A future supported cgroup v1 path would be a separately qualified backend policy
 with its own exact readback baseline -- never a boolean that re-enables host
@@ -197,10 +198,10 @@ def require_rootful_daemon(run: Callable[..., Any]) -> None:
     """Refuse a rootless daemon with a named reason, for every scenario.
 
     Lab start calls this once the backend is bound and before any SSH key,
-    credential render, volume, certificate, image pull or Compose change
-    (#1053). ``run`` is the selected backend's list-form runner, so an
-    explicitly selected endpoint is the daemon that answers; nothing here
-    redirects to another daemon.
+    credential render, volume, certificate, image pull or Compose change, and
+    ``--clean`` calls it before its teardown (#1053). ``run`` is the selected
+    backend's list-form runner, so an explicitly selected endpoint is the
+    daemon that answers; nothing here redirects to another daemon.
     """
 
     if _ROOTLESS_MODE in _daemon_security_option_names(run, _ROOTFUL_REQUIREMENT):

@@ -105,6 +105,18 @@ def _raes_start_after_backend_retry(
     )
 
 
+_DAEMON_MODE_PROBE = ["docker", "info", "--format", "{{json .SecurityOptions}}"]
+_ROOTFUL_OPTIONS = '["name=seccomp,profile=builtin"]'
+_ROOTLESS_OPTIONS = '["name=seccomp,profile=builtin","name=rootless"]'
+
+
+def _daemon_reporting(security_options: str) -> MagicMock:
+    """Model a Docker runner whose daemon reports these security options."""
+    return MagicMock(
+        return_value=MagicMock(returncode=0, stdout=security_options, stderr="")
+    )
+
+
 class TestLabImportContracts:
     """Import contracts for core lab orchestration."""
 
@@ -539,6 +551,20 @@ class TestCleanBootLab:
     contaminated environment must never be reused as ``clean``.
     """
 
+    @pytest.fixture(autouse=True)
+    def rootful_daemon(self, monkeypatch):
+        """Answer the daemon-mode probe ``--clean`` runs first (#1053) as rootful.
+
+        These tests are about the stop and start sequence, so no real
+        ``docker info`` may run. Tests that check which daemon was asked
+        request the stub by name.
+        """
+        import subprocess
+
+        runner = _daemon_reporting(_ROOTFUL_OPTIONS)
+        monkeypatch.setattr(subprocess, "run", runner)
+        return runner
+
     def test_clean_boot_stops_with_volumes_then_starts(self, monkeypatch, tmp_path):
         """Clean boot tears down (volumes removed) before booting, in order."""
         from aptl.core import lab
@@ -593,6 +619,70 @@ class TestCleanBootLab:
         assert "appliance" in result.error.lower()
         assert stopped == []
         assert started == []
+
+    @pytest.mark.parametrize("from_caller", [False, True], ids=["project", "caller"])
+    def test_rootless_daemon_is_refused_before_the_teardown(
+        self, monkeypatch, tmp_path, rootful_daemon, from_caller
+    ):
+        """`--clean` on a rootless daemon fails by name and removes nothing (#1053).
+
+        Without a caller backend the probe asks the daemon ``stop_lab`` would
+        build from ``aptl.json``. With one, it asks that backend and no other.
+        """
+        import subprocess
+
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult
+
+        rootless = _daemon_reporting(_ROOTLESS_OPTIONS)
+        backend = MagicMock(_run=rootless) if from_caller else None
+        if backend is None:
+            (tmp_path / "aptl.json").write_text(
+                '{"deployment": {"project_name": "custom-project"}}', encoding="utf-8"
+            )
+            monkeypatch.setattr(subprocess, "run", rootless)
+        calls = []
+        monkeypatch.setattr(
+            lab,
+            "stop_lab",
+            lambda **kwargs: calls.append("stop") or LabResult(success=True),
+        )
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *args, **kwargs: calls.append("start") or LabResult(success=True),
+        )
+
+        result = clean_boot_lab(tmp_path, backend=backend)
+
+        assert calls == []
+        assert result.success is False
+        assert "rootless mode" in result.error
+        assert [c.args[0] for c in rootless.call_args_list] == [_DAEMON_MODE_PROBE]
+        rootful_daemon.assert_not_called()
+
+    def test_unloadable_config_is_left_to_the_stop_refusal(
+        self, monkeypatch, tmp_path, rootful_daemon
+    ):
+        """An ``aptl.json`` that does not load reaches ``stop_lab``'s refusal.
+
+        The probe cannot tell which daemon such a project names, so it asks
+        none, and ``stop_lab`` refuses the configuration before any teardown.
+        """
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+
+        (tmp_path / "aptl.json").write_text("{not-json", encoding="utf-8")
+        monkeypatch.setattr(
+            lab, "orchestrate_lab_start", lambda *a, **k: pytest.fail("unreachable")
+        )
+
+        result = clean_boot_lab(tmp_path)
+
+        assert result.success is False
+        assert "[lifecycle-invalid-configuration]" in result.error
+        rootful_daemon.assert_not_called()
 
     def test_clean_boot_stop_failure_is_fatal_and_skips_start(
         self, monkeypatch, tmp_path
@@ -730,7 +820,7 @@ class TestCleanBootLab:
         from aptl.core.lab import clean_boot_lab
         from aptl.core.lab_types import LabResult, StartupOutcome
 
-        sentinel_backend = MagicMock()
+        sentinel_backend = MagicMock(_run=_daemon_reporting(_ROOTFUL_OPTIONS))
         captured = {}
 
         def fake_stop(**kwargs):

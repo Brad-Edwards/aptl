@@ -38,6 +38,14 @@ regardless of what was asked. Neither is a qualified substrate runtime (ADR-060
 makes the VM seat the alternative boundary), so the gate names the mode before
 mutation instead of letting the create fail with an opaque start error.
 
+**Lab start refuses a rootless daemon for every scenario** (#1053). LilRAE does
+not support rootless Docker at all, not only for systemd nodes, so
+:func:`require_rootful_daemon` asks the same security-options question before
+any SSH key, credential render, volume, certificate, image pull or Compose
+change, and before ``aptl lab start --clean`` tears anything down, whatever the
+scenario selects. userns-remap stays refused only where the substrate posture
+needs writable cgroups.
+
 A future supported cgroup v1 path would be a separately qualified backend policy
 with its own exact readback baseline -- never a boolean that re-enables host
 authority through this gate.
@@ -66,15 +74,28 @@ SUBSTRATE_MIN_DOCKER_ENGINE = (28, 0)
 
 _PROBE_TIMEOUT_SECONDS = 30
 
+_ROOTLESS_MODE = "rootless"
+
 # Daemon modes, as named in ``docker info``'s SecurityOptions, that cannot run
 # the substrate posture, with the wording an operator will recognize.
 _UNQUALIFIED_DAEMON_MODES = (
-    ("rootless", "rootless"),
+    (_ROOTLESS_MODE, "rootless"),
     ("userns", "user-namespace remapping (userns-remap)"),
 )
 
+_SUBSTRATE_REQUIREMENT = (
+    "the generic systemd substrate requires a cgroup v2 daemon at Docker Engine "
+    f"{SUBSTRATE_MIN_DOCKER_ENGINE[0]}.{SUBSTRATE_MIN_DOCKER_ENGINE[1]} or newer"
+)
+_ROOTFUL_REQUIREMENT = "LilRAE requires a rootful Docker daemon"
 
-def _probe(run: Callable[..., Any], argv: list[str], subject: str) -> str:
+
+def _probe(
+    run: Callable[..., Any],
+    argv: list[str],
+    subject: str,
+    requirement: str = _SUBSTRATE_REQUIREMENT,
+) -> str:
     """Run one daemon probe and return its trimmed stdout.
 
     A probe that cannot be completed is a refusal, not a default: an
@@ -83,24 +104,17 @@ def _probe(run: Callable[..., Any], argv: list[str], subject: str) -> str:
     a host path, a remote endpoint, or an operator's environment.
     """
 
+    unanswered = (
+        f"could not determine the target Docker daemon's {subject}; {requirement}"
+    )
     try:
         result = run(argv, timeout=_PROBE_TIMEOUT_SECONDS)
     # Any runner failure -- a timeout, a missing binary, a transport error on a
     # remote endpoint -- is a refusal, never a pass.
     except Exception as exc:
-        raise BackendSeedError(
-            f"could not determine the target Docker daemon's {subject}; "
-            "the generic systemd substrate requires a cgroup v2 daemon at "
-            f"Docker Engine {SUBSTRATE_MIN_DOCKER_ENGINE[0]}."
-            f"{SUBSTRATE_MIN_DOCKER_ENGINE[1]} or newer"
-        ) from exc
+        raise BackendSeedError(unanswered) from exc
     if getattr(result, "returncode", 1) != 0:
-        raise BackendSeedError(
-            f"could not determine the target Docker daemon's {subject}; "
-            "the generic systemd substrate requires a cgroup v2 daemon at "
-            f"Docker Engine {SUBSTRATE_MIN_DOCKER_ENGINE[0]}."
-            f"{SUBSTRATE_MIN_DOCKER_ENGINE[1]} or newer"
-        )
+        raise BackendSeedError(unanswered)
     return str(getattr(result, "stdout", "") or "").strip()
 
 
@@ -165,16 +179,42 @@ def _security_option_names(raw: str) -> frozenset[str]:
     )
 
 
-def _require_qualified_daemon_mode(run: Callable[..., Any]) -> None:
-    """Refuse rootless and userns-remap daemons with a named reason."""
+def _daemon_security_option_names(
+    run: Callable[..., Any], requirement: str = _SUBSTRATE_REQUIREMENT
+) -> frozenset[str]:
+    """Ask the target daemon for its SecurityOptions ``name=`` values."""
 
-    names = _security_option_names(
+    return _security_option_names(
         _probe(
             run,
             ["docker", "info", "--format", "{{json .SecurityOptions}}"],
             "security options",
+            requirement,
         )
     )
+
+
+def require_rootful_daemon(run: Callable[..., Any]) -> None:
+    """Refuse a rootless daemon with a named reason, for every scenario.
+
+    Lab start calls this once the backend is bound and before any SSH key,
+    credential render, volume, certificate, image pull or Compose change, and
+    ``--clean`` calls it before its teardown (#1053). ``run`` is the selected
+    backend's list-form runner, so an explicitly selected endpoint is the
+    daemon that answers; nothing here redirects to another daemon.
+    """
+
+    if _ROOTLESS_MODE in _daemon_security_option_names(run, _ROOTFUL_REQUIREMENT):
+        raise BackendSeedError(
+            "LilRAE does not support a Docker daemon running in rootless mode. "
+            "Use a rootful Docker daemon"
+        )
+
+
+def _require_qualified_daemon_mode(run: Callable[..., Any]) -> None:
+    """Refuse rootless and userns-remap daemons with a named reason."""
+
+    names = _daemon_security_option_names(run)
     for mode, label in _UNQUALIFIED_DAEMON_MODES:
         if mode in names:
             raise BackendSeedError(

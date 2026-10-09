@@ -97,7 +97,11 @@ from aptl.core.ssh import (
     ensure_victim_authorized_keys,
     ensure_workstation_pivot_key,
 )
-from aptl.core.sysreqs import check_docker_buildx, check_max_map_count
+from aptl.core.sysreqs import (
+    check_docker_buildx,
+    check_max_map_count,
+    docker_mode_for_containment,
+)
 from aptl.utils.logging import get_logger
 from aptl.utils.redaction import redact
 
@@ -1973,11 +1977,9 @@ def _step_check_sysreqs(ctx: _LabStartContext) -> LabResult | None:
     """Validate host requirements before Compose starts building images."""
     log.info("Step 4: Checking system requirements...")
     boundary = ctx.execution_boundary
-    selected_mode = hostenv.DOCKER_UNKNOWN
-    if boundary is not None and boundary.host_containment == "native-docker":
-        selected_mode = hostenv.DOCKER_LINUX_NATIVE
-    elif boundary is not None and boundary.host_containment == "docker-vm-unverified":
-        selected_mode = hostenv.DOCKER_VM
+    selected_mode = docker_mode_for_containment(
+        boundary.host_containment if boundary is not None else None
+    )
     sysreq_result = check_max_map_count(selected_mode=selected_mode)
     if not sysreq_result.passed:
         log.error(

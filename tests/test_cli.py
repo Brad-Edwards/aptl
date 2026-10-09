@@ -50,6 +50,57 @@ class TestMainApp:
         assert "No such command" in result.output
 
 
+class TestDoctorCommand:
+    """`aptl doctor` prints every check and exits by its verdict (#1218)."""
+
+    @pytest.mark.parametrize(
+        ("status", "exit_code", "closing"),
+        [
+            ("pass", 0, "No prerequisite failed."),
+            ("warn", 0, "No prerequisite failed."),
+            ("fail", 1, "Fix each FAIL, then run it again."),
+        ],
+    )
+    def test_doctor_output_and_exit_code(
+        self, runner, mocker, tmp_path, status, exit_code, closing
+    ):
+        from aptl.cli.main import app
+        from aptl.core.doctor import CheckStatus, DoctorCheck, DoctorReport
+
+        fix = "" if status == "pass" else "Start Docker."
+        report = DoctorReport(
+            (
+                DoctorCheck("project-config", CheckStatus.PASSED, "aptl.json is valid."),
+                DoctorCheck(
+                    "docker-daemon", CheckStatus(status), "The daemon answered.", fix
+                ),
+            )
+        )
+        run = mocker.patch("aptl.core.doctor.run_doctor", return_value=report)
+
+        result = runner.invoke(app, ["doctor", "--project-dir", str(tmp_path)])
+
+        assert result.exit_code == exit_code
+        run.assert_called_once_with(tmp_path)
+        lines = result.stdout.splitlines()
+        label = {"pass": "pass", "warn": "WARN", "fail": "FAIL"}[status]
+        assert f"  {label}  docker-daemon   The daemon answered." in lines
+        assert ("        fix: Start Docker." in lines) is bool(fix)
+        assert lines[-1] == closing
+
+    def test_doctor_help_documents_its_exit_status(self, runner):
+        import re
+
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, ["doctor", "--help"])
+
+        assert result.exit_code == 0
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", result.stdout)
+        assert "Changes nothing" in plain
+        assert "Exit status: 0 when no check failed" in plain
+
+
 class TestLabCommands:
     """Tests for aptl lab subcommands."""
 

@@ -957,6 +957,7 @@ src/aptl/cli/_start_residue.py	core-candidate	Migrate only after public-import, 
 src/aptl/cli/config.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/container.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/continuity.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/cli/doctor.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/experiment.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/kill.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/lab.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1111,6 +1112,7 @@ src/aptl/core/deployment/realization.py	core-candidate	Migrate only after public
 src/aptl/core/deployment/runtime_materialization.py	backend-substrate	Retain faithful runtime materialization qualification
 src/aptl/core/deployment/ssh_compose.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/detection.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/doctor.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/endpoints.py	mixed-lifecycle-policy	Separate scenario/provider policy from reusable lifecycle or mechanism; do not copy wholesale
 src/aptl/core/env.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/evidence/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
@@ -1429,6 +1431,7 @@ tests/test_detection.py	tests-follow-owner	Retain meaningful boundary and parity
 tests/test_deterministic_archive.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_docker_compose_port_bindings.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_docker_image_identity.py	tests-follow-owner	Retain exact pinned child-image identity tests with deployment authority
+tests/test_doctor.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_endpoints.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_env.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_env_fuzz.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner

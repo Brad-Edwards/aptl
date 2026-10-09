@@ -16,6 +16,7 @@ aptl <command> <subcommand> --help
 
 | Command | Supported behavior |
 | --- | --- |
+| `aptl doctor` | Check the host and the selected Docker engine before a start, without changing anything. |
 | `aptl lab` | Initialize, select, start, inspect, validate, stop, and clean a lab project. |
 | `aptl config` | Show and validate the strict, non-secret project configuration. |
 | `aptl container` | List realized project containers and open bounded logs or shells. |
@@ -34,6 +35,7 @@ and direct calls into Python modules are not supported interfaces.
 | Task | Command | Result |
 | --- | --- | --- |
 | Create a project | `aptl lab init <directory>` | Materializes the lab assets bundled with the installed release. |
+| Check the host | `aptl doctor` | Reports each unmet prerequisite with its fix and exits with status 1 when a check failed. |
 | Discover scenarios | `aptl lab scenarios` | Lists validated identities from the installed environment pack. |
 | Start | `aptl lab start --scenario <id>` | Validates and realizes the scenario, starts services, and reports readiness. |
 | Check state | `aptl lab status` | Reports the current project lifecycle and realized containers. |

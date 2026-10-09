@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -31,12 +33,27 @@ from aptl.core.deployment._compose_environment import (
     SOURCED_ENVIRONMENT_OVERRIDE,
     sourced_environment_file,
 )
+from aptl.core.deployment._compose_node_generation import (
+    base_compose_file,
+    render_realization_compose,
+)
+from aptl.core.deployment._compose_runtime_config import (
+    _environment_config,
+    compose_readback,
+)
 from aptl.core.deployment._environment_bindings import EnvironmentBindingError
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentNodeRealization,
+    DeploymentPersistentVolumeRealization,
+    DeploymentPublishedPort,
     DeploymentRealizationSpec,
+    DeploymentStatefulConsumer,
+)
+from aptl.core.deployment.runtime_materialization import (
+    SHARED_DOCKER_PROFILE,
+    effective_runtime_contract_issues,
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
 from aptl.core.scenario_bundle import PackIdentity
@@ -46,6 +63,11 @@ _CANARY = "ambient-canary-value"
 # literal sits in the source for a secret scanner to flag.
 _GRANTED = f"granted-{uuid.uuid4().hex[:12]}"
 _ADAPTER = f"adapter-{uuid.uuid4().hex[:12]}"
+# Values a single-quoted Compose env-file line cannot carry (#1256): a single
+# quote ends the value early, and an unpaired final backslash escapes the
+# closing quote.
+_QUOTED = f"it's-{uuid.uuid4().hex[:12]}"
+_BACKSLASHED = f"ends-with-{uuid.uuid4().hex[:12]}\\"
 _PACK = PackIdentity("example-pack", "1.0.0", "sha256:" + "0" * 64)
 
 
@@ -146,6 +168,8 @@ def test_a_compose_command_never_inherits_scenario_or_host_secrets(
         "SSL_CERT_FILE": "/etc/ssl/corporate.pem",
         "COMPOSE_HTTP_TIMEOUT": "240",
         "BUILDKIT_PROGRESS": "plain",
+        # Windows: where Docker Desktop installs the Compose CLI plugin.
+        "PROGRAMFILES": r"C:\Program Files",
     }
     for name, value in client.items():
         monkeypatch.setenv(name, value)
@@ -410,9 +434,21 @@ def test_an_adapter_value_comes_from_env_and_ambient_never_overrides_it(
                 adapter_names=("API_TOKEN",),
             ),
             (),
-            'API_TOKEN="it\'s-quoted"\n',
-            "a Compose env file cannot carry API_TOKEN exactly",
-            id="value-the-env-file-cannot-carry",
+            f'API_TOKEN="{_QUOTED}"\n',
+            "a Compose env file cannot carry API_TOKEN exactly: "
+            "the value contains a single quote",
+            id="value-with-a-single-quote",
+        ),
+        pytest.param(
+            _realization(
+                _service("worker", _secret("API_TOKEN", "secret_fixture")),
+                adapter_names=("API_TOKEN",),
+            ),
+            (),
+            f"API_TOKEN={_BACKSLASHED}\n",
+            "a Compose env file cannot carry API_TOKEN exactly: "
+            "the value ends in an odd number of backslashes",
+            id="value-ending-in-a-backslash",
         ),
     ],
 )
@@ -430,7 +466,7 @@ def test_a_compose_service_without_its_binding_stops_before_mutation(
 
     assert result.success is False
     assert named in result.error
-    for value in (_CANARY, _GRANTED, _ADAPTER, "it's-quoted"):
+    for value in (_CANARY, _GRANTED, _ADAPTER, _QUOTED, _BACKSLASHED):
         assert value not in result.error
     assert commands == []
     assert not (tmp_path / SOURCED_ENVIRONMENT_DIR).exists()
@@ -500,10 +536,8 @@ def test_the_generated_compose_files_attach_each_service_env_file(
     assert "DB_PASSWORD" not in base["services"]["db"].get("environment", {})
 
 
-def test_authored_compose_values_are_escaped_so_compose_delivers_them_exactly():
-    """Only authored values are inline; a sourced name has no `${NAME}` hole."""
-
-    from aptl.core.deployment._compose_runtime_config import _environment_config
+def test_the_environment_map_holds_authored_values_only():
+    """A sourced name has no `${NAME}` hole; the file writer escapes `$`."""
 
     runtime = RuntimeConfiguration.model_validate(
         {
@@ -519,10 +553,161 @@ def test_authored_compose_values_are_escaped_so_compose_delivers_them_exactly():
         }
     )
 
-    assert _environment_config(runtime) == {"PLANTED": "p@ss$$HOME", "OPTIONAL": ""}
+    assert _environment_config(runtime) == {"PLANTED": "p@ss$HOME", "OPTIONAL": ""}
 
 
-@pytest.mark.integration
+# Pack-authored text that names values Compose could otherwise fill: the Wazuh
+# and Grafana credentials in `.env`, the client's kept proxy setting, an APTL_*
+# setting, and an unkept name with a default. `"$@"` is the catalog's
+# container-shell pass-through, which must reach the container as written.
+_NAMED_VARIABLES = (
+    "echo ${INDEXER_PASSWORD} ${GRAFANA_ADMIN_PASSWORD} ${HTTPS_PROXY} "
+    "${APTL_API_TOKEN} ${GITHUB_TOKEN:-unset}"
+)
+_PASS_THROUGH = ["/bin/sh", "-ec", 'exec "$@"', "--"]
+_AUTHORED_VALUE = "p@ss$HOME"
+_MOUNT_TARGET = "/run/${APTL_API_TOKEN}"
+_VOLUME_TARGET = "/var/lib/${INDEXER_PASSWORD}"
+
+
+def _authored_realization(
+    host_ip: str | None = "${bind_ip}",
+) -> DeploymentRealizationSpec:
+    """One generated service whose authored fields name Compose variables."""
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "container": {
+                "command": ["sh", "-c", _NAMED_VARIABLES],
+                "entrypoint": _PASS_THROUGH,
+            },
+            "environment": [{"name": "PLANTED", "value": _AUTHORED_VALUE}],
+            "mounts": [{"source_kind": "tmpfs", "target": _MOUNT_TARGET}],
+        }
+    )
+    ports = () if host_ip is None else (DeploymentPublishedPort(80, host_ip=host_ip),)
+    node = replace(_service("app"), runtime=runtime, published_ports=ports)
+    consumer = DeploymentStatefulConsumer(
+        node.address, "app", "app", _VOLUME_TARGET, "read_write"
+    )
+    volume = DeploymentPersistentVolumeRealization(
+        "provision.volume.data", "data", "ephemeral", "read_write_once", (consumer,)
+    )
+    return replace(_realization(node), persistent_volumes=(volume,))
+
+
+def _interpolates_nothing(text: str) -> bool:
+    """Compose reads `$$` as one literal `$`, so even runs leave nothing to fill."""
+
+    return all(len(run) % 2 == 0 for run in re.findall(r"\$+", text))
+
+
+def _generated_files(backend, realization, root: Path) -> tuple[Path, ...]:
+    """Write the generated base and every override APTL adds to it."""
+
+    assert backend._environment_binding_preflight(realization, root) is None
+    base = base_compose_file(realization, root)
+    files = backend._realization_compose_files((base,), realization, root)
+    assert files is not None
+    return files
+
+
+def test_every_generated_compose_file_writes_authored_text_as_a_literal(tmp_path):
+    """Command, entrypoint, value, mount paths and host address: no `$` is live."""
+
+    realization = _authored_realization()
+    files = _generated_files(DockerComposeBackend(tmp_path), realization, tmp_path)
+    text = {path.name: path.read_text(encoding="utf-8") for path in files}
+
+    for name in ("compose-base.yml", "compose.ports.yml", "compose.stateful.yml"):
+        assert _interpolates_nothing(text[name])
+    assert "$${INDEXER_PASSWORD}" in text["compose.stateful.yml"]
+    assert "$${bind_ip}" in text["compose.ports.yml"]
+    base = yaml.safe_load(text["compose-base.yml"])
+    assert compose_readback(base) == render_realization_compose(realization)
+
+
+def test_the_generated_model_check_reads_escaped_text_back_as_values(
+    tmp_path, monkeypatch
+):
+    """The uninterpolated readback keeps `$$` and still matches the runtime."""
+
+    realization = _realization(*_authored_realization().nodes)
+    backend = DockerComposeBackend(tmp_path)
+    base = base_compose_file(realization, tmp_path)
+    readback = json.dumps(yaml.safe_load(base.read_text(encoding="utf-8")))
+    monkeypatch.setattr(
+        backend,
+        "_run",
+        lambda cmd, **_: subprocess.CompletedProcess(cmd, 0, readback, ""),
+    )
+
+    command = ["docker", "compose", "config"]
+    assert backend._effective_compose_model_error(command, realization, tmp_path) is None
+
+
+def _require_compose_cli() -> None:
+    """Skip unless the Compose CLI runs; ``config`` needs no Docker daemon."""
+
+    if shutil.which("docker") is None or (
+        subprocess.run(["docker", "compose", "version"], capture_output=True).returncode
+    ):
+        pytest.skip("requires the Docker Compose CLI")
+
+
+def test_compose_never_fills_a_variable_that_pack_text_names(tmp_path, monkeypatch):
+    """Canary through Compose: no `.env` or client value reaches authored text.
+
+    Before #965, an authored ``${INDEXER_PASSWORD}`` in a command was filled
+    from `.env` with no grant, and ``${HTTPS_PROXY}`` from the kept client
+    proxy setting, which can carry credentials. ``docker compose config``
+    interpolates the model as ``up`` does, without a daemon;
+    :func:`compose_readback` reads any ``$$`` it prints as the ``$`` the
+    container receives.
+    """
+
+    _require_compose_cli()
+    wazuh = f"wazuh-{uuid.uuid4().hex[:12]}"
+    grafana = f"grafana-{uuid.uuid4().hex[:12]}"
+    (tmp_path / ".env").write_text(
+        f"INDEXER_PASSWORD={wazuh}\nGRAFANA_ADMIN_PASSWORD={grafana}\n"
+        "bind_ip=0.0.0.0\n",
+        encoding="utf-8",
+    )
+    proxy_host = f"proxy-{uuid.uuid4().hex[:12]}.example.test"
+    monkeypatch.setenv("HTTPS_PROXY", f"http://{proxy_host}:3128")
+    monkeypatch.setenv("APTL_API_TOKEN", _GRANTED)
+    monkeypatch.setenv("GITHUB_TOKEN", _CANARY)
+    backend = DockerComposeBackend(tmp_path)
+
+    def config(realization: DeploymentRealizationSpec) -> list[str]:
+        files = _generated_files(backend, realization, tmp_path)
+        return backend._build_command(
+            "config", [], compose_files=files, scenario_root=tmp_path
+        )
+
+    realization = _authored_realization(host_ip=None)
+    result = backend._run([*config(realization), "--format", "json"])
+
+    assert result.returncode == 0, result.stderr
+    for value in (wazuh, grafana, proxy_host, _GRANTED, _CANARY):
+        assert value not in result.stdout
+    app = compose_readback(json.loads(result.stdout)["services"]["app"])
+    assert app["command"] == ["sh", "-c", _NAMED_VARIABLES]
+    assert app["entrypoint"] == _PASS_THROUGH
+    assert app["environment"]["PLANTED"] == _AUTHORED_VALUE
+    assert {mount["target"] for mount in app["volumes"]} == {
+        _MOUNT_TARGET,
+        _VOLUME_TARGET,
+    }
+    # The pre-start model check accepts the escaped model Compose reads back.
+    command = config(realization)
+    assert backend._effective_compose_model_error(command, realization, tmp_path) is None
+    # A host address naming `.env`'s bind_ip never binds all interfaces.
+    published = backend._run([*config(_authored_realization()), "--format", "json"])
+    assert "0.0.0.0" not in published.stdout
+
+
 def test_compose_gives_a_granted_value_to_its_service_only(tmp_path, monkeypatch):
     """Readback through Compose itself: another service's `${NAME}` stays empty.
 
@@ -531,10 +716,7 @@ def test_compose_gives_a_granted_value_to_its_service_only(tmp_path, monkeypatch
     name, such as APTL's own observability services.
     """
 
-    if shutil.which("docker") is None or (
-        subprocess.run(["docker", "compose", "version"], capture_output=True).returncode
-    ):
-        pytest.skip("requires the Docker Compose CLI")
+    _require_compose_cli()
     monkeypatch.setenv("DB_PASSWORD", _CANARY)
     monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
     backend = DockerComposeBackend(
@@ -622,6 +804,24 @@ def test_the_released_techvault_pack_binds_from_its_own_adapter(
     } == _TECHVAULT_SOURCED
     assert _CANARY not in "".join(delivered.values())
     assert _CANARY not in _compose_env(backend, monkeypatch).values()
+
+
+def test_the_released_techvault_model_is_escaped_and_passes_the_model_check(
+    techvault, tmp_path
+):
+    """The catalog's misp-redis `"$@"` pass-through is written as `"$$@"`."""
+
+    text = base_compose_file(techvault, tmp_path).read_text(encoding="utf-8")
+    model = yaml.safe_load(text)
+
+    entrypoint = model["services"]["misp-redis"]["entrypoint"]
+    assert entrypoint[2].endswith('exec docker-entrypoint.sh "$$@"')
+    assert _interpolates_nothing(text)
+    readback = compose_readback(model)
+    issues = effective_runtime_contract_issues(
+        readback, techvault, profile=SHARED_DOCKER_PROFILE
+    )
+    assert issues == ()
 
 
 def test_the_released_techvault_pack_without_its_env_stops_before_mutation(

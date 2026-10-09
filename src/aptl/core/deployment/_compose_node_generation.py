@@ -22,7 +22,10 @@ from pathlib import Path
 
 import yaml
 
-from aptl.core.deployment._compose_runtime_config import _operational_config
+from aptl.core.deployment._compose_runtime_config import (
+    _operational_config,
+    compose_literal,
+)
 from aptl.core.deployment._compose_runtime_orchestration import (
     docker_authority_admissions_by_address,
     docker_socket_volume,
@@ -194,12 +197,17 @@ _DEFAULT_IMAGE_NODE_ULIMITS = {
 def write_realization_compose(
     spec: DeploymentRealizationSpec, scenario_root: Path
 ) -> Path:
-    """Render and write the generated base Compose file under ``scenario_root``."""
+    """Render and write the generated base Compose file under ``scenario_root``.
+
+    Every string is written as a Compose literal, so Compose interpolates
+    nothing the scenario authors, such as a command (issue #965).
+    """
 
     path = scenario_root / GENERATED_COMPOSE_RELPATH
     path.parent.mkdir(parents=True, exist_ok=True)
+    document = compose_literal(render_realization_compose(spec))
     path.write_text(
-        yaml.safe_dump(render_realization_compose(spec), sort_keys=True),
+        yaml.safe_dump(document, sort_keys=True),
         encoding="utf-8",
         newline="\n",
     )

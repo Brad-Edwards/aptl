@@ -24,6 +24,7 @@ from aptl.core.deployment._compose_node_generation import (
     base_compose_file,
 )
 from aptl.core.deployment._compose_port_realization import write_port_override
+from aptl.core.deployment._compose_runtime_config import compose_readback
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
     stateful_override_payload,
@@ -250,7 +251,9 @@ class ComposeRealizationModelMixin:
 
         ``realization_root`` is where generated artifacts and their mount sources
         live; the expected-mount set is computed against it so it matches the
-        override that was actually written (issue #875).
+        override that was actually written (issue #875). The generated files
+        write each ``$`` as ``$$``, so the uninterpolated model is read back as
+        the values Compose delivers before it is compared (issue #965).
         """
 
         command.extend(["--no-interpolate", "--format", "json"])
@@ -258,7 +261,7 @@ class ComposeRealizationModelMixin:
         if result.returncode != 0:
             return _COMPOSE_MODEL_VALIDATION_ERROR
         try:
-            payload = json.loads(result.stdout)
+            payload = compose_readback(json.loads(result.stdout))
         except (TypeError, ValueError):
             return _COMPOSE_MODEL_VALIDATION_ERROR
         errors = effective_stateful_model_errors(

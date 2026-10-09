@@ -111,12 +111,21 @@ the value in `.env` instead.
 
 A Compose service receives each grant or startup-adapter value through its own
 owner-only env file under `.aptl/realization/sourced-environment/`, which a
-generated override attaches to that service alone. The value is never written
-as a `${NAME}` reference. Compose resolves those references from one
-environment that every service and every Compose file of the project share, so
-a reference would let a value granted to one node reach another service, or
-APTL's own Grafana. An in-tree scenario that ships its own `docker-compose.yml`
-keeps its own references, resolved from `.env`.
+generated override attaches to that service alone. That file cannot carry a
+value that contains a single quote or ends in an odd number of backslashes, so
+such a value stops `aptl lab start` at the same point as a missing source. The
+value is never written as a `${NAME}` reference. Compose resolves those
+references from one environment that every service and every Compose file of
+the project share, so a reference would let a value granted to one node reach
+another service, or APTL's own Grafana. An in-tree scenario that ships its own
+`docker-compose.yml` keeps its own references, resolved from `.env`.
+
+The Compose model that APTL generates from a scenario names no variable for
+Compose to fill. APTL writes each `$` in scenario-authored text, such as a
+command, an environment value, a mount path or a host address, as `$$`, which
+Compose reads as one literal `$`. A `${INDEXER_PASSWORD}` in a node's command
+therefore reaches the container as written instead of as the `.env` value, and
+a container-shell `"$@"` reaches the shell unchanged.
 
 A grant names the admitted pack's identifier, the consuming node, the variable
 that node declares, and the source. The source is either an exact variable of

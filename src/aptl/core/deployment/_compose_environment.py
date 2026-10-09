@@ -64,8 +64,9 @@ SOURCED_ENVIRONMENT_DIR = ".aptl/realization/sourced-environment"
 SOURCED_ENVIRONMENT_OVERRIDE = f"{SOURCED_ENVIRONMENT_DIR}/compose.override.yml"
 
 #: Variables the ``docker compose`` client itself reads: toolchain, locale, TLS
-#: trust and temporary paths, credential-helper locations, Docker client
-#: transport, Compose behaviour, and proxies. None of them is a scenario value.
+#: trust and temporary paths, credential-helper locations, the Windows plugin
+#: directory (``%ProgramFiles%\Docker\cli-plugins``), Docker client transport,
+#: Compose behaviour, and proxies. None of them is a scenario value.
 #: ``COMPOSE_FILE``, ``COMPOSE_PROFILES`` and ``COMPOSE_PROJECT_NAME`` stay out:
 #: APTL selects the model itself.
 COMPOSE_CLIENT_VARIABLES = frozenset(
@@ -74,8 +75,8 @@ COMPOSE_CLIENT_VARIABLES = frozenset(
         "XDG_CONFIG_HOME XDG_RUNTIME_DIR XDG_CACHE_HOME XDG_DATA_HOME SSH_AUTH_SOCK "
         "SSL_CERT_FILE SSL_CERT_DIR DBUS_SESSION_BUS_ADDRESS GNUPGHOME "
         "PASSWORD_STORE_DIR "
-        "USERPROFILE HOMEDRIVE HOMEPATH APPDATA LOCALAPPDATA PROGRAMDATA SYSTEMROOT "
-        "WINDIR COMSPEC PATHEXT "
+        "USERPROFILE HOMEDRIVE HOMEPATH APPDATA LOCALAPPDATA PROGRAMDATA PROGRAMFILES "
+        "SYSTEMROOT WINDIR COMSPEC PATHEXT "
         "DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG DOCKER_CERT_PATH DOCKER_TLS "
         "DOCKER_TLS_VERIFY DOCKER_API_VERSION DOCKER_SSH_IDENTITY "
         "DOCKER_DEFAULT_PLATFORM DOCKER_BUILDKIT DOCKER_CLI_HINTS "

@@ -88,8 +88,8 @@ to make a naming change pass.
 
 The extension seam is the separation already present in site metadata,
 packaging/CLI contracts, and the linked naming policy. Change display metadata
-without routing executable behavior through it. Keep the rule in the one
-planning artifact, linked to its ADR. A future package or CLI
+without routing executable behavior through it. Keep the rule in
+`.gc/plan-rules.md`, linked to its ADR. A future package or CLI
 cutover can use the existing packaging and command-registration seams after
 its own compatibility decision; no brand registry, environment toggle, wrapper,
 or alias matrix is warranted here.

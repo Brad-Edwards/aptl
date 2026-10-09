@@ -3,12 +3,13 @@
 # not by its product name (#1243). Literal configuration names stay
 # allowed: `.ground-control.yaml` is excluded below, and `.gc/` and
 # `gc_*` never match. The raw scope also catches a name that wraps
-# across lines inside a list item or blockquote. AGENTS.md and the
-# other agent-facing paths are outside Vale (see .vale.ini).
+# onto the next line inside a list item or blockquote. A blank line or
+# a new list item between the two words ends the match. AGENTS.md and
+# the other agent-facing paths are outside Vale (see .vale.ini).
 extends: existence
 message: "Use neutral wording such as 'the GRC workflow platform' instead of the product name '%s'."
 level: error
 ignorecase: true
 scope: raw
 tokens:
-  - '(?<!\.)ground[\s>*-]*control(?!\.ya?ml)'
+  - '(?<!\.)ground(?:[^\S\r\n]|[*-])*(?:\r?\n(?:[^\S\r\n]|>)*)?control(?!\.ya?ml)'

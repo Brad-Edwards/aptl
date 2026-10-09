@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+from time import monotonic
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Optional, cast
 from uuid import uuid4
@@ -1133,6 +1134,9 @@ class _LabStartContext(object):
     # second time.
     admitted_start: AdmittedScenarioStart | None = None
     admitted_surface: "AdmittedStartSurface | None" = None
+    # Wall-clock seconds the one admission took, reported in the start
+    # summary so a slow (registry-bound) admission is visible (#953).
+    admission_seconds: float | None = None
     # Optional content-identified startup enrichment selected through the
     # installed scenario adapter. Core treats the validated plan generically.
     scenario_startup: ScenarioStartupPlan | None = None
@@ -1734,6 +1738,7 @@ def _load_admitted_start_surface(
     admitted = None
     surface = None
     failure = None
+    admission_started = monotonic()
     try:
         admission_kwargs = (
             {
@@ -1767,6 +1772,7 @@ def _load_admitted_start_surface(
                 f"{redact(str(exc))}"
             ),
         )
+    ctx.admission_seconds = monotonic() - admission_started
     if failure is None and admitted is not None:
         failure = admitted.runtime_materialization_failure
     if failure is None:
@@ -2146,7 +2152,10 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     if ctx.offline_staged and pull_warnings:
         result = LabResult(
             success=False,
-            error="Offline staged Suricata image verification failed.",
+            error=(
+                "Offline staged Suricata image verification failed: "
+                f"{'; '.join(pull_warnings)}"
+            ),
         )
     if result is None:
         ownership = ensure_suricata_config_source_ownership(
@@ -2334,9 +2343,12 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
         log.warning(warning)
     if warnings:
         if ctx.offline_staged:
+            # Offline warnings name only the exact reference, never stderr.
             return LabResult(
                 success=False,
-                error="Offline staged image verification failed.",
+                error=(
+                    f"Offline staged image verification failed: {'; '.join(warnings)}"
+                ),
             )
         # Pre-pull is a latency optimization — Compose pulls on demand
         # when containers start. Surface as a cosmetic info diagnostic
@@ -4266,6 +4278,7 @@ def _orchestrate_lab_start_owned(
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
                 execution_boundary=ctx.execution_boundary,
+                admission_seconds=ctx.admission_seconds,
             )
         ctx.diagnostics.extend(stage.diagnostics)
         if stage.error is not None:
@@ -4279,6 +4292,7 @@ def _orchestrate_lab_start_owned(
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
                 execution_boundary=ctx.execution_boundary,
+                admission_seconds=ctx.admission_seconds,
             )
 
     if after_start is not None:
@@ -4304,6 +4318,7 @@ def _orchestrate_lab_start_owned(
         diagnostics=list(ctx.diagnostics),
         resolved_ports=list(ctx.resolved_ports),
         execution_boundary=ctx.execution_boundary,
+        admission_seconds=ctx.admission_seconds,
     )
 
 

@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 import re
+from typing import Any
 
 EXACT_IMAGE_INSPECT_FORMAT = (
     "{{json .RepoDigests}}\t{{.Id}}\t{{.Os}}/{{.Architecture}}"
     '{{with index . "Variant"}}/{{.}}{{end}}'
 )
+# What the selected daemon holds under one reference, read without a registry.
+LOCAL_IMAGE_PRESENT = "present"
+LOCAL_IMAGE_MISSING = "missing"
+LOCAL_IMAGE_MISMATCHED = "digest-mismatched"
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
@@ -92,6 +98,38 @@ def exact_inspected_image_identity(
     ):
         identity = ExactDockerImageIdentity(image_id=image_id, platform=platform)
     return identity
+
+
+def is_exact_image_reference(image_ref: str) -> bool:
+    """Whether a reference pins one immutable image by its sha256 digest.
+
+    A tag alone is mutable, so it never proves which image a name resolves to.
+    """
+
+    return _canonical_repo_digest(image_ref) is not None
+
+
+def local_image_state(run: Callable[..., Any], image_ref: str, *, timeout: int) -> str:
+    """Read what the selected daemon holds under one reference (#953).
+
+    An exact (digest-pinned) reference counts as present only when the
+    daemon's own repo digests prove the pinned digest; resolving the name is
+    not enough. Any other reference, such as a component built during backend
+    preparation, only has to be present. ``run`` is the backend's list-form
+    runner and this issues one local inspection, never a registry request.
+    """
+
+    exact = is_exact_image_reference(image_ref)
+    output_format = ["--format", EXACT_IMAGE_INSPECT_FORMAT] if exact else []
+    result = run(
+        ["docker", "image", "inspect", *output_format, image_ref], timeout=timeout
+    )
+    state = LOCAL_IMAGE_PRESENT
+    if result.returncode != 0:
+        state = LOCAL_IMAGE_MISSING
+    elif exact and exact_inspected_image_identity(result.stdout, image_ref) is None:
+        state = LOCAL_IMAGE_MISMATCHED
+    return state
 
 
 def authored_tag_reference(image_ref: str) -> str | None:

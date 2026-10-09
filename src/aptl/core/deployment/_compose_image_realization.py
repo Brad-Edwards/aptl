@@ -10,6 +10,11 @@ from aptl.core.deployment._compose_node_generation import base_compose_file
 from aptl.core.deployment._compose_spawn_image_realization import (
     prepare_spawn_images,
 )
+from aptl.core.deployment._docker_image_identity import (
+    LOCAL_IMAGE_PRESENT,
+    is_exact_image_reference,
+    local_image_state,
+)
 from aptl.core.deployment.realization import (
     DeploymentImageRealization,
     DeploymentRealizationSpec,
@@ -293,17 +298,19 @@ class ComposeRealizationImageMixin:
         self,
         image: DeploymentImageRealization,
     ) -> LabResult | None:
-        """Fail closed when an offline appliance did not stage an exact image."""
+        """Fail closed, naming the reference, when a staged image is unproven."""
 
-        result = self._run(
-            ["docker", "image", "inspect", image.image_ref],
-            timeout=_IMAGE_REALIZATION_TIMEOUT,
+        state = local_image_state(
+            self._run, image.image_ref, timeout=_IMAGE_REALIZATION_TIMEOUT
         )
-        if result.returncode == 0:
+        if state == LOCAL_IMAGE_PRESENT:
             return None
         return LabResult(
             success=False,
-            error=f"Staged image missing for RAES node {image.address}.",
+            error=(
+                f"Staged image {state} for RAES node {image.address}: "
+                f"{image.image_ref}"
+            ),
         )
 
     def _realize_image(
@@ -341,8 +348,19 @@ class ComposeRealizationImageMixin:
         self,
         image: DeploymentImageRealization,
     ) -> LabResult | None:
-        """Pull one scenario-resolved image reference."""
+        """Use a proven local copy of an exact image, or pull the reference.
 
+        A tag is mutable, so it is not identity evidence and is still pulled,
+        as is an exact image the daemon cannot prove (#953).
+        """
+
+        if is_exact_image_reference(image.image_ref) and (
+            local_image_state(
+                self._run, image.image_ref, timeout=_IMAGE_REALIZATION_TIMEOUT
+            )
+            == LOCAL_IMAGE_PRESENT
+        ):
+            return None
         result = self._run(
             ["docker", "pull", image.image_ref],
             timeout=_IMAGE_REALIZATION_TIMEOUT,

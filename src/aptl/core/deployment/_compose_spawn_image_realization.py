@@ -134,23 +134,32 @@ def _prepare_one_image(
     requirement: DeploymentSpawnImageRequirement,
     expected: DockerPlatform,
 ) -> LabResult | None:
-    """Acquire when allowed, then attest one exact image and platform."""
+    """Attest one exact image and platform, acquiring it only when unproven.
+
+    An image the daemon already proves by repo digest and platform is used
+    without a registry lookup (#953). Otherwise an online start pulls it and
+    attests it again; an offline-staged start reports the local verdict.
+    """
 
     timeout = min(
         _IMAGE_REALIZATION_TIMEOUT,
         requirement.execution_timeout_seconds,
     )
-    failure = None
-    if not backend._offline_staged:
+    identity, failure = _inspect_spawn_image(
+        backend,
+        requirement,
+        expected,
+        timeout=timeout,
+    )
+    if failure is not None and not backend._offline_staged:
         failure = _pull_spawn_image(backend, requirement, timeout=timeout)
-    identity = None
-    if failure is None:
-        identity, failure = _inspect_spawn_image(
-            backend,
-            requirement,
-            expected,
-            timeout=timeout,
-        )
+        if failure is None:
+            identity, failure = _inspect_spawn_image(
+                backend,
+                requirement,
+                expected,
+                timeout=timeout,
+            )
     if failure is None and identity is not None and requirement.tag_reference:
         failure = _realize_authored_tag(
             backend,

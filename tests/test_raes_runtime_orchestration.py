@@ -1249,7 +1249,31 @@ def test_offline_child_image_platform_mismatch_is_stable_and_bounded(tmp_path) -
     )
 
 
-def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "local_copy",
+    [
+        pytest.param(
+            subprocess.CompletedProcess(
+                [], 1, stdout="", stderr=f"Error: No such image: {_CHILD_REF}\n"
+            ),
+            id="missing",
+        ),
+        pytest.param(
+            subprocess.CompletedProcess(
+                [],
+                0,
+                stdout=(
+                    f'["ghcr.io/example/alias@{_DIGEST}"]\t{_IMAGE_ID}\tlinux/amd64\n'
+                ),
+                stderr="",
+            ),
+            id="unproven-alias",
+        ),
+    ],
+)
+def test_online_child_image_not_proven_locally_is_pulled_and_verified(
+    tmp_path, local_copy
+) -> None:
     backend = DockerComposeBackend(tmp_path)
     backend.revalidate_local_docker_socket = MagicMock(
         return_value=LabResult(success=True)
@@ -1257,6 +1281,7 @@ def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) 
     backend._run = MagicMock(
         side_effect=[
             subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            local_copy,
             subprocess.CompletedProcess([], 0, stdout="", stderr=""),
             subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
         ]
@@ -1264,14 +1289,33 @@ def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) 
 
     assert backend._prepare_spawn_images(_spec()) is None
     commands = [call.args[0] for call in backend._run.call_args_list]
-    assert commands[1] == ["docker", "pull", _CHILD_REF]
-    assert commands[2][-1] == _CHILD_REF
+    assert commands[2] == ["docker", "pull", _CHILD_REF]
+    assert commands[3][-1] == _CHILD_REF
     # Docker omits Variant for images without an architecture variant. A
     # direct .Variant lookup makes the entire inspect command fail on amd64.
-    assert '{{with index . "Variant"}}/{{.}}{{end}}' in commands[2][4]
-    assert commands[2][4] == EXACT_IMAGE_INSPECT_FORMAT
-    assert backend._run.call_args_list[1].kwargs["timeout"] == 600
-    assert backend._run.call_args_list[2].kwargs["timeout"] == 600
+    assert '{{with index . "Variant"}}/{{.}}{{end}}' in commands[3][4]
+    assert commands[3][4] == EXACT_IMAGE_INSPECT_FORMAT
+    assert all(call.kwargs["timeout"] == 600 for call in backend._run.call_args_list[1:])
+
+
+def test_online_child_image_proven_locally_is_used_without_a_pull(tmp_path) -> None:
+    """A warm start reuses the exact child image the daemon proves (#953)."""
+    backend = DockerComposeBackend(tmp_path)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend._run = MagicMock(
+        side_effect=[
+            subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
+        ]
+    )
+
+    assert backend._prepare_spawn_images(_spec()) is None
+    commands = [call.args[0] for call in backend._run.call_args_list]
+    assert commands[1][:3] == ["docker", "image", "inspect"]
+    assert all("pull" not in command for command in commands)
+    assert all("manifest" not in command for command in commands)
 
 
 def test_arm64_variant_image_matches_daemon_native_variant(tmp_path) -> None:

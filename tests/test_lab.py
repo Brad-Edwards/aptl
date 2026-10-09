@@ -2308,6 +2308,25 @@ class TestOrchestrateLabStart:
         assert ["docker", "info", "--format", "{{json .SecurityOptions}}"] in issued
         assert all(cmd[:2] in (["docker", "info"], ["docker", "context"]) for cmd in issued)
 
+    @pytest.mark.parametrize("residue", [False, True], ids=["started", "refused"])
+    def test_start_result_carries_the_admission_duration(
+        self, mocker, tmp_path, residue
+    ):
+        """The summary's admission time survives success and later refusal (#953)."""
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        mocks["project_presence"].return_value = ProjectRuntimePresence(
+            container_count=1 if residue else 0
+        )
+        mocker.patch("aptl.core.lab.monotonic", side_effect=[50.0, 54.25])
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is not residue
+        assert result.admission_seconds == pytest.approx(4.25)
+
     def test_handles_empty_profiles(self, mocker, tmp_path):
         """Should work when all containers are disabled (C6)."""
         from aptl.core.lab import orchestrate_lab_start
@@ -2350,7 +2369,7 @@ class TestOrchestrateLabStart:
         assert result.success is False
 
     def test_pre_pull_runs_before_compose_up(self, mocker, tmp_path):
-        """Should call docker pull for images before compose up."""
+        """Images the daemon lacks are pulled before compose up."""
         from aptl.core.lab import (
             _LAB_START_STEPS,
             _step_pull_images,
@@ -2359,6 +2378,12 @@ class TestOrchestrateLabStart:
         )
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+
+        def daemon_without_images(cmd, **_kwargs):
+            absent = cmd[:3] == ["docker", "image", "inspect"]
+            return MagicMock(returncode=1 if absent else 0, stdout="", stderr="")
+
+        mocks["mcp_subprocess"].side_effect = daemon_without_images
 
         step_names = [step.__name__ for step in _LAB_START_STEPS]
         assert step_names.index(_step_pull_images.__name__) < step_names.index(
@@ -2437,6 +2462,29 @@ class TestAdmittedStartSurface:
         assert _load_admitted_start_surface(ctx) is None
 
         assert admit.call_args.kwargs["scenario_path"] == selected
+
+    @pytest.mark.parametrize("admitted", [True, False], ids=["admitted", "rejected"])
+    def test_admission_duration_is_recorded_for_the_start_summary(
+        self, mocker, tmp_path, admitted
+    ):
+        """How long the one admission took is kept, whatever its verdict (#953)."""
+        from aptl.core.lab import _load_admitted_start_surface
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(
+                _admitted_start_fixture(tmp_path),
+                _admitted_surface(tmp_path, env_pack=False),
+            ),
+            side_effect=None if admitted else ValueError("fixture rejection"),
+        )
+        mocker.patch("aptl.core.lab.monotonic", side_effect=[100.0, 112.5])
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert (result is None) is admitted
+        assert ctx.admission_seconds == pytest.approx(12.5)
 
     def test_admitted_facts_are_cached_for_the_later_steps(self, mocker, tmp_path):
         """Ownership, the admission itself, and the surface all land on ctx."""
@@ -3139,6 +3187,23 @@ class TestSeedSuricataVolumesStep:
         )
         assert pull_call < seed_call
 
+    def test_offline_missing_seeder_image_is_named_before_any_seed(self, tmp_path):
+        from aptl.core.lab import SURICATA_IMAGE, _step_seed_suricata_volumes
+
+        _write_suricata_seed_sources(tmp_path)
+        backend = MagicMock()
+        backend.pull_images.return_value = [
+            f"Required staged image is missing: {SURICATA_IMAGE}"
+        ]
+        ctx = self._ctx(tmp_path, backend)
+        ctx.offline_staged = True
+
+        result = _step_seed_suricata_volumes(ctx)
+
+        assert result is not None
+        assert SURICATA_IMAGE in result.error
+        backend.seed_named_volumes.assert_not_called()
+
     def test_seed_error_aborts_lab_start_step(self, tmp_path, caplog):
         from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.lab import _step_seed_suricata_volumes
@@ -3470,6 +3535,27 @@ class TestStartupClassificationWiring:
         assert "connection reset" not in diag.message
         assert "rate limit" not in diag.message
         assert "2" in diag.message  # number of failed images
+
+    def test_offline_pull_images_failure_names_each_missing_image(self, tmp_path):
+        """Offline-staged start fails by naming the exact images to stage (#953)."""
+        from aptl.core.lab import WAZUH_IMAGE_VERSION, _step_pull_images
+
+        ctx = self._ctx(tmp_path)
+        ctx.offline_staged = True
+        missing = [
+            f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
+            f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
+        ]
+        ctx.backend.pull_images.return_value = [
+            f"Required staged image is missing: {image}" for image in missing
+        ]
+
+        result = _step_pull_images(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert all(image in result.error for image in missing)
+        assert ctx.diagnostics == []
 
     # -- wait_for_services (backend-owned Wazuh attestation) -------------
 

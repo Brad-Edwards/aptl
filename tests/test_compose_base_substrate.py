@@ -11,6 +11,7 @@ cannot regress silently again.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -1282,6 +1283,11 @@ class TestInitRunFlagsPosture:
         assert flags[flags.index("--cap-add") + 1] == "NET_ADMIN"
 
 
+# Grant values built at run time, so no password-shaped literal is in the source.
+_CURRENT = f"current-{uuid.uuid4().hex[:12]}"
+_PREVIOUS = f"previous-{uuid.uuid4().hex[:12]}"
+
+
 class TestBaseContainerReuseRejectsDrift:
     """issue #955: a running container is reused only when it still matches the
     spec that would be created now.
@@ -1494,6 +1500,88 @@ class TestBaseContainerReuseRejectsDrift:
         assert not backend._base_container_already_realized(
             _CONTAINER_ID, self._provider_spec(), "aptl/generic-samba-ad-base:latest"
         )
+
+    def _granted(self, tmp_path):
+        """A backend whose preflight granted db's DB_PASSWORD from LAB_DB_PASSWORD."""
+
+        import os
+
+        from aptl.core.config import EnvironmentGrant
+        from aptl.core.deployment._environment_bindings import (
+            EnvironmentBindingContext,
+        )
+
+        grant = EnvironmentGrant(
+            pack="techvault",
+            consumer="db",
+            variable="DB_PASSWORD",
+            source={"kind": "process-environment", "variable": "LAB_DB_PASSWORD"},
+        )
+        backend = _backend(tmp_path)
+        backend._environment_binding_context = EnvironmentBindingContext(
+            pack_id="techvault", grants=(grant,), process_environment=os.environ
+        )
+        backend._environment_consumers = {"provision.node.db": "db"}
+        spec = replace(
+            self._spec(),
+            environment_names=("DB_PASSWORD",),
+            environment_sourced=("DB_PASSWORD",),
+        )
+        return backend, spec
+
+    @pytest.mark.parametrize(
+        ("realized", "label", "reused"),
+        [
+            pytest.param(f"DB_PASSWORD={_CURRENT}", "DB_PASSWORD", True, id="same"),
+            pytest.param(
+                f"DB_PASSWORD={_PREVIOUS}", "DB_PASSWORD", False, id="changed-source"
+            ),
+            pytest.param(None, "DB_PASSWORD", False, id="variable-missing"),
+            pytest.param(
+                f"DB_PASSWORD={_CURRENT}",
+                "DB_PASSWORD,OLD_TOKEN",
+                False,
+                id="still-carries-an-unbound-variable",
+            ),
+            pytest.param(f"DB_PASSWORD={_CURRENT}", None, False, id="unlabelled"),
+        ],
+    )
+    def test_a_changed_source_is_not_reused_with_the_old_value(
+        self, tmp_path, monkeypatch, realized, label, reused
+    ):
+        # Changed source (#965): the posture check leaves environment out, so a
+        # container started with an old grant value would otherwise be kept.
+        # The bound-names label also catches a variable that is no longer bound.
+        monkeypatch.setenv("LAB_DB_PASSWORD", _CURRENT)
+        backend, spec = self._granted(tmp_path)
+        info = self._inspect()
+        info["Config"]["Env"] = ["PATH=/usr/bin", *([realized] if realized else [])]
+        if label is not None:
+            info["Config"]["Labels"]["aptl.environment.names"] = label
+        backend._raw_container_inspect = MagicMock(return_value=info)
+
+        assert (
+            backend._base_container_already_realized(
+                _CONTAINER_ID, spec, "aptl/generic-systemd-base-debian:latest"
+            )
+            is reused
+        )
+
+    def test_a_missing_binding_fails_before_the_recreate_path_removes_anything(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.delenv("LAB_DB_PASSWORD", raising=False)
+        backend, spec = self._granted(tmp_path)
+        backend._raw_container_inspect = MagicMock()
+        backend._run = MagicMock()
+
+        with pytest.raises(BackendSeedError, match="has no value"):
+            backend._base_container_already_realized(
+                _CONTAINER_ID, spec, "aptl/generic-systemd-base-debian:latest"
+            )
+
+        backend._raw_container_inspect.assert_not_called()
+        backend._run.assert_not_called()
 
 
 class TestSubstrateDaemonGateInStartPath:

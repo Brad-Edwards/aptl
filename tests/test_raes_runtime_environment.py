@@ -10,6 +10,12 @@ back.
 The security property under test is that a value never reaches process argv.
 Environment carries credentials; `-e NAME=value` would expose them to any local
 process able to read `/proc`, and to anything that echoes the command.
+
+A matching name is not authority to read a value (issue #965). A declared
+variable takes its authored value (or none), a generated output, an operator
+grant for its pack and node, or the admitted pack's startup adapter value. The
+canary tests below plant same-named values in this process's environment and
+in `.env` and show that neither reaches the container on its own.
 """
 
 from __future__ import annotations
@@ -21,12 +27,16 @@ import stat
 import subprocess
 import tarfile
 import uuid
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from raes.parser import parse_sdl_file
 
 from aptl.backends.raes_base_substrate import BaseContainerSpec, _environment_names
+from aptl.core.config import EnvironmentGrant
+from aptl.core.deployment._environment_bindings import EnvironmentBindingContext
 from aptl.core.deployment.errors import BackendSeedError
 from tests.helpers import techvault_scenario_path
 
@@ -59,14 +69,77 @@ def _append(spec: BaseContainerSpec, project_dir: Path) -> list[str]:
     return argv
 
 
-def _spec(names: tuple[str, ...]) -> BaseContainerSpec:
+def _spec(
+    names: tuple[str, ...],
+    *,
+    sourced: tuple[str, ...] = (),
+    defaults: tuple[tuple[str, str], ...] = (),
+    node: str = "webapp",
+) -> BaseContainerSpec:
     return BaseContainerSpec(
-        node_address="provision.node.webapp",
-        container_name="aptl-webapp",
+        node_address=f"provision.node.{node}",
+        container_name=f"aptl-{node}",
         image_ref="debian:13-slim",
         runs_services=True,
         environment_names=names,
+        environment_defaults=defaults,
+        environment_sourced=sourced,
     )
+
+
+_CANARY = "ambient-canary-value"
+# Granted values are built at run time, so no password-shaped literal sits in
+# the source for a secret scanner to flag.
+_GRANTED = f"granted-{uuid.uuid4().hex[:12]}"
+_OTHER = f"other-{uuid.uuid4().hex[:12]}"
+
+
+def _grant(
+    variable: str,
+    source: str,
+    *,
+    kind: str = "process-environment",
+    pack: str = "techvault",
+    consumer: str = "webapp",
+) -> EnvironmentGrant:
+    return EnvironmentGrant(
+        pack=pack,
+        consumer=consumer,
+        variable=variable,
+        source={"kind": kind, "variable": source},
+    )
+
+
+def _granting(
+    project_dir: Path,
+    *grants: EnvironmentGrant,
+    pack: str | None = "techvault",
+    adapter_names: frozenset[str] = frozenset(),
+):
+    """A backend whose preflight recorded these grants for one admitted pack."""
+
+    from aptl.core.env import load_dotenv
+
+    backend = _backend(project_dir)
+    env_file = project_dir / ".env"
+    backend._environment_binding_context = EnvironmentBindingContext(
+        pack_id=pack,
+        adapter_names=adapter_names,
+        grants=grants,
+        project_environment=load_dotenv(env_file) if env_file.exists() else {},
+        process_environment=os.environ,
+    )
+    backend._environment_consumers = {
+        "provision.node.webapp": "webapp",
+        "provision.node.db": "db",
+    }
+    return backend
+
+
+def _bound_body(backend, spec: BaseContainerSpec) -> str:
+    argv: list[str] = []
+    backend._append_base_environment(argv, spec)
+    return Path(argv[1]).read_text(encoding="utf-8")
 
 
 def test_closed_pack_environment_is_not_invented(scenario_path):
@@ -80,42 +153,56 @@ def test_closed_pack_environment_is_not_invented(scenario_path):
 def test_secret_values_never_reach_process_argv(tmp_path, monkeypatch):
     """Values are bound through a file, never as -e NAME=value."""
 
-    monkeypatch.setenv("DB_PASSWORD", "s3cret-value")
-    monkeypatch.setenv("DB_HOST", "db")
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = _granting(tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD"))
+    spec = _spec(
+        ("DB_HOST", "DB_PASSWORD"),
+        sourced=("DB_PASSWORD",),
+        defaults=(("DB_HOST", "db"),),
+    )
 
-    argv = _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path)
+    argv: list[str] = []
+    backend._append_base_environment(argv, spec)
 
     assert argv[0] == "--env-file"
     assert not any(arg.startswith("-e") for arg in argv)
     joined = " ".join(argv)
-    assert "s3cret-value" not in joined
+    assert _GRANTED not in joined
     assert "DB_PASSWORD=" not in joined
 
 
 def test_env_file_is_owner_only_and_carries_the_bindings(tmp_path, monkeypatch):
     """The file holding credentials is not readable by other local users."""
 
-    monkeypatch.setenv("DB_PASSWORD", "s3cret-value")
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = _granting(tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD"))
 
-    argv = _append(_spec(("DB_PASSWORD",)), tmp_path)
+    argv: list[str] = []
+    backend._append_base_environment(
+        argv, _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+    )
     path = Path(argv[1])
 
-    assert path.read_text(encoding="utf-8") == "DB_PASSWORD=s3cret-value\n"
+    assert path.read_text(encoding="utf-8") == f"DB_PASSWORD={_GRANTED}\n"
     mode = stat.S_IMODE(path.stat().st_mode)
     assert mode == stat.S_IRUSR | stat.S_IWUSR, oct(mode)
 
 
-def test_absent_variable_is_omitted_rather_than_bound_empty(tmp_path, monkeypatch):
-    """A missing value must not become a silently blank credential."""
+def test_a_valueless_declaration_is_delivered_empty_not_inherited(
+    tmp_path, monkeypatch
+):
+    """A plain variable declared without a value is realized empty, as declared.
 
-    monkeypatch.delenv("DB_PASSWORD", raising=False)
-    monkeypatch.setenv("DB_HOST", "db")
+    The same-named canaries in this process's environment and in `.env` are
+    exactly what the old name matching bound into the container.
+    """
 
-    argv = _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path)
-    body = Path(argv[1]).read_text(encoding="utf-8")
+    monkeypatch.setenv("DB_HOST", _CANARY)
+    (tmp_path / ".env").write_text(f"DB_HOST={_CANARY}-dotenv\n", encoding="utf-8")
 
-    assert body == "DB_HOST=db\n"
-    assert "DB_PASSWORD" not in body
+    body = _bound_body(_granting(tmp_path), _spec(("DB_HOST",)))
+
+    assert body == "DB_HOST=\n"
 
 
 def test_node_declaring_no_environment_binds_nothing(tmp_path):
@@ -136,13 +223,21 @@ def test_a_node_that_binds_nothing_keeps_no_earlier_env_file(tmp_path):
     assert not stale.exists()
 
 
-def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
-    """All declared variables absent yields no file rather than an empty one."""
+def test_an_ungranted_secret_is_refused_not_inherited(tmp_path, monkeypatch):
+    """Missing binding: a same-named canary is never taken as authority."""
 
-    monkeypatch.delenv("DB_PASSWORD", raising=False)
-    monkeypatch.delenv("DB_HOST", raising=False)
+    monkeypatch.setenv("DB_PASSWORD", _CANARY)
+    (tmp_path / ".env").write_text(f"DB_PASSWORD={_CANARY}\n", encoding="utf-8")
+    backend = _granting(tmp_path)
+    spec = _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
 
-    assert _append(_spec(("DB_HOST", "DB_PASSWORD")), tmp_path) == []
+    argv: list[str] = []
+    with pytest.raises(BackendSeedError, match="no environment grant") as excinfo:
+        backend._append_base_environment(argv, spec)
+
+    assert _CANARY not in str(excinfo.value)
+    assert argv == []
+    assert not (tmp_path / ".aptl").exists()
 
 
 def test_closed_node_mounts_are_not_invented(scenario_path):
@@ -177,32 +272,33 @@ def test_closed_node_mounts_are_not_invented(scenario_path):
     }
 
 
-def test_values_come_from_the_project_credential_boundary(tmp_path, monkeypatch):
-    """APTL keeps values in the generated .env, never in this process.
+def test_the_project_env_file_is_read_only_through_a_grant(tmp_path):
+    """A `project-env-file` grant reads exactly the key it names."""
 
-    Reading only ``os.environ`` produced no bindings at all during a real lab
-    start, because the lab-start process never exports them. The project's
-    dotenv boundary is the actual source.
-    """
+    (tmp_path / ".env").write_text(
+        f"DB_PASSWORD={_CANARY}\nLAB_DB_PASSWORD={_GRANTED}\n", encoding="utf-8"
+    )
+    grant = _grant("DB_PASSWORD", "LAB_DB_PASSWORD", kind="project-env-file")
 
-    monkeypatch.delenv("DB_HOST", raising=False)
-    (tmp_path / ".env").write_text("DB_HOST=db\n", encoding="utf-8")
+    body = _bound_body(
+        _granting(tmp_path, grant), _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+    )
 
-    argv = _append(_spec(("DB_HOST",)), tmp_path)
-
-    assert argv[0] == "--env-file"
-    assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=db\n"
+    assert body == f"DB_PASSWORD={_GRANTED}\n"
 
 
-def test_process_environment_overrides_the_project_file(tmp_path, monkeypatch):
-    """An operator can override one variable without editing credentials."""
+def test_the_process_environment_is_read_only_through_a_grant(tmp_path, monkeypatch):
+    """A `process-environment` grant reads its variable, not the target's name."""
 
-    (tmp_path / ".env").write_text("DB_HOST=from-file\n", encoding="utf-8")
-    monkeypatch.setenv("DB_HOST", "from-operator")
+    monkeypatch.setenv("DB_PASSWORD", _CANARY)
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    grant = _grant("DB_PASSWORD", "LAB_DB_PASSWORD")
 
-    argv = _append(_spec(("DB_HOST",)), tmp_path)
+    body = _bound_body(
+        _granting(tmp_path, grant), _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+    )
 
-    assert Path(argv[1]).read_text(encoding="utf-8") == "DB_HOST=from-operator\n"
+    assert body == f"DB_PASSWORD={_GRANTED}\n"
 
 
 def test_closed_pack_environment_has_no_backend_defaults(scenario_path):
@@ -215,34 +311,381 @@ def test_closed_pack_environment_has_no_backend_defaults(scenario_path):
     assert defaults == {}
 
 
-def test_credentials_and_operator_overrides_beat_authored_defaults(
+def test_authored_values_survive_same_named_ambient_and_project_values(
     tmp_path, monkeypatch
 ):
-    """Precedence is operator, then project credentials, then authored default."""
+    """An authored fixture or setting is delivered exactly as written."""
 
-    from aptl.backends.raes_base_substrate import BaseContainerSpec
+    (tmp_path / ".env").write_text(f"DB_NAME={_CANARY}\n", encoding="utf-8")
+    monkeypatch.setenv("DB_HOST", _CANARY)
+    grant = _grant("DB_HOST", "LAB_DB_HOST")
+    monkeypatch.setenv("LAB_DB_HOST", _CANARY)
+    spec = _spec(
+        ("DB_HOST", "DB_NAME"),
+        defaults=(("DB_HOST", "authored-host"), ("DB_NAME", "authored-name")),
+    )
 
-    (tmp_path / ".env").write_text("DB_NAME=from-credentials\n", encoding="utf-8")
-    monkeypatch.setenv("DB_HOST", "from-operator")
-    monkeypatch.delenv("DB_NAME", raising=False)
+    body = _bound_body(_granting(tmp_path, grant), spec)
 
-    spec = BaseContainerSpec(
-        node_address="provision.node.webapp",
-        container_name="aptl-webapp",
-        image_ref="debian:13-slim",
-        runs_services=True,
-        environment_names=("DB_HOST", "DB_NAME", "DB_PORT"),
-        environment_defaults=(
-            ("DB_HOST", "authored"),
-            ("DB_NAME", "authored"),
-            ("DB_PORT", "5432"),
+    assert body == "DB_HOST=authored-host\nDB_NAME=authored-name\n"
+
+
+def test_a_grant_binds_only_the_consumer_it_names(tmp_path, monkeypatch):
+    """Wrong consumer: a grant for `db` never reaches `webapp`'s same variable."""
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = _granting(
+        tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD", consumer="db")
+    )
+    webapp = _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+    db = _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",), node="db")
+
+    with pytest.raises(BackendSeedError, match="no environment grant") as excinfo:
+        backend._append_base_environment([], webapp)
+
+    assert _GRANTED not in str(excinfo.value)
+    assert _bound_body(backend, db) == f"DB_PASSWORD={_GRANTED}\n"
+
+
+@pytest.mark.parametrize(
+    ("pack", "named"),
+    [("other-pack", "pack other-pack"), (None, "no pack identity")],
+    ids=["other-pack", "project-tree"],
+)
+def test_a_grant_binds_only_the_pack_it_names(tmp_path, monkeypatch, pack, named):
+    """Pack identity: a grant for `techvault` binds nothing in any other run."""
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = _granting(tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD"), pack=pack)
+    spec = _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+
+    with pytest.raises(BackendSeedError, match=named) as excinfo:
+        backend._append_base_environment([], spec)
+
+    assert _GRANTED not in str(excinfo.value)
+
+
+def test_an_empty_grant_source_is_refused_and_named(tmp_path, monkeypatch):
+    """A granted source that holds no value is a missing binding, not a blank."""
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", "")
+    backend = _granting(tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD"))
+    spec = _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+
+    with pytest.raises(
+        BackendSeedError,
+        match="source grant:process-environment:LAB_DB_PASSWORD has no value",
+    ):
+        backend._append_base_environment([], spec)
+
+
+def test_the_startup_adapter_binds_only_the_names_it_declares(tmp_path):
+    """An adapter value comes from `.env`; other `.env` keys stay unreachable."""
+
+    (tmp_path / ".env").write_text(
+        f"INDEXER_PASSWORD={_OTHER}\nAPTL_API_TOKEN={_CANARY}\n",
+        encoding="utf-8",
+    )
+    backend = _granting(tmp_path, adapter_names=frozenset({"INDEXER_PASSWORD"}))
+    fixture = _spec(("INDEXER_PASSWORD",), sourced=("INDEXER_PASSWORD",))
+    control_plane = _spec(("APTL_API_TOKEN",), sourced=("APTL_API_TOKEN",))
+
+    assert _bound_body(backend, fixture) == f"INDEXER_PASSWORD={_OTHER}\n"
+    with pytest.raises(BackendSeedError, match="no environment grant") as excinfo:
+        backend._append_base_environment([], control_plane)
+    assert _CANARY not in str(excinfo.value)
+
+
+def test_binding_logs_name_each_source_never_a_value(tmp_path, monkeypatch, caplog):
+    """Logs carry the source identity only."""
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = _granting(tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD"))
+    spec = _spec(
+        ("DB_HOST", "DB_PASSWORD"),
+        sourced=("DB_PASSWORD",),
+        defaults=(("DB_HOST", "db"),),
+    )
+
+    # Scope the level to APTL's logger: another test may have raised it.
+    with caplog.at_level("INFO", logger="aptl"):
+        backend._append_base_environment([], spec)
+
+    assert (
+        "DB_HOST from authored, DB_PASSWORD from "
+        "grant:process-environment:LAB_DB_PASSWORD"
+    ) in caplog.text
+    assert _GRANTED not in caplog.text
+
+
+def _base_node_realization(environment=None, **fields):
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.core.deployment.realization import (
+        DeploymentNodeRealization,
+        DeploymentRealizationSpec,
+    )
+    from aptl.core.scenario_bundle import PackIdentity
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "environment": environment
+            or [
+                {
+                    "name": "DB_PASSWORD",
+                    "value_classification": "operator_secret",
+                    "provenance": "operator",
+                }
+            ]
+        }
+    )
+    node = DeploymentNodeRealization(
+        address="provision.node.webapp",
+        name="webapp",
+        service_name=None,
+        container_name=None,
+        networks=(),
+        os="linux",
+        runtime=runtime,
+    )
+    return DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(node,),
+        networks=(),
+        pack_identity=PackIdentity("techvault", "0.1.1", "sha256:" + "0" * 64),
+        **fields,
+    )
+
+
+def test_a_missing_binding_stops_realize_before_any_docker_command(
+    tmp_path, monkeypatch
+):
+    """Missing binding fails in the backend preflight, before any mutation."""
+
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    monkeypatch.setenv("DB_PASSWORD", _CANARY)
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    commands: list[list[str]] = []
+    monkeypatch.setattr(backend, "_run", lambda cmd, **_: commands.append(cmd))
+
+    result = backend.realize(_base_node_realization(), scenario_root=tmp_path)
+
+    assert result.success is False
+    assert result.error == (
+        "Environment binding refused for node webapp: DB_PASSWORD has no "
+        "environment grant for pack techvault."
+    )
+    assert commands == []
+    assert not (tmp_path / ".aptl" / "realization").exists()
+
+
+def test_a_granted_binding_passes_the_preflight(tmp_path, monkeypatch):
+    """The same request passes once an operator grant names the variable."""
+
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = DockerComposeBackend(
+        tmp_path,
+        project_name="aptl-test",
+        environment_grants=(_grant("DB_PASSWORD", "LAB_DB_PASSWORD"),),
+    )
+
+    assert backend._environment_binding_preflight(_base_node_realization()) is None
+
+
+def test_an_adapter_selected_for_another_pack_supplies_nothing(tmp_path):
+    """Pack identity: adapter names apply only to the identity it was selected for."""
+
+    from aptl.core.deployment._environment_bindings import binding_context
+    from aptl.core.scenario_bundle import PackIdentity
+
+    plan = SimpleNamespace(
+        environment_fixtures=(SimpleNamespace(name="DB_PASSWORD"),),
+        environment_aliases=(),
+    )
+    other = PackIdentity("techvault", "0.0.9", "sha256:" + "1" * 64)
+    matching = _base_node_realization(
+        startup_selection=SimpleNamespace(identity=None, plan=plan)
+    )
+    selected = SimpleNamespace(identity=matching.pack_identity, plan=plan)
+    stale = SimpleNamespace(identity=other, plan=plan)
+
+    names = {
+        label: binding_context(
+            replace(matching, startup_selection=selection), (), tmp_path
+        ).adapter_names
+        for label, selection in (("selected", selected), ("stale", stale))
+    }
+
+    assert names == {"selected": frozenset({"DB_PASSWORD"}), "stale": frozenset()}
+
+
+def test_a_generated_value_never_replaces_an_authored_declaration(tmp_path):
+    """Only a variable declared with value_from takes a generated output."""
+
+    backend = _granting(tmp_path)
+    backend._base_container_generated_environment = {
+        "provision.node.webapp": {"DB_HOST": _CANARY}
+    }
+
+    body = _bound_body(
+        backend, _spec(("DB_HOST",), defaults=(("DB_HOST", "authored"),))
+    )
+
+    assert body == "DB_HOST=authored\n"
+
+
+def test_a_value_its_env_file_cannot_carry_stops_the_preflight(tmp_path, monkeypatch):
+    """The preflight checks granted values against Docker's env-file rules."""
+
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", "first-line\nsecond-line")
+    backend = DockerComposeBackend(
+        tmp_path, environment_grants=(_grant("DB_PASSWORD", "LAB_DB_PASSWORD"),)
+    )
+
+    result = backend._environment_binding_preflight(_base_node_realization())
+
+    assert result is not None
+    assert "cannot carry DB_PASSWORD exactly: the value contains a line break" in (
+        result.error
+    )
+    assert "first-line" not in result.error
+
+
+def test_a_grant_source_is_read_once_when_the_start_is_checked(tmp_path, monkeypatch):
+    """A source changed after the preflight does not change this start's value."""
+
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = DockerComposeBackend(
+        tmp_path, environment_grants=(_grant("DB_PASSWORD", "LAB_DB_PASSWORD"),)
+    )
+    assert backend._environment_binding_preflight(_base_node_realization()) is None
+    monkeypatch.setenv("LAB_DB_PASSWORD", _OTHER)
+
+    body = _bound_body(backend, _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",)))
+
+    assert body == f"DB_PASSWORD={_GRANTED}\n"
+
+
+def test_a_secret_without_a_checked_context_is_refused(tmp_path, monkeypatch):
+    """A start that skipped the preflight names why, not a missing pack."""
+
+    monkeypatch.setenv("DB_PASSWORD", _CANARY)
+    backend = _backend(tmp_path)
+    spec = _spec(("DB_PASSWORD",), sourced=("DB_PASSWORD",))
+
+    with pytest.raises(BackendSeedError, match="were not checked before this start"):
+        backend._append_base_environment([], spec)
+
+
+def test_an_unreadable_env_file_fails_only_a_variable_that_needs_it(tmp_path):
+    """Only an adapter or grant value read from `.env` depends on it."""
+
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    (tmp_path / ".env").write_bytes(b"\xff\xfe not utf-8")
+    backend = DockerComposeBackend(tmp_path)
+    plain = _base_node_realization(environment=[{"name": "DB_HOST", "value": "db"}])
+    secret = _base_node_realization()
+    adapter = replace(
+        secret,
+        startup_selection=SimpleNamespace(
+            identity=secret.pack_identity,
+            plan=SimpleNamespace(
+                environment_fixtures=(SimpleNamespace(name="DB_PASSWORD"),),
+                environment_aliases=(),
+            ),
         ),
     )
-    body = Path(_append(spec, tmp_path)[1]).read_text(encoding="utf-8")
 
-    assert "DB_HOST=from-operator" in body
-    assert "DB_NAME=from-credentials" in body
-    assert "DB_PORT=5432" in body
+    assert backend._environment_binding_preflight(plain) is None
+    result = backend._environment_binding_preflight(adapter)
+
+    assert "the project .env is unreadable, so DB_PASSWORD has no value" in result.error
+
+
+def test_a_grant_that_matches_nothing_is_reported(tmp_path, monkeypatch, caplog):
+    """A mistyped grant is named in the log instead of silently ignored."""
+
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    grants = (
+        _grant("DB_PASSWORD", "LAB_DB_PASSWORD"),
+        _grant("DB_PASWORD", "LAB_DB_PASSWORD"),
+    )
+    backend = DockerComposeBackend(tmp_path, environment_grants=grants)
+
+    with caplog.at_level("WARNING", logger="aptl"):
+        assert backend._environment_binding_preflight(_base_node_realization()) is None
+
+    assert "node webapp variable DB_PASWORD matched no value-less secret" in caplog.text
+    assert "variable DB_PASSWORD matched" not in caplog.text
+    assert _GRANTED not in caplog.text
+
+
+def test_the_env_file_flag_is_followed_by_the_bound_names_label(tmp_path, monkeypatch):
+    """The label names what was bound, so a later start can see a stale one."""
+
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
+    backend = _granting(tmp_path, _grant("DB_PASSWORD", "LAB_DB_PASSWORD"))
+    spec = _spec(
+        ("DB_PASSWORD", "DB_HOST"),
+        sourced=("DB_PASSWORD",),
+        defaults=(("DB_HOST", "db"),),
+    )
+
+    argv: list[str] = []
+    backend._append_base_environment(argv, spec)
+
+    assert argv[2:] == ["--label", "aptl.environment.names=DB_HOST,DB_PASSWORD"]
+
+
+def test_spec_lowering_marks_out_of_band_and_generated_names():
+    """Value-less operator secrets, redacted values and fixtures need a source."""
+
+    from raes.runtime_configuration import RuntimeConfiguration
+
+    from aptl.backends.raes_base_substrate import base_container_spec
+
+    runtime = RuntimeConfiguration.model_validate(
+        {
+            "environment": [
+                {"name": "SETTING", "value": "on"},
+                {"name": "EMPTY_SETTING", "value_classification": "plain"},
+                {"name": "OPERATOR", "value_classification": "operator_secret"},
+                {"name": "FIXTURE", "value_classification": "secret_fixture"},
+                {"name": "WITHHELD", "value_classification": "redacted"},
+                {
+                    "name": "PLANTED",
+                    "value": "changeme",
+                    "value_classification": "secret_fixture",
+                },
+                {
+                    "name": "GENERATED",
+                    "value_from": {
+                        "generated_artifact": "keys",
+                        "output": "api-key",
+                    },
+                    "value_classification": "redacted",
+                },
+            ]
+        }
+    )
+
+    spec = base_container_spec(
+        "provision.node.webapp", os="linux", os_version="", runtime=runtime
+    )
+
+    assert spec.environment_sourced == ("OPERATOR", "FIXTURE", "WITHHELD")
+    assert spec.environment_generated == ("GENERATED",)
+    assert dict(spec.environment_defaults) == {"SETTING": "on", "PLANTED": "changeme"}
 
 
 def test_closed_pack_credentials_are_not_reintroduced_as_environment(scenario_path):

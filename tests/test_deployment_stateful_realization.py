@@ -421,6 +421,8 @@ def test_base_container_generated_environment_uses_the_declared_output(
             image_ref="debian:13-slim",
             runs_services=True,
             environment_names=("CORTEX_KEY",),
+            # The node declares CORTEX_KEY with value_from (#965).
+            environment_generated=("CORTEX_KEY",),
         ),
     )
     body = Path(argv[1]).read_text()

@@ -971,6 +971,7 @@ src/aptl/cli/runs.py	core-candidate	Migrate only after public-import, history an
 src/aptl/cli/seat.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/cli/web.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/__init__.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
+src/aptl/core/_doctor_common.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/_doctor_runtime.py	core-candidate	Migrate only after public-import, history and scenario-independence verification
 src/aptl/core/_pack_staging.py	core-candidate	Retain bounded no-follow pack acquisition with generic loading
 src/aptl/core/_port_bindings.py	core-candidate	Migrate only after public-import, history and scenario-independence verification

@@ -8,25 +8,27 @@ a summary or fix.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from aptl.core import hostenv, sysreqs
-from aptl.core.config import AptlConfig
-from aptl.core.doctor import (
-    _NO_PROJECT_DIRECTORY,
-    _PROBE_TIMEOUT_SECONDS,
+from aptl.core._doctor_common import (
+    NO_PROJECT_DIRECTORY,
+    PROBE_TIMEOUT_SECONDS,
     CheckStatus,
     DoctorCheck,
-    Runner,
     Which,
-    _major_minor,
-    _skipped,
-    _version_text,
+    major_minor,
+    skipped,
+    version_text,
 )
+from aptl.core.config import AptlConfig
 
 if TYPE_CHECKING:
     from aptl.core.execution_boundary import BoundaryProbeBackend
+
+Runner = Callable[..., Any]
 
 # The prerequisites page: "the full `techvault` stack needs more than 20GB".
 _FULL_STACK_MEMORY_BYTES = 20 * 10**9
@@ -63,12 +65,12 @@ def runtime_checks(
 
     if which("docker") is None:
         return [
-            _skipped(check_id, "the Docker CLI is not on PATH (see docker-cli)")
+            skipped(check_id, "the Docker CLI is not on PATH (see docker-cli)")
             for check_id in _RUNTIME_CHECK_IDS
         ]
     if project_root is None:
         return _without_backend(
-            _skipped("docker-daemon", _NO_PROJECT_DIRECTORY), _NO_PROJECT_DIRECTORY
+            skipped("docker-daemon", NO_PROJECT_DIRECTORY), NO_PROJECT_DIRECTORY
         )
     return _configured_backend_checks(config, project_root)
 
@@ -109,9 +111,9 @@ def _without_backend(daemon: DoctorCheck, reason: str) -> list[DoctorCheck]:
 
     return [
         daemon,
-        _skipped("docker-compose", reason),
+        skipped("docker-compose", reason),
         _buildx_check(),
-        *(_skipped(check_id, reason) for check_id in _DAEMON_CHECK_IDS),
+        *(skipped(check_id, reason) for check_id in _DAEMON_CHECK_IDS),
     ]
 
 
@@ -127,7 +129,7 @@ def _backend_checks(backend: BoundaryProbeBackend) -> list[DoctorCheck]:
         return [
             daemon,
             *plugins,
-            *(_skipped(check_id, reason) for check_id in _DAEMON_CHECK_IDS),
+            *(skipped(check_id, reason) for check_id in _DAEMON_CHECK_IDS),
         ]
     rootful = _rootful_check(backend._run)
     return [
@@ -144,7 +146,7 @@ def _daemon_check(run: Runner) -> DoctorCheck:
     """Ask the selected daemon for its version, without echoing its errors."""
 
     result = _probe(run, ["docker", "version", "--format", "{{.Server.Version}}"])
-    version = _version_text(getattr(result, "stdout", "")) if _ok(result) else None
+    version = version_text(getattr(result, "stdout", "")) if _ok(result) else None
     if version is not None:
         return DoctorCheck(
             "docker-daemon",
@@ -207,7 +209,7 @@ def _substrate_check(run: Runner, rootful: DoctorCheck) -> DoctorCheck:
     from aptl.core.deployment.errors import BackendSeedError
 
     if rootful.status is not CheckStatus.PASSED:
-        return _skipped(
+        return skipped(
             "systemd-substrate", "the daemon is not rootful (see rootful-daemon)"
         )
     fix = _ENGINE_FIX
@@ -232,7 +234,7 @@ def _compose_check(run: Runner) -> DoctorCheck:
     """Check for the Docker Compose v2 plugin lab start drives."""
 
     result = _probe(run, ["docker", "compose", "version", "--short"])
-    version = _major_minor(getattr(result, "stdout", "")) if _ok(result) else None
+    version = major_minor(getattr(result, "stdout", "")) if _ok(result) else None
     if version is not None and version[0] >= _MIN_COMPOSE_MAJOR:
         return DoctorCheck(
             "docker-compose",
@@ -303,13 +305,13 @@ def _max_map_count_not_read(
     """
 
     if mode == hostenv.DOCKER_VM:
-        return _skipped(
+        return skipped(
             "max-map-count",
             "the selected Docker engine is not native Linux on this host, so it "
             "manages vm.max_map_count itself",
         )
     if mode == hostenv.DOCKER_LINUX_NATIVE:
-        return _skipped(
+        return skipped(
             "max-map-count", "sysctl could not read vm.max_map_count on this host"
         )
     engine = (
@@ -343,7 +345,7 @@ def _memory_check(run: Runner) -> DoctorCheck:
     result = _probe(run, ["docker", "info", "--format", "{{.MemTotal}}"])
     raw = str(getattr(result, "stdout", "") or "").strip() if _ok(result) else ""
     if not raw.isdigit():
-        return _skipped("docker-memory", "the daemon did not report its memory")
+        return skipped("docker-memory", "the daemon did not report its memory")
     memory_gb = int(raw) / 10**9
     if int(raw) > _FULL_STACK_MEMORY_BYTES:
         return DoctorCheck(
@@ -372,7 +374,7 @@ def _probe(run: Runner, argv: list[str]) -> object | None:
     """Run one read-only Docker query; any runner failure is no answer."""
 
     try:
-        return run(argv, timeout=_PROBE_TIMEOUT_SECONDS)
+        return run(argv, timeout=PROBE_TIMEOUT_SECONDS)
     # A timeout, a missing binary or a transport error is reported as an
     # unanswered probe; its text, which can name an endpoint, is not kept.
     except Exception:

@@ -480,18 +480,49 @@ def test_a_missing_binding_stops_realize_before_any_docker_command(
     assert not (tmp_path / ".aptl" / "realization").exists()
 
 
-def test_a_granted_binding_passes_the_preflight(tmp_path, monkeypatch):
-    """The same request passes once an operator grant names the variable."""
+@pytest.mark.parametrize(
+    "deployment",
+    [
+        {"provider": "docker-compose"},
+        {
+            "provider": "ssh-compose",
+            "ssh_host": "server.example.com",
+            "ssh_user": "deploy",
+        },
+    ],
+    ids=["docker-compose", "ssh-compose"],
+)
+def test_a_granted_binding_passes_the_preflight(tmp_path, monkeypatch, deployment):
+    """The same request passes once a grant in `aptl.json` names the variable.
 
-    from aptl.core.deployment.docker_compose import DockerComposeBackend
+    `get_backend` hands the grants to either provider. The SSH backend takes
+    them through `use_environment_grants`, not through its constructor.
+    """
 
-    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
-    backend = DockerComposeBackend(
-        tmp_path,
-        project_name="aptl-test",
-        environment_grants=(_grant("DB_PASSWORD", "LAB_DB_PASSWORD"),),
+    from aptl.core.config import load_config
+    from aptl.core.deployment import get_backend
+
+    grant = {
+        "pack": "techvault",
+        "consumer": "webapp",
+        "variable": "DB_PASSWORD",
+        "source": {"kind": "process-environment", "variable": "LAB_DB_PASSWORD"},
+    }
+    config_path = tmp_path / "aptl.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "lab": {"name": "grants"},
+                "deployment": {**deployment, "environment_grants": [grant]},
+            }
+        ),
+        encoding="utf-8",
     )
+    monkeypatch.setenv("LAB_DB_PASSWORD", _GRANTED)
 
+    backend = get_backend(load_config(config_path), tmp_path)
+
+    assert backend._environment_grants == (_grant("DB_PASSWORD", "LAB_DB_PASSWORD"),)
     assert backend._environment_binding_preflight(_base_node_realization()) is None
 
 
@@ -648,7 +679,11 @@ def test_the_env_file_flag_is_followed_by_the_bound_names_label(tmp_path, monkey
 
 
 def test_spec_lowering_marks_out_of_band_and_generated_names():
-    """Value-less operator secrets, redacted values and fixtures need a source."""
+    """Value-less operator secrets, redacted values and fixtures need a source.
+
+    A value-less `plain` variable, or one with RAES's default classification
+    `unknown`, needs none: it keeps its declared name and is delivered empty.
+    """
 
     from raes.runtime_configuration import RuntimeConfiguration
 
@@ -659,6 +694,7 @@ def test_spec_lowering_marks_out_of_band_and_generated_names():
             "environment": [
                 {"name": "SETTING", "value": "on"},
                 {"name": "EMPTY_SETTING", "value_classification": "plain"},
+                {"name": "UNCLASSIFIED"},
                 {"name": "OPERATOR", "value_classification": "operator_secret"},
                 {"name": "FIXTURE", "value_classification": "secret_fixture"},
                 {"name": "WITHHELD", "value_classification": "redacted"},
@@ -683,6 +719,7 @@ def test_spec_lowering_marks_out_of_band_and_generated_names():
         "provision.node.webapp", os="linux", os_version="", runtime=runtime
     )
 
+    assert {"EMPTY_SETTING", "UNCLASSIFIED"} <= set(spec.environment_names)
     assert spec.environment_sourced == ("OPERATOR", "FIXTURE", "WITHHELD")
     assert spec.environment_generated == ("GENERATED",)
     assert dict(spec.environment_defaults) == {"SETTING": "on", "PLANTED": "changeme"}

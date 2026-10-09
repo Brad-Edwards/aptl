@@ -54,6 +54,7 @@ authority through this gate.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -88,6 +89,19 @@ _SUBSTRATE_REQUIREMENT = (
     f"{SUBSTRATE_MIN_DOCKER_ENGINE[0]}.{SUBSTRATE_MIN_DOCKER_ENGINE[1]} or newer"
 )
 _ROOTFUL_REQUIREMENT = "LilRAE requires a rootful Docker daemon"
+
+# The only form of a cgroup version answer a refusal repeats. Anything else the
+# daemon prints is not trusted text and is described instead.
+_CGROUP_VERSION_ANSWER = re.compile(r"\d{1,2}", re.ASCII)
+
+
+class UnqualifiedDaemonModeError(BackendSeedError):
+    """The daemon runs in a mode the substrate cannot use (rootless, userns-remap).
+
+    A distinct type, so a caller can name the fix for the mode itself rather
+    than the cgroup and engine fix. Every existing ``BackendSeedError`` handler
+    still catches it.
+    """
 
 
 def _probe(
@@ -129,10 +143,18 @@ def _require_cgroup_v2(run: Callable[..., Any]) -> None:
     if version != "2":
         raise BackendSeedError(
             "the generic systemd substrate requires a Docker daemon on cgroup "
-            f"v2; this daemon reports {version or 'no cgroup version'}. It is "
+            f"v2; this daemon reports {_reported_cgroup_version(version)}. It is "
             "not supported, and the writable-cgroups option the substrate "
             "depends on is unsafe on cgroup v1"
         )
+
+
+def _reported_cgroup_version(answer: str) -> str:
+    """Repeat the daemon's cgroup answer only when it is a version number."""
+
+    if _CGROUP_VERSION_ANSWER.fullmatch(answer):
+        return answer
+    return "an unrecognized cgroup version" if answer else "no cgroup version"
 
 
 def _engine_version(run: Callable[..., Any]) -> tuple[int, int]:
@@ -217,7 +239,7 @@ def _require_qualified_daemon_mode(run: Callable[..., Any]) -> None:
     names = _daemon_security_option_names(run)
     for mode, label in _UNQUALIFIED_DAEMON_MODES:
         if mode in names:
-            raise BackendSeedError(
+            raise UnqualifiedDaemonModeError(
                 "the generic systemd substrate does not support a Docker daemon "
                 f"running in {label} mode: it refuses the writable-cgroups "
                 "option systemd nodes depend on. Use a rootful daemon without "

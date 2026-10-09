@@ -9,23 +9,55 @@ states exactly which prerequisite is missing.
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from pathlib import Path
 
 import pytest
 
+from aptl.core import hostenv
+from aptl.core.deployment import get_backend as real_get_backend
 from aptl.core.doctor import CheckStatus, run_doctor
 from aptl.core.execution_boundary import ExecutionBoundaryObservation
+from aptl.core.lifecycle_guard import canonical_lifecycle_project_root
 from aptl.core.sysreqs import SysReqResult, ToolReqResult
+from aptl.core.sysreqs import check_max_map_count as real_check_max_map_count
 
 _ROOTFUL = '["name=seccomp,profile=builtin","name=cgroupns"]'
 _ROOTLESS = '["name=seccomp,profile=builtin","name=rootless"]'
+_USERNS = '["name=seccomp,profile=builtin","name=userns"]'
 _PROBE_DETAIL = "/home/operator/.private/docker.sock endpoint-marker-7f3a"
+# Loads as valid aptl.json; only the backend constructor refuses it.
+_SSH_WITHOUT_HOST = json.dumps(
+    {"lab": {"name": "doctor"}, "deployment": {"provider": "ssh-compose"}}
+)
 _READ_ONLY_QUERIES = {
     ("docker", "version"),
     ("docker", "info"),
     ("docker", "compose", "version"),
     ("docker", "context", "inspect"),
+}
+_CHECK_IDS = (
+    "project-config",
+    "workspace-writable",
+    "docker-cli",
+    "ssh-keygen",
+    "node-npm",
+    "docker-daemon",
+    "docker-compose",
+    "docker-buildx",
+    "rootful-daemon",
+    "systemd-substrate",
+    "max-map-count",
+    "docker-memory",
+)
+_DAEMON_CHECK_IDS = _CHECK_IDS[-4:]
+# How the execution-boundary probe describes each kind of selected engine.
+_BOUNDARIES = {
+    "native-docker": ("local-unix", "native-linux", "observed"),
+    "docker-vm-unverified": ("local-unix", "docker-vm", "observed"),
+    "remote-unverified": ("remote-ssh", "unknown", "partial"),
+    "unknown": ("unknown", "unknown", "unknown"),
 }
 
 
@@ -96,9 +128,27 @@ def _which(missing: tuple[str, ...] = ()):
     return lambda name: None if name in missing else f"/usr/bin/{name}"
 
 
+def _boundary(containment):
+    transport, runtime, status = _BOUNDARIES[containment]
+    return ExecutionBoundaryObservation(
+        transport=transport,
+        override_source="none",
+        daemon_runtime=runtime,
+        host_containment=containment,
+        observation_status=status,
+        host_os="linux",
+    )
+
+
 @pytest.fixture
 def host(mocker):
-    """A host whose daemon, Buildx, sysctl and Node.js answer as configured."""
+    """A host whose daemon, Buildx, sysctl and Node.js answer as configured.
+
+    A native engine's ``vm.max_map_count`` reads ``state["max_map_count"]``,
+    or the real check (with whatever sysctl a test stubs) when that is None.
+    Every other engine goes through the real check, which reads nothing on
+    this host for them.
+    """
 
     state = {
         "daemon": _FakeDaemon(),
@@ -109,24 +159,23 @@ def host(mocker):
         "buildx": ToolReqResult(passed=True, command="docker buildx version"),
         "node": "v20.11.1\n",
     }
-    mocker.patch(
+
+    def check_max_map_count(*, selected_mode):
+        canned = state["max_map_count"]
+        if selected_mode == hostenv.DOCKER_LINUX_NATIVE and canned is not None:
+            return canned
+        return real_check_max_map_count(selected_mode=selected_mode)
+
+    state["get_backend"] = mocker.patch(
         "aptl.core.deployment.get_backend",
         side_effect=lambda *_args, **_kwargs: _FakeBackend(state["daemon"]),
     )
     mocker.patch(
         "aptl.core.execution_boundary.observe_execution_boundary",
-        side_effect=lambda _backend: ExecutionBoundaryObservation(
-            transport="local-unix",
-            override_source="none",
-            daemon_runtime="native-linux",
-            host_containment=state["containment"],
-            observation_status="observed",
-            host_os="linux",
-        ),
+        side_effect=lambda _backend: _boundary(state["containment"]),
     )
-    mocker.patch(
-        "aptl.core.sysreqs.check_max_map_count",
-        side_effect=lambda **_kwargs: state["max_map_count"],
+    state["check_max_map_count"] = mocker.patch(
+        "aptl.core.sysreqs.check_max_map_count", side_effect=check_max_map_count
     )
     mocker.patch(
         "aptl.core.sysreqs.check_docker_buildx",
@@ -147,20 +196,7 @@ def test_a_ready_host_passes_every_check(tmp_path, host):
     report = run_doctor(_project(tmp_path), which=_which())
 
     assert report.ok is True
-    assert [check.check_id for check in report.checks] == [
-        "project-config",
-        "workspace-writable",
-        "docker-cli",
-        "ssh-keygen",
-        "node-npm",
-        "docker-daemon",
-        "docker-compose",
-        "docker-buildx",
-        "rootful-daemon",
-        "systemd-substrate",
-        "max-map-count",
-        "docker-memory",
-    ]
+    assert [check.check_id for check in report.checks] == list(_CHECK_IDS)
     assert {check.status for check in report.checks} == {CheckStatus.PASSED}
     assert all(check.fix == "" for check in report.checks)
     assert "Docker Engine 28.0.4" in _by_id(report)["docker-daemon"].summary
@@ -231,6 +267,17 @@ def test_doctor_changes_nothing_and_only_queries(tmp_path, host):
             id="old-node",
         ),
         pytest.param(
+            {"config": _SSH_WITHOUT_HOST, "real_backend": True},
+            (),
+            (
+                "docker-daemon",
+                CheckStatus.FAILED,
+                "backend cannot be created",
+                "needs ssh_host and ssh_user",
+            ),
+            id="unusable-backend",
+        ),
+        pytest.param(
             {"daemon": {"answers": False}},
             (),
             ("docker-daemon", CheckStatus.FAILED, "did not answer", "DOCKER_HOST"),
@@ -279,6 +326,17 @@ def test_doctor_changes_nothing_and_only_queries(tmp_path, host):
                 "Docker Engine 28.0",
             ),
             id="old-engine",
+        ),
+        pytest.param(
+            {"daemon": {"version": "29.1.0", "security": _USERNS}},
+            (),
+            (
+                "systemd-substrate",
+                CheckStatus.FAILED,
+                "userns-remap",
+                "Turn off userns-remap in the Docker daemon configuration",
+            ),
+            id="userns-remap",
         ),
         pytest.param(
             {"daemon": {"compose": None}},
@@ -337,6 +395,8 @@ def test_each_unmet_prerequisite_is_named_with_its_fix(
 ):
     check_id, status, summary, fix = expected
     host["daemon"] = _FakeDaemon(**change.get("daemon", {}))
+    if change.get("real_backend"):
+        host["get_backend"].side_effect = real_get_backend
     for key in ("max_map_count", "buildx", "node"):
         if key in change:
             host[key] = change[key]
@@ -351,39 +411,223 @@ def test_each_unmet_prerequisite_is_named_with_its_fix(
     assert report.ok is (status is not CheckStatus.FAILED)
 
 
-def test_a_silent_daemon_skips_only_the_checks_that_need_it(tmp_path, host):
+def _without_docker_cli(tmp_path, _host):
+    return _project(tmp_path), _which(("docker",))
+
+
+def _without_project_directory(tmp_path, _host):
+    return tmp_path / "absent", _which()
+
+
+def _with_an_unusable_backend(tmp_path, host):
+    host["get_backend"].side_effect = real_get_backend
+    return _project(tmp_path, _SSH_WITHOUT_HOST), _which()
+
+
+def _with_a_silent_daemon(tmp_path, host):
     host["daemon"] = _FakeDaemon(answers=False)
-
-    report = run_doctor(_project(tmp_path), which=_which())
-
-    statuses = {check.check_id: check.status for check in report.checks}
-    assert statuses["docker-compose"] is CheckStatus.PASSED
-    assert statuses["docker-buildx"] is CheckStatus.PASSED
-    assert [
-        check_id
-        for check_id, status in statuses.items()
-        if status is CheckStatus.SKIPPED
-    ] == ["rootful-daemon", "systemd-substrate", "max-map-count", "docker-memory"]
+    return _project(tmp_path), _which()
 
 
-def test_a_vm_engine_does_not_ask_this_host_for_max_map_count(tmp_path, host):
-    host["containment"] = "docker-vm-unverified"
-    host["max_map_count"] = SysReqResult(
-        passed=True, current_value=0, required_value=262144, applicable=False
+@pytest.mark.parametrize(
+    ("arrange", "failed", "skipped", "cause"),
+    [
+        pytest.param(
+            _without_docker_cli,
+            ("docker-cli",),
+            _CHECK_IDS[5:],
+            "docker-cli",
+            id="no-docker-cli",
+        ),
+        pytest.param(
+            _without_project_directory,
+            ("project-config",),
+            (
+                "workspace-writable",
+                "docker-daemon",
+                "docker-compose",
+                *_DAEMON_CHECK_IDS,
+            ),
+            "project-config",
+            id="no-project-directory",
+        ),
+        pytest.param(
+            _with_an_unusable_backend,
+            ("docker-daemon",),
+            ("docker-compose", *_DAEMON_CHECK_IDS),
+            "docker-daemon",
+            id="backend-cannot-be-created",
+        ),
+        pytest.param(
+            _with_a_silent_daemon,
+            ("docker-daemon",),
+            _DAEMON_CHECK_IDS,
+            "docker-daemon",
+            id="silent-daemon",
+        ),
+    ],
+)
+def test_every_path_reports_every_check_in_order(
+    tmp_path, host, arrange, failed, skipped, cause
+):
+    """A check that cannot run is skipped and names the check that stopped it."""
+    project_dir, which = arrange(tmp_path, host)
+
+    report = run_doctor(project_dir, which=which)
+
+    assert [check.check_id for check in report.checks] == list(_CHECK_IDS)
+
+    def ids(status):
+        return [check.check_id for check in report.checks if check.status is status]
+
+    assert ids(CheckStatus.FAILED) == list(failed)
+    assert ids(CheckStatus.SKIPPED) == list(skipped)
+    assert ids(CheckStatus.WARNING) == []
+    assert all(
+        f"(see {cause})" in check.summary
+        for check in report.checks
+        if check.status is CheckStatus.SKIPPED
+    )
+
+
+def test_a_missing_project_directory_is_named_and_never_probed(tmp_path, host):
+    report = run_doctor(tmp_path / "absent", which=_which())
+
+    check = _by_id(report)["project-config"]
+    assert check.summary == (
+        "The project directory does not exist or is not a directory."
+    )
+    assert "--project-dir" in check.fix
+    assert host["daemon"].calls == []
+    host["get_backend"].assert_not_called()
+
+
+def test_a_project_subdirectory_resolves_to_the_root_lab_start_uses(tmp_path, host):
+    """Like lab start and stop, doctor finds aptl.json in a parent directory."""
+    project = _project(
+        tmp_path,
+        '{"lab": {"name": "doctor"}, "deployment": {"project_name": "doctor-sub"}}',
+    )
+    notes = project / "notes"
+    notes.mkdir()
+
+    report = run_doctor(notes, which=_which())
+
+    assert _by_id(report)["project-config"].status is CheckStatus.PASSED
+    (config, root), _ = host["get_backend"].call_args
+    assert root == canonical_lifecycle_project_root(notes) == project.resolve()
+    assert config.deployment.project_name == "doctor-sub"
+
+
+@pytest.mark.parametrize(
+    ("containment", "mode", "status", "summary", "fix"),
+    [
+        pytest.param(
+            "native-docker",
+            hostenv.DOCKER_LINUX_NATIVE,
+            CheckStatus.PASSED,
+            "vm.max_map_count is 262144.",
+            "",
+            id="native-linux",
+        ),
+        pytest.param(
+            "docker-vm-unverified",
+            hostenv.DOCKER_VM,
+            CheckStatus.SKIPPED,
+            "manages vm.max_map_count itself",
+            "",
+            id="docker-vm",
+        ),
+        pytest.param(
+            "remote-unverified",
+            hostenv.DOCKER_UNKNOWN,
+            CheckStatus.WARNING,
+            "the selected Docker engine is remote",
+            "On the host that runs the selected Docker engine, run "
+            "`sudo sysctl -w vm.max_map_count=262144`",
+            id="remote",
+        ),
+        pytest.param(
+            "unknown",
+            hostenv.DOCKER_UNKNOWN,
+            CheckStatus.WARNING,
+            "doctor could not tell which host runs the selected Docker engine",
+            "On the host that runs the selected Docker engine, run "
+            "`sudo sysctl -w vm.max_map_count=262144`",
+            id="unknown",
+        ),
+    ],
+)
+def test_max_map_count_is_asked_of_the_host_that_runs_the_engine(
+    tmp_path, host, containment, mode, status, summary, fix
+):
+    host["containment"] = containment
+
+    check = _by_id(run_doctor(_project(tmp_path), which=_which()))["max-map-count"]
+
+    host["check_max_map_count"].assert_called_once_with(selected_mode=mode)
+    assert check.status is status
+    assert summary in check.summary
+    assert fix in check.fix
+    assert bool(check.fix) is bool(fix)
+
+
+def test_a_native_host_whose_sysctl_has_no_such_key_is_skipped(tmp_path, host, mocker):
+    """Lab start passes this case, so doctor skips it and says what it saw."""
+    host["max_map_count"] = None
+    mocker.patch(
+        "aptl.core.sysreqs._run_max_map_count_sysctl",
+        return_value=subprocess.CompletedProcess(
+            ["sysctl", "vm.max_map_count"],
+            1,
+            stdout="",
+            stderr="sysctl: unknown oid 'vm.max_map_count'",
+        ),
     )
 
     check = _by_id(run_doctor(_project(tmp_path), which=_which()))["max-map-count"]
 
     assert check.status is CheckStatus.SKIPPED
-    assert "manages vm.max_map_count itself" in check.summary
+    assert check.summary == (
+        "Not checked: sysctl could not read vm.max_map_count on this host."
+    )
 
 
-def test_diagnostics_never_echo_probe_output(tmp_path, host):
-    """Daemon errors can name sockets or hosts; doctor keeps none of that."""
+def _unanswered_probes(host, _mocker):
     host["daemon"] = _FakeDaemon(answers=False)
     host["buildx"] = ToolReqResult(
         passed=False, command="docker buildx version", error=_PROBE_DETAIL
     )
+
+
+def _answers_that_carry_probe_detail(host, mocker):
+    host["daemon"] = _FakeDaemon(cgroup=_PROBE_DETAIL)
+    host["max_map_count"] = None
+    mocker.patch(
+        "aptl.core.sysreqs._run_max_map_count_sysctl",
+        return_value=subprocess.CompletedProcess(
+            ["sysctl", "vm.max_map_count"],
+            1,
+            stdout="",
+            stderr=f"sysctl: permission denied {_PROBE_DETAIL}",
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "arrange",
+    [
+        pytest.param(_unanswered_probes, id="unanswered"),
+        pytest.param(_answers_that_carry_probe_detail, id="answered"),
+    ],
+)
+def test_diagnostics_never_echo_probe_output(tmp_path, host, mocker, caplog, arrange):
+    """Daemon and sysctl output can name sockets or hosts; doctor keeps none of it.
+
+    Neither the report nor any log record the run emits carries it.
+    """
+    caplog.set_level(logging.DEBUG, logger="aptl")
+    arrange(host, mocker)
 
     report = run_doctor(_project(tmp_path), which=_which())
 
@@ -391,3 +635,4 @@ def test_diagnostics_never_echo_probe_output(tmp_path, host):
     assert "endpoint-marker-7f3a" not in rendered
     assert ".private" not in rendered
     assert str(tmp_path) not in rendered
+    assert "endpoint-marker-7f3a" not in caplog.text

@@ -33,6 +33,7 @@ import pytest
 
 from aptl.core.deployment._compose_substrate_gate import (
     SUBSTRATE_MIN_DOCKER_ENGINE,
+    UnqualifiedDaemonModeError,
     compose_services_requesting_writable_cgroups,
     require_rootful_daemon,
     require_substrate_daemon_support,
@@ -114,6 +115,16 @@ class TestFailsClosed:
 
         assert "cgroup" in str(excinfo.value).lower()
 
+    def test_a_non_numeric_cgroup_answer_is_described_not_repeated(self):
+        # `aptl doctor` and lab start show this refusal; daemon stdout is not
+        # trusted text, so only a version number is repeated.
+        run = _runner(cgroup_version="v2 /home/operator/.private/docker.sock")
+        with pytest.raises(BackendSeedError) as excinfo:
+            require_substrate_daemon_support(run)
+
+        assert "reports an unrecognized cgroup version" in str(excinfo.value)
+        assert ".private" not in str(excinfo.value)
+
     def test_an_engine_older_than_the_floor_is_refused(self):
         run = _runner(engine_version="27.5.1")
         with pytest.raises(BackendSeedError) as excinfo:
@@ -155,7 +166,7 @@ class TestFailsClosed:
         # (moby daemon/oci_linux.go). Refusing here names the cause before any
         # mutation instead of an opaque "failed to start base container".
         run = _runner(security_options=security_options)
-        with pytest.raises(BackendSeedError) as excinfo:
+        with pytest.raises(UnqualifiedDaemonModeError) as excinfo:
             require_substrate_daemon_support(run)
 
         assert mode in str(excinfo.value)

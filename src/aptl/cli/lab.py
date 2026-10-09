@@ -540,7 +540,7 @@ def _report_reset_result(outcome: LabResetResult, output_json: bool) -> None:
             {
                 "containers_found": outcome.containers_found,
                 "networks_found": outcome.networks_found,
-                "error": result.error or None,
+                "error": redact_text(result.error) or None,
             },
         )
     elif result.success:

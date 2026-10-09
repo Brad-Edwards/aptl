@@ -1691,7 +1691,9 @@ class TestJsonOutputAndExitStatus:
         assert payload["command"] == " ".join(args)
 
     @pytest.mark.parametrize(
-        "args", [["doctor"], ["lab", "start"], ["lab", "stop"]], ids=["doctor", "start", "stop"]
+        "args",
+        [["doctor"], ["lab", "start"], ["lab", "stop"], ["lab", "reset"]],
+        ids=["doctor", "start", "stop", "reset"],
     )
     def test_usage_error_exits_2_with_no_json_object(self, runner, args):
         """Exit status 2 prints no JSON: the usage error goes to stderr."""
@@ -1908,6 +1910,26 @@ class TestLabResetCommand:
             "networks_found": 2,
             "error": None if succeeded else "docker not found",
         }
+
+    def test_reset_json_redacts_the_error(self, runner, mocker):
+        """ADR-012: the reset JSON error is redacted, as stop's is (#1218)."""
+        from aptl.cli.main import app
+
+        mocker.patch(
+            "aptl.cli.lab.reset_lab",
+            return_value=self._outcome(
+                success=False,
+                error="upstream said Authorization: Bearer leaked-test-value",
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "reset", "--yes", "--json"])
+
+        assert result.exit_code == 1
+        assert "leaked-test-value" not in result.stdout
+        assert _json_result(result)["error"] == (
+            "upstream said Authorization: Bearer [REDACTED]"
+        )
 
 
 class TestLabStopCommand:

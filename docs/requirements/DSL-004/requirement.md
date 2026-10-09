@@ -1,12 +1,12 @@
 ---
 id: DSL-004
 title: "Scenario Composition (Atomic to Campaigns)"
-status: DRAFT
+status: DEPRECATED
 type: FUNCTIONAL
 priority: WONT
 wave: 2
 created_at: 2026-03-21T07:52:31.235076Z
-updated_at: 2026-10-05T07:51:12.874346Z
+updated_at: 2026-10-09T00:00:00.000000Z
 ---
 
 # DSL-004: Scenario Composition (Atomic to Campaigns)

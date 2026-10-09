@@ -6,6 +6,7 @@ calls are mocked.
 """
 
 import logging
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import ANY, MagicMock, call, patch
@@ -79,6 +80,73 @@ def _mcp_build_fails(cmd, **_kwargs):
     if cmd[0] == "docker":
         return MagicMock(returncode=0, stdout="", stderr="")
     return MagicMock(returncode=1, stdout="", stderr="npm error")
+
+
+def _lifecycle_lock_held_elsewhere(project_dir: Path) -> bool:
+    """Whether another thread is refused the project's lifecycle lock now."""
+    from aptl.core.lifecycle_guard import lifecycle_mutation_lock
+    from aptl.core.lifecycle_policy import LifecycleBusyError
+
+    refused: list[bool] = []
+
+    def probe() -> None:
+        try:
+            with lifecycle_mutation_lock(project_dir):
+                refused.append(False)
+        except LifecycleBusyError:
+            refused.append(True)
+
+    prober = threading.Thread(target=probe)
+    prober.start()
+    prober.join(timeout=10)
+    return refused == [True]
+
+
+class _FailingRange:
+    """A project whose start creates runtime and then fails (#952).
+
+    It stands in for the backend's project inventory. The RAES handoff
+    creates containers, networks and volumes, then fails; ``stop`` removes
+    containers and networks and keeps volumes unless asked, as
+    ``docker compose down`` does. Each stop records whether the start's
+    lifecycle lock was still held at that moment.
+    """
+
+    def __init__(self, project_dir: Path, *, containers=0, networks=0, volumes=0):
+        self.project_dir = project_dir
+        self.containers = containers
+        self.networks = networks
+        self.volumes = volumes
+        self.stops: list[bool] = []
+        self.lock_held_during_stop: list[bool] = []
+        self.containers_surviving_stop = 0
+
+    def observe(self, *_args, **_kwargs):
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+
+        return ProjectRuntimePresence(
+            container_count=self.containers, network_count=self.networks
+        )
+
+    def start_then_fail(self, *_args, **_kwargs):
+        self.containers, self.networks, self.volumes = 3, 2, 4
+        return _raes_outcome(
+            success=False,
+            error="RAES runtime handoff failed: backend-contract-invalid",
+        )
+
+    def stop(self, _profiles, *, remove_volumes=False):
+        from aptl.core.lab_types import LabResult
+
+        self.lock_held_during_stop.append(
+            _lifecycle_lock_held_elsewhere(self.project_dir)
+        )
+        self.stops.append(remove_volumes)
+        self.containers = self.containers_surviving_stop
+        self.networks = 0
+        if remove_volumes:
+            self.volumes = 0
+        return LabResult(success=True)
 
 
 def _admitted_start_fixture(bundle_root: Path):
@@ -496,7 +564,15 @@ class TestPreexistingRangeAdmission:
         assert result is not None
         assert result.success is False
         assert "lifecycle-range-present" in result.error
-        assert "aptl lab stop" in result.error
+        # The refusal names the residue and the same recovery routes, with their
+        # data consequences, as a failed start's summary (#952).
+        assert "1 container and 0 networks" in result.error
+        assert "`aptl lab stop` removes" in result.error
+        assert "keeps its volumes" in result.error
+        assert "`aptl lab stop -v` also removes the volumes" in result.error
+        assert "destroys all lab data" in result.error
+        assert "aptl lab start --clean" in result.error
+        assert ctx.range_was_absent is False
 
     def test_network_only_residue_blocks_start(self, tmp_path):
         from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
@@ -540,6 +616,7 @@ class TestPreexistingRangeAdmission:
         ctx = _LabStartContext(project_dir=tmp_path, skip_seed=False, backend=backend)
 
         assert _step_reject_preexisting_range(ctx) is None
+        assert ctx.range_was_absent is True
 
 
 class TestCleanBootLab:
@@ -590,6 +667,32 @@ class TestCleanBootLab:
         assert result.success is True
         assert result.outcome is StartupOutcome.READY
         assert order == ["stop", "start"]
+
+    @pytest.mark.parametrize("teardown_on_failure", [False, True])
+    def test_clean_boot_forwards_teardown_on_failure(
+        self, monkeypatch, tmp_path, teardown_on_failure
+    ):
+        """`start --clean --teardown-on-failure` keeps the opt-in (#952)."""
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult
+
+        started: list[dict] = []
+        monkeypatch.setattr(
+            lab, "stop_lab", lambda **_kwargs: LabResult(success=True)
+        )
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda _project_dir, **kwargs: started.append(kwargs)
+            or LabResult(success=True),
+        )
+
+        clean_boot_lab(tmp_path, teardown_on_failure=teardown_on_failure)
+
+        assert [kwargs["teardown_on_failure"] for kwargs in started] == [
+            teardown_on_failure
+        ]
 
     def test_required_seat_failure_preserves_existing_range(
         self, monkeypatch, tmp_path
@@ -752,10 +855,12 @@ class TestCleanBootLab:
             skip_seed=False,
             scenario_path=None,
             progress=None,
+            teardown_on_failure=False,
         ):
             captured["skip_seed"] = skip_seed
             captured["scenario_path"] = scenario_path
             captured["progress"] = progress
+            captured["teardown_on_failure"] = teardown_on_failure
             return LabResult(success=True, outcome=StartupOutcome.READY)
 
         monkeypatch.setattr(lab, "orchestrate_lab_start", fake_start)
@@ -767,6 +872,7 @@ class TestCleanBootLab:
             "skip_seed": True,
             "scenario_path": scenario,
             "progress": None,
+            "teardown_on_failure": False,
         }
 
     def test_clean_boot_forwards_progress_to_start(self, monkeypatch, tmp_path):
@@ -2352,6 +2458,134 @@ class TestOrchestrateLabStart:
 
         assert result.error == "Appliance guest readiness publication failed."
         assert result.admission_seconds == pytest.approx(4.25)
+
+    def _failing_range(self, mocker, tmp_path, **inventory):
+        """Wire a range that the RAES handoff mutates and then fails (#952)."""
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        project = _FailingRange(tmp_path, **inventory)
+        mocks["project_presence"].side_effect = project.observe
+        mocks["start"].side_effect = project.start_then_fail
+        mocker.patch(
+            "aptl.core.deployment.docker_compose.DockerComposeBackend.stop",
+            side_effect=project.stop,
+        )
+        return project
+
+    def test_failed_start_names_its_residue_and_leaves_it_running(
+        self, mocker, tmp_path
+    ):
+        """By default the range stays up for diagnosis, and is counted (#952)."""
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import StartResidue
+
+        project = self._failing_range(mocker, tmp_path)
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert "backend-contract-invalid" in result.error
+        assert result.residue == StartResidue(container_count=3, network_count=2)
+        assert (project.containers, project.networks, project.volumes) == (3, 2, 4)
+        assert project.stops == []
+
+    def test_teardown_on_failure_stops_the_range_inside_the_start_lock(
+        self, mocker, tmp_path
+    ):
+        """Containers and networks go, volumes stay, and no other owner can
+        take the project between the failure and the teardown (#952, #933)."""
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import StartResidue
+
+        project = self._failing_range(mocker, tmp_path)
+
+        result = orchestrate_lab_start(tmp_path, teardown_on_failure=True)
+
+        assert result.success is False
+        assert result.residue == StartResidue(
+            container_count=3,
+            network_count=2,
+            teardown_requested=True,
+            torn_down=True,
+        )
+        assert (project.containers, project.networks, project.volumes) == (0, 0, 4)
+        assert project.stops == [False]
+        assert project.lock_held_during_stop == [True]
+        assert _lifecycle_lock_held_elsewhere(tmp_path) is False
+
+    def test_incomplete_teardown_reports_what_remains(self, mocker, tmp_path):
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import StartResidue
+
+        project = self._failing_range(mocker, tmp_path)
+        project.containers_surviving_stop = 1
+
+        result = orchestrate_lab_start(tmp_path, teardown_on_failure=True)
+
+        assert result.residue == StartResidue(
+            container_count=1, network_count=0, teardown_requested=True
+        )
+
+    def test_unobservable_residue_is_reported_as_unknown(self, mocker, tmp_path):
+        """A failed observation is not an empty project (#952)."""
+        from aptl.core.deployment import DockerComposeBackend
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import orchestrate_lab_start
+        from aptl.core.lab_types import StartResidue
+
+        project = self._failing_range(mocker, tmp_path)
+        observations = iter(
+            [
+                project.observe(),
+                ProjectRuntimePresence(error="container observation failed"),
+            ]
+        )
+        mocker.patch.object(
+            DockerComposeBackend,
+            "observe_project_runtime",
+            side_effect=lambda: next(observations),
+        )
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.residue == StartResidue(container_count=None, network_count=None)
+        assert project.stops == []
+
+    def test_preexisting_range_is_refused_and_never_torn_down(
+        self, mocker, tmp_path
+    ):
+        """Only what this start created counts as its residue (#952)."""
+        from aptl.core.lab import orchestrate_lab_start
+
+        project = self._failing_range(
+            mocker, tmp_path, containers=2, networks=1, volumes=1
+        )
+
+        result = orchestrate_lab_start(tmp_path, teardown_on_failure=True)
+
+        assert result.success is False
+        assert "lifecycle-range-present" in result.error
+        assert "2 containers and 1 network" in result.error
+        assert result.residue is None
+        assert (project.containers, project.networks, project.volumes) == (2, 1, 1)
+        assert project.stops == []
+
+    def test_failure_that_left_nothing_reports_no_residue(self, mocker, tmp_path):
+        """A start that fails before creating runtime has nothing to stop."""
+        from aptl.core.certs import CertResult
+        from aptl.core.lab import orchestrate_lab_start
+
+        project = self._failing_range(mocker, tmp_path)
+        mocker.patch(
+            "aptl.core.lab.ensure_ssl_certs",
+            return_value=CertResult(success=False, generated=False, error="boom"),
+        )
+
+        result = orchestrate_lab_start(tmp_path, teardown_on_failure=True)
+
+        assert result.error == "Certificate generation failed: boom"
+        assert result.residue is None
+        assert project.stops == []
 
     def test_handles_empty_profiles(self, mocker, tmp_path):
         """Should work when all containers are disabled (C6)."""

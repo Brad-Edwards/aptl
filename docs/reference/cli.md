@@ -55,6 +55,13 @@ confirmation unless the explicit non-interactive option shown by `--help` is
 used. It destroys volume-backed lab data but does not prune unrelated Docker
 resources.
 
+A failed `aptl lab start` leaves the containers and networks it created
+running so you can diagnose the failure. The failure summary counts them and
+names the two recovery commands: `aptl lab stop` keeps the volumes, and
+`aptl lab stop -v` destroys all lab data. Add `--teardown-on-failure` to the
+start command to stop those containers and networks automatically instead. It
+keeps the volumes.
+
 `aptl lab start --clean` performs the same project-volume cleanup before a
 fresh start. `aptl kill` and its container option are emergency controls for
 stuck MCP processes or lab containers. They are not a graceful stop, a data

@@ -13,7 +13,12 @@ from aptl.core.execution_boundary import (
     observe_execution_boundary,
 )
 from aptl.core.lab import LabResult
-from aptl.core.lab_types import StartupDiagnostic, StartupOutcome
+from aptl.core.lab_types import (
+    STOP_RECOVERY_ROUTES,
+    StartResidue,
+    StartupDiagnostic,
+    StartupOutcome,
+)
 
 if TYPE_CHECKING:
     from aptl.core.deployment.backend import DeploymentBackend
@@ -64,6 +69,8 @@ def render_start_result(result: LabResult) -> None:
     emit_execution_boundary_summary(result.execution_boundary)
     if result.admission_seconds is not None:
         typer.echo(f"Scenario admission: {result.admission_seconds:.1f}s")
+    if result.residue is not None:
+        emit_start_residue(result.residue)
     if not result.diagnostics:
         return
     typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
@@ -80,6 +87,33 @@ def render_start_result(result: LabResult) -> None:
             )
             if diag.operator_action:
                 typer.echo(f"      action: {diag.operator_action}")
+
+
+def emit_start_residue(residue: StartResidue) -> None:
+    """Say what a failed start left running and how to recover (#952)."""
+
+    counts = residue.describe()
+    if residue.torn_down:
+        volumes_command, volumes_effect = STOP_RECOVERY_ROUTES[-1]
+        removed = (
+            f"removed {counts}" if counts else "left no project containers or networks"
+        )
+        typer.echo(f"Teardown after the failed start {removed}; volumes were kept.")
+        typer.echo(f"  `{volumes_command}` {volumes_effect}.")
+        return
+    if counts is None:
+        typer.echo(
+            "The failed start may have left containers or networks running; "
+            "they could not be observed."
+        )
+    else:
+        typer.echo(f"The failed start left {counts} running.")
+    if residue.teardown_requested:
+        typer.echo("  --teardown-on-failure did not remove them.")
+    typer.echo("  To recover, run one of:")
+    width = max(len(command) for command, _effect in STOP_RECOVERY_ROUTES)
+    for command, effect in STOP_RECOVERY_ROUTES:
+        typer.echo(f"    {command.ljust(width)}  {effect}")
 
 
 def emit_execution_boundary_summary(

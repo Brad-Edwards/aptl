@@ -52,6 +52,11 @@ class ComposeImageFetchMixin:
             return None
         if self._offline_staged:
             return self._image_fetch_failure(image, present.stderr)
+        return self._pull_one_image(image)
+
+    def _pull_one_image(self, image: str) -> str | None:
+        """Pull one image the daemon lacks; return a warning on failure."""
+
         result = self._run(["docker", "pull", image])
         if result.returncode != 0:
             return self._image_fetch_failure(image, result.stderr)

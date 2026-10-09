@@ -2327,6 +2327,32 @@ class TestOrchestrateLabStart:
         assert result.success is not residue
         assert result.admission_seconds == pytest.approx(4.25)
 
+    @pytest.mark.parametrize(
+        "start",
+        ["orchestrate_lab_start", "_orchestrate_lab_start_owned"],
+        ids=["after-start", "inline"],
+    )
+    def test_readiness_failure_carries_the_admission_duration(
+        self, mocker, tmp_path, start
+    ):
+        """A failure after every start step still reports admission time (#953)."""
+        from aptl.core import lab
+        from aptl.core.lab_types import LabResult
+
+        self._patch_all_steps(mocker, tmp_path)
+        mocker.patch("aptl.core.lab.monotonic", side_effect=[50.0, 54.25])
+        mocker.patch(
+            "aptl.core.lab._publish_appliance_guest_readiness",
+            return_value=LabResult(
+                success=False, error="Appliance guest readiness publication failed."
+            ),
+        )
+
+        result = getattr(lab, start)(tmp_path)
+
+        assert result.error == "Appliance guest readiness publication failed."
+        assert result.admission_seconds == pytest.approx(4.25)
+
     def test_handles_empty_profiles(self, mocker, tmp_path):
         """Should work when all containers are disabled (C6)."""
         from aptl.core.lab import orchestrate_lab_start

@@ -1245,7 +1245,8 @@ def test_offline_child_image_platform_mismatch_is_stable_and_bounded(tmp_path) -
     assert result is not None
     assert result.success is False
     assert result.error == (
-        "Spawn image platform incompatible for provision.node.orborus/worker."
+        "Spawn image platform incompatible for provision.node.orborus/worker: "
+        f"{_CHILD_REF}"
     )
 
 
@@ -1362,8 +1363,51 @@ def test_child_image_cache_alias_is_not_exact_identity_evidence(tmp_path) -> Non
     assert result is not None
     assert result.success is False
     assert result.error == (
-        "Spawn image identity unavailable for provision.node.orborus/worker."
+        "Spawn image identity unavailable for provision.node.orborus/worker: "
+        f"{_CHILD_REF}"
     )
+
+
+@pytest.mark.parametrize(
+    ("offline_staged", "condition", "pulls"),
+    [
+        pytest.param(True, "missing", [], id="offline-missing"),
+        pytest.param(
+            False,
+            "pull failed",
+            [["docker", "pull", _CHILD_REF]],
+            id="online-unpullable",
+        ),
+    ],
+)
+def test_child_image_failure_names_the_exact_reference(
+    tmp_path, offline_staged, condition, pulls
+) -> None:
+    """A start that cannot prove a child image names the image to stage (#953)."""
+    backend = DockerComposeBackend(tmp_path, offline_staged=offline_staged)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    absent = subprocess.CompletedProcess(
+        [], 1, stdout="", stderr=f"Error: No such image: {_CHILD_REF}\n"
+    )
+    unreachable = subprocess.CompletedProcess([], 1, stdout="", stderr="dial tcp\n")
+    backend._run = MagicMock(
+        side_effect=[
+            subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            absent,
+            unreachable,
+        ]
+    )
+
+    result = backend._prepare_spawn_images(_spec())
+
+    assert result is not None
+    assert result.error == (
+        f"Spawn image {condition} for provision.node.orborus/worker: {_CHILD_REF}"
+    )
+    commands = [call.args[0] for call in backend._run.call_args_list]
+    assert [command for command in commands if "pull" in command] == pulls
 
 
 def test_post_start_authority_is_observed_on_same_daemon(tmp_path) -> None:

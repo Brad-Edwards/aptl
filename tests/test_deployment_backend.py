@@ -2131,6 +2131,25 @@ services:
         commands = [call.args[0] for call in mock_run.call_args_list]
         assert commands[0] == ["docker", "pull", "postgres:16.4"]
 
+    def test_offline_full_docker_hub_pin_is_proven_by_the_short_repo_digest(
+        self, tmp_path
+    ):
+        """Docker reports `postgres@…` for a `docker.io/library/postgres@…` pin."""
+        backend = self._make_backend(tmp_path)
+        backend._offline_staged = True
+        qualified = f"docker.io/library/{_PINNED}"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0, stdout=_PROVEN_INSPECT, stderr=""
+            )
+            failure, _files = backend._prepare_realization_images(
+                _pinned_image_spec(qualified), tmp_path
+            )
+
+        assert failure is None
+        assert [call.args[0][-1] for call in mock_run.call_args_list] == [qualified]
+
     def test_project_dir_property(self, tmp_path):
         backend = self._make_backend(tmp_path)
         assert backend.project_dir == tmp_path

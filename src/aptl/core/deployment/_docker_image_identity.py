@@ -17,6 +17,9 @@ LOCAL_IMAGE_PRESENT = "present"
 LOCAL_IMAGE_MISSING = "missing"
 LOCAL_IMAGE_MISMATCHED = "digest-mismatched"
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+# Docker Hub names Docker drops when it reports a repo digest.
+_DOCKER_HUB_REGISTRIES = frozenset({"docker.io", "index.docker.io"})
+_DOCKER_HUB_OFFICIAL_NAMESPACE = "library"
 
 
 @dataclass(frozen=True)
@@ -92,7 +95,7 @@ def exact_inspected_image_identity(
     identity = None
     if (
         isinstance(repo_digests, list)
-        and canonical_digest in repo_digests
+        and canonical_digest in _canonical_repo_digests(repo_digests)
         and bool(_IMAGE_ID.fullmatch(image_id))
         and platform is not None
     ):
@@ -159,4 +162,32 @@ def _canonical_repo_digest(image_ref: str) -> str | None:
         return None
     # Docker records RepoDigests as repository@digest even when the requested
     # immutable reference also carries a human-readable tag before the @.
-    return f"{namespace}{slash}{image_name.split(':', 1)[0]}@{digest}"
+    repository = f"{namespace}{slash}{image_name.split(':', 1)[0]}"
+    return f"{_familiar_repository(repository)}@{digest}"
+
+
+def _canonical_repo_digests(repo_digests: list[object]) -> set[str]:
+    """Normalize the repo digests one inspection reported, the same way."""
+
+    canonical = (
+        _canonical_repo_digest(item) for item in repo_digests if isinstance(item, str)
+    )
+    return {digest for digest in canonical if digest is not None}
+
+
+def _familiar_repository(repository: str) -> str:
+    """Shorten a Docker Hub repository to the form Docker reports it in.
+
+    Docker reports repo digests without the ``docker.io`` registry (or its
+    legacy ``index.docker.io`` name) and, for official images, without the
+    ``library/`` namespace: ``docker.io/library/postgres`` is ``postgres``.
+    Shortening both sides lets the fully written and the short reference
+    prove the same pin. Every other registry is kept as written.
+    """
+
+    registry, slash, path = repository.partition("/")
+    familiar = path if slash and registry in _DOCKER_HUB_REGISTRIES else repository
+    namespace, slash, name = familiar.partition("/")
+    if slash and namespace == _DOCKER_HUB_OFFICIAL_NAMESPACE and "/" not in name:
+        return name
+    return familiar

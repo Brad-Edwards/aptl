@@ -1,5 +1,7 @@
 """Exact Docker image identity across tagged and untagged digest references."""
 
+import pytest
+
 from aptl.core.deployment._docker_image_identity import (
     authored_tag_reference,
     exact_inspected_image_identity,
@@ -32,6 +34,34 @@ def test_tagged_digest_does_not_accept_other_repository_or_digest() -> None:
     wrong_digest = f"sha256:{'c' * 64}"
     for observed_ref in (f"frikky/shuffle@{wrong_digest}", f"other/shuffle@{_DIGEST}"):
         observed = f'["{observed_ref}"]\t{_IMAGE_ID}\tlinux/amd64\n'
+        assert exact_inspected_image_identity(observed, requested) is None
+
+
+@pytest.mark.parametrize(
+    ("requested", "reported"),
+    [
+        (f"docker.io/library/postgres@{_DIGEST}", f"postgres@{_DIGEST}"),
+        (f"index.docker.io/library/postgres:16@{_DIGEST}", f"postgres@{_DIGEST}"),
+        (f"library/postgres@{_DIGEST}", f"postgres@{_DIGEST}"),
+        (f"docker.io/postgres@{_DIGEST}", f"postgres@{_DIGEST}"),
+        (f"docker.io/wazuh/wazuh-manager@{_DIGEST}", f"wazuh/wazuh-manager@{_DIGEST}"),
+        (f"postgres@{_DIGEST}", f"docker.io/library/postgres@{_DIGEST}"),
+    ],
+)
+def test_docker_hub_reference_proves_the_digest_in_either_form(
+    requested, reported
+) -> None:
+    # Docker reports repo digests in short form (`postgres@...`), so a pin
+    # written in full must still be proven by a daemon that holds it (#953).
+    observed = f'["{reported}"]\t{_IMAGE_ID}\tlinux/amd64\n'
+
+    assert exact_inspected_image_identity(observed, requested) is not None
+
+
+def test_only_docker_hub_names_are_shortened() -> None:
+    requested = f"ghcr.io/library/postgres@{_DIGEST}"
+    for reported in (f"postgres@{_DIGEST}", f"library/postgres@{_DIGEST}"):
+        observed = f'["{reported}"]\t{_IMAGE_ID}\tlinux/amd64\n'
         assert exact_inspected_image_identity(observed, requested) is None
 
 

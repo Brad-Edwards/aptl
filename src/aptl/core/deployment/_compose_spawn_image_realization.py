@@ -336,12 +336,17 @@ def _spawn_image_failure(
     condition: str,
     requirement: DeploymentSpawnImageRequirement,
 ) -> LabResult:
-    """Build one stable child-image diagnostic."""
+    """Build one stable child-image diagnostic naming the exact reference.
+
+    The authored reference is printed, never daemon or registry output, so an
+    operator can stage exactly the image a start could not prove (#953).
+    """
 
     return LabResult(
         success=False,
         error=(
             f"Spawn image {condition} for "
-            f"{requirement.node_address}/{requirement.template_id}."
+            f"{requirement.node_address}/{requirement.template_id}: "
+            f"{requirement.image_ref}"
         ),
     )

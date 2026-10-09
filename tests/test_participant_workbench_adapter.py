@@ -786,10 +786,13 @@ def test_bounded_runner_kills_a_descendant_that_outlives_sigterm(
         "signal.signal(signal.SIGTERM, signal.SIG_IGN);"
         "time.sleep(120)"
     )
+    # Publish the pid by rename: the poll below reads the file once it exists.
     program = (
         "import pathlib,subprocess,sys;"
         f"child=subprocess.Popen([sys.executable,'-c',{grandchild_program!r}]);"
-        f"pathlib.Path({str(pid_path)!r}).write_text(str(child.pid));"
+        f"staged=pathlib.Path({str(pid_path) + '.tmp'!r});"
+        "staged.write_text(str(child.pid));"
+        f"staged.replace({str(pid_path)!r});"
         "sys.exit(0)"
     )
     process = subprocess.Popen(
@@ -815,9 +818,10 @@ def test_bounded_runner_kills_a_descendant_that_outlives_sigterm(
 def test_bounded_runner_tolerates_eperm_from_the_group_signal() -> None:
     """Neither errno killpg can raise is treated as an error.
 
-    Darwin answers EPERM where Linux answers ESRCH once a group holds only
-    unreaped zombies. Treating that platform-specific EPERM as a real failure
-    turned an "output exceeded" verdict into an unhandled PermissionError.
+    Darwin answers EPERM once a group holds only unreaped zombies, while Linux
+    still answers 0 for them. Treating that platform-specific EPERM as a real
+    failure turned an "output exceeded" verdict into an unhandled
+    PermissionError.
     """
 
     from aptl.workbench.process import _terminate_process_group
@@ -855,10 +859,10 @@ def test_bounded_runner_escalates_even_when_the_child_exits_promptly() -> None:
     with mock.patch("aptl.workbench.process.os.killpg") as killpg:
         _terminate_process_group(process)
 
-    assert [call.args[1] for call in killpg.call_args_list] == [
-        signal.SIGTERM,
-        signal.SIGKILL,
-    ]
+    # The mock answers every signal-0 membership probe (#963), so the group
+    # still looks occupied: escalation must not depend on the direct child.
+    delivered = [call.args[1] for call in killpg.call_args_list if call.args[1] != 0]
+    assert delivered == [signal.SIGTERM, signal.SIGKILL]
 
 
 def test_appliance_factory_requires_enrolled_guest_binding(tmp_path: Path) -> None:

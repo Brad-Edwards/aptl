@@ -1660,6 +1660,7 @@ tests/test_wazuh_active_response.py	tests-follow-owner	Retain meaningful boundar
 tests/test_wazuh_identity.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_web_dockerfile_cmd.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_workbench_authorization.py	backend-owned-runtime	Constrain the temporary planning compatibility to identified TechVault open concerns with complete native readback
+tests/test_workbench_process.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tests/test_workflow_engine.py	tests-follow-owner	Retain meaningful boundary and parity tests with migrated owner
 tools/.gitignore	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact
 tools/check_pr_title.py	build-governance	Migrate policy by surface; remove bundle-of-entire-repository from generic artifact

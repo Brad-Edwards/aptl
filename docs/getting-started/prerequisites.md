@@ -14,7 +14,14 @@
   daemon before creating anything and stops with a clear message on an older
   engine or a cgroup v1 host rather than falling back to a privileged container
   recipe
-- Docker Compose 2.0+ (`docker compose version`)
+- A rootful Docker daemon without user-namespace remapping (`userns-remap`).
+  `aptl lab start` refuses a rootless daemon for every scenario. Docker refuses
+  the writable-cgroups option under `userns-remap`, so `aptl lab start` also
+  refuses that daemon for a scenario with systemd nodes. `docker info --format
+  '{{json .SecurityOptions}}'` must list neither `name=rootless` nor
+  `name=userns`
+- Docker Compose 2.0+ (`docker compose version`). The `techvault` scenario
+  needs 2.24.4 or newer, and `aptl lab start` refuses an older Compose for it
 - Docker Buildx (`docker buildx version`)
 - Python 3.12+ (for the CLI)
 - OpenSSH client. `ssh-keygen` must be on `PATH`. `aptl lab start` generates the

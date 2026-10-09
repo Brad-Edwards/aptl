@@ -19,7 +19,6 @@ from aptl.core._doctor_common import (
     CheckStatus,
     DoctorCheck,
     Which,
-    major_minor,
     skipped,
     version_text,
 )
@@ -231,22 +230,45 @@ def _substrate_check(run: Runner, rootful: DoctorCheck) -> DoctorCheck:
 
 
 def _compose_check(run: Runner) -> DoctorCheck:
-    """Check for the Docker Compose v2 plugin lab start drives."""
+    """Check the Docker Compose v2 plugin, reading its version as lab start does.
+
+    ``compose_version`` reads a distribution build such as
+    ``2.40.3+ds1-0ubuntu1~24.04.1`` as 2.40.3. Lab start refuses Compose older
+    than 2.24.4 only for a scenario whose Wazuh services consume generated
+    certificates or volumes, as techvault's do. Doctor does not stage a
+    scenario to find out, so an older Compose v2 is a warning.
+    """
+
+    from aptl.core.deployment._compose_stateful_constants import (
+        MIN_OVERRIDE_COMPOSE_VERSION,
+    )
+    from aptl.core.deployment._compose_stateful_graph import compose_version
 
     result = _probe(run, ["docker", "compose", "version", "--short"])
-    version = major_minor(getattr(result, "stdout", "")) if _ok(result) else None
-    if version is not None and version[0] >= _MIN_COMPOSE_MAJOR:
+    answer = str(getattr(result, "stdout", "") or "") if _ok(result) else ""
+    version = compose_version(answer)
+    if version is None or version[0] < _MIN_COMPOSE_MAJOR:
         return DoctorCheck(
             "docker-compose",
-            CheckStatus.PASSED,
-            f"Docker Compose {version[0]}.{version[1]} is available.",
+            CheckStatus.FAILED,
+            "Docker Compose v2 is not available to the Docker CLI.",
+            "Install the Docker Compose v2 plugin. Docker Desktop and the official "
+            "Docker Engine installer include it.",
+        )
+    if version < MIN_OVERRIDE_COMPOSE_VERSION:
+        floor = ".".join(str(part) for part in MIN_OVERRIDE_COMPOSE_VERSION)
+        found = ".".join(str(part) for part in version)
+        return DoctorCheck(
+            "docker-compose",
+            CheckStatus.WARNING,
+            f"Docker Compose {found} is older than {floor}, which lab start "
+            "requires for techvault's Wazuh services.",
+            f"Upgrade the Docker Compose plugin to {floor} or newer.",
         )
     return DoctorCheck(
         "docker-compose",
-        CheckStatus.FAILED,
-        "Docker Compose v2 is not available to the Docker CLI.",
-        "Install the Docker Compose v2 plugin. Docker Desktop and the official "
-        "Docker Engine installer include it.",
+        CheckStatus.PASSED,
+        f"Docker Compose {version[0]}.{version[1]} is available.",
     )
 
 

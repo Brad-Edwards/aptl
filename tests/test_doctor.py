@@ -411,6 +411,82 @@ def test_each_unmet_prerequisite_is_named_with_its_fix(
     assert report.ok is (status is not CheckStatus.FAILED)
 
 
+def _lab_start_compose_refusal(tmp_path, daemon, mocker):
+    """Ask lab start's own Compose check about a scenario with Wazuh state."""
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    mocker.patch(
+        "aptl.core.deployment._compose_stateful_realization.owned_wazuh_services",
+        return_value={"wazuh-manager"},
+    )
+    backend = DockerComposeBackend(tmp_path / "start", project_name="doctor")
+    backend._run = daemon
+    return backend._validate_stateful_compose_capability(None)
+
+
+@pytest.mark.parametrize(
+    ("answer", "status", "summary", "fix"),
+    [
+        pytest.param(
+            "2.40.3+ds1-0ubuntu1~24.04.1",
+            CheckStatus.PASSED,
+            "Docker Compose 2.40 is available.",
+            "",
+            id="ubuntu-noble-package",
+        ),
+        pytest.param(
+            "2.29.1-desktop.1",
+            CheckStatus.PASSED,
+            "Docker Compose 2.29 is available.",
+            "",
+            id="docker-desktop",
+        ),
+        pytest.param(
+            "v2.24.4",
+            CheckStatus.PASSED,
+            "Docker Compose 2.24 is available.",
+            "",
+            id="wazuh-floor",
+        ),
+        pytest.param(
+            "2.24.3",
+            CheckStatus.WARNING,
+            "Docker Compose 2.24.3 is older than 2.24.4, which lab start requires "
+            "for techvault",
+            "Upgrade the Docker Compose plugin to 2.24.4 or newer.",
+            id="below-the-wazuh-floor",
+        ),
+        pytest.param(
+            "1.29.2",
+            CheckStatus.FAILED,
+            "Docker Compose v2 is not available",
+            "Install the Docker Compose v2 plugin.",
+            id="compose-v1",
+        ),
+    ],
+)
+def test_compose_is_read_the_way_lab_start_reads_it(
+    tmp_path, host, mocker, answer, status, summary, fix
+):
+    """A Compose that lab start accepts for techvault's Wazuh services passes.
+
+    Doctor parses the answer with lab start's parser, so a distribution build
+    string passes. Older v2 releases that lab start refuses only for such a
+    scenario are a warning.
+    """
+    host["daemon"] = _FakeDaemon(compose=answer)
+
+    report = run_doctor(_project(tmp_path), which=_which())
+
+    check = _by_id(report)["docker-compose"]
+    assert check.status is status
+    assert summary in check.summary
+    assert fix in check.fix
+    assert bool(check.fix) is bool(fix)
+    refusal = _lab_start_compose_refusal(tmp_path, host["daemon"], mocker)
+    assert (refusal is None) is (status is CheckStatus.PASSED)
+
+
 def _without_docker_cli(tmp_path, _host):
     return _project(tmp_path), _which(("docker",))
 

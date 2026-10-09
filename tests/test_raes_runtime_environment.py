@@ -334,11 +334,11 @@ def test_values_dockers_reader_would_alter_are_refused_before_writing(
 ):
     """A value Docker cannot carry exactly is a reported limitation, not a guess."""
 
+    backend = _backend(tmp_path)
+    spec = _fixture_spec({"FIXTURE": value})
     argv: list[str] = []
     with pytest.raises(BackendSeedError, match=problem) as excinfo:
-        _backend(tmp_path)._append_base_environment(
-            argv, _fixture_spec({"FIXTURE": value})
-        )
+        backend._append_base_environment(argv, spec)
 
     assert "cannot carry FIXTURE exactly" in str(excinfo.value)
     assert value not in str(excinfo.value)
@@ -362,11 +362,11 @@ def test_a_symlinked_env_path_is_refused_and_its_target_untouched(tmp_path, link
     (tmp_path / link).parent.mkdir(parents=True)
     (tmp_path / link).symlink_to(target)
 
+    backend = _backend(tmp_path)
+    spec = _fixture_spec({"FIXTURE": "value"})
     argv: list[str] = []
     with pytest.raises(BackendSeedError, match=r"\(symlink\)"):
-        _backend(tmp_path)._append_base_environment(
-            argv, _fixture_spec({"FIXTURE": "value"})
-        )
+        backend._append_base_environment(argv, spec)
 
     assert argv == []
     assert sorted(path.name for path in outside.iterdir()) == ["aptl-webapp.env"]

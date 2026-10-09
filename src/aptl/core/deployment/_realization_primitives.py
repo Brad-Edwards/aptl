@@ -65,15 +65,24 @@ def environment_file_line(name: str, value: str, *, compose: bool = False) -> st
 def _env_file_value_problem(value: str) -> str | None:
     """Return why no env-file line can hold ``value``, or ``None``."""
 
+    problem = None
     if "\n" in value:
-        return "the value contains a line break"
-    if "\x00" in value:
-        return "the value contains a NUL character"
+        problem = "the value contains a line break"
+    elif "\x00" in value:
+        problem = "the value contains a NUL character"
+    elif not _is_utf8_encodable(value):
+        problem = "the value is not valid UTF-8"
+    return problem
+
+
+def _is_utf8_encodable(value: str) -> bool:
+    """Whether ``value`` has a UTF-8 encoding (no lone surrogates)."""
+
     try:
         value.encode("utf-8")
     except UnicodeEncodeError:
-        return "the value is not valid UTF-8"
-    return None
+        return False
+    return True
 
 
 def _docker_env_file_problem(line: str) -> str | None:

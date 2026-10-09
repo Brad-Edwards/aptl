@@ -91,6 +91,7 @@ def get_backend(
             project_dir=project_dir,
             project_name=project_name,
             offline_staged=offline_staged,
+            environment_grants=config.deployment.environment_grants,
         )
 
     if provider == "ssh-compose":
@@ -103,7 +104,7 @@ def get_backend(
             raise ValueError("deployment.ssh_host is required for ssh-compose provider")
         if not dep.ssh_user:
             raise ValueError("deployment.ssh_user is required for ssh-compose provider")
-        return SSHComposeBackend(
+        backend = SSHComposeBackend(
             project_dir=project_dir,
             host=dep.ssh_host,
             user=dep.ssh_user,
@@ -112,6 +113,8 @@ def get_backend(
             remote_dir=dep.remote_dir,
             project_name=project_name,
         )
+        backend.use_environment_grants(dep.environment_grants)
+        return backend
 
     raise ValueError(
         f"Unknown deployment provider: {provider!r}. "

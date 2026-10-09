@@ -290,8 +290,8 @@ def substrate_posture_mismatch(
     ``volume_prefix`` is the project namespace the backend prefixes onto a
     declared volume's bare name when it creates the container. Network
     attachments are deliberately excluded: the post-start reconcile owns them.
-    Declared environment names are excluded too: they bind through an env file,
-    and a variable absent from the operator environment is legitimately omitted.
+    Declared environment is excluded too: it binds through an env file, and the
+    caller compares the realized values with the resolved bindings (issue #965).
     """
 
     host = info.get("HostConfig") if isinstance(info, Mapping) else None

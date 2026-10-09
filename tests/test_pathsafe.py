@@ -14,6 +14,7 @@ import pytest
 
 import stat
 
+import aptl.utils.pathsafe as pathsafe
 from aptl.utils.pathsafe import (
     PathContainmentError,
     create_exclusive_nofollow,
@@ -21,6 +22,7 @@ from aptl.utils.pathsafe import (
     open_contained_nofollow,
     read_contained_nofollow,
     remove_contained_nofollow,
+    replace_private_nofollow,
 )
 
 
@@ -390,3 +392,198 @@ class TestRemoveContainedNofollow:
         assert target.read_bytes() == b"keep"
         assert (tmp_path / "link.json").is_symlink()
         assert (tmp_path / "dir.json").is_dir()
+
+
+class _Interrupted(BaseException):
+    """Stands in for a signal or crash that stops a write part-way."""
+
+
+def _interrupt(*_args, **_kwargs):
+    raise _Interrupted
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX modes and no-follow descriptors")
+class TestReplacePrivateNofollow:
+    """#966: a rewritten private file is replaced whole, never written through."""
+
+    def test_replaces_a_permissive_file_and_parent_with_private_ones(self, tmp_path):
+        env = tmp_path / "state" / "env"
+        env.mkdir(parents=True)
+        env.chmod(0o777)
+        leaf = env / "node.env"
+        leaf.write_bytes(b"OLD=1\n")
+        leaf.chmod(0o666)
+
+        replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        assert leaf.read_bytes() == b"NEW=1\n"
+        assert stat.S_IMODE(env.stat().st_mode) == 0o700
+        assert stat.S_IMODE(leaf.stat().st_mode) == 0o600
+
+    def test_creates_missing_directories_owner_only(self, tmp_path):
+        replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        for directory in (tmp_path / "state", tmp_path / "state" / "env"):
+            assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+        assert (tmp_path / "state" / "env" / "node.env").read_bytes() == b"NEW=1\n"
+
+    def test_a_hard_linked_file_never_rewrites_its_other_name(self, tmp_path):
+        outside = tmp_path / "outside.txt"
+        outside.write_bytes(b"keep")
+        (tmp_path / "env").mkdir()
+        (tmp_path / "env" / "node.env").hardlink_to(outside)
+
+        replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
+
+        assert outside.read_bytes() == b"keep"
+        assert (tmp_path / "env" / "node.env").read_bytes() == b"NEW=1\n"
+
+    @pytest.mark.parametrize(
+        ("plant", "reason"),
+        [
+            (lambda leaf, outside: leaf.symlink_to(outside), "symlink"),
+            (lambda leaf, outside: leaf.mkdir(), "not_regular_file"),
+            (lambda leaf, outside: os.mkfifo(leaf), "not_regular_file"),
+        ],
+        ids=["symlink", "directory", "fifo"],
+    )
+    def test_refuses_an_unsafe_leaf_and_leaves_it_in_place(
+        self, tmp_path, plant, reason
+    ):
+        outside = tmp_path / "outside.txt"
+        outside.write_bytes(b"keep")
+        (tmp_path / "env").mkdir()
+        leaf = tmp_path / "env" / "node.env"
+        plant(leaf, outside)
+        planted = os.lstat(leaf)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
+
+        assert excinfo.value.reason == reason
+        assert outside.read_bytes() == b"keep"
+        assert os.lstat(leaf).st_ino == planted.st_ino
+        assert list((tmp_path / "env").glob(".node.env*")) == []
+
+    @pytest.mark.parametrize("link", ["state", "state/env"], ids=["ancestor", "parent"])
+    def test_refuses_a_symlinked_directory_without_touching_its_target(
+        self, tmp_path, link
+    ):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        mode = outside.stat().st_mode
+        (tmp_path / link).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / link).symlink_to(outside)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        assert excinfo.value.reason == "symlink"
+        assert list(outside.iterdir()) == []
+        assert outside.stat().st_mode == mode
+
+    @pytest.mark.parametrize(
+        ("name", "replacement"),
+        [("geteuid", lambda: -1), ("fchmod", lambda fd, mode: None)],
+        ids=["owned-by-someone-else", "mode-does-not-stick"],
+    )
+    def test_refuses_a_parent_that_cannot_be_made_private(
+        self, tmp_path, monkeypatch, name, replacement
+    ):
+        (tmp_path / "env").mkdir()
+        (tmp_path / "env").chmod(0o755)
+        monkeypatch.setattr(pathsafe.os, name, replacement)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
+
+        assert excinfo.value.reason == "not_private"
+        assert list((tmp_path / "env").iterdir()) == []
+
+    def test_a_writable_ancestor_loses_its_write_bits_before_the_write(
+        self, tmp_path
+    ):
+        # Docker reads the file again by path; a world-writable ancestor would
+        # let another user rename the directory and swap the file after it.
+        state = tmp_path / "state"
+        (state / "env").mkdir(parents=True)
+        state.chmod(0o777)
+
+        replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        assert stat.S_IMODE(state.stat().st_mode) == 0o755
+        assert stat.S_IMODE((state / "env").stat().st_mode) == 0o700
+
+    def test_a_writable_ancestor_owned_by_someone_else_is_refused(
+        self, tmp_path, monkeypatch
+    ):
+        state = tmp_path / "state"
+        (state / "env").mkdir(parents=True)
+        state.chmod(0o777)
+        monkeypatch.setattr(pathsafe.os, "geteuid", lambda: -1)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        monkeypatch.undo()
+        assert excinfo.value.reason == "not_private"
+        assert list((state / "env").iterdir()) == []
+
+    def test_a_leaf_swapped_for_a_symlink_mid_write_is_replaced_not_followed(
+        self, tmp_path, monkeypatch
+    ):
+        outside = tmp_path / "outside.txt"
+        outside.write_bytes(b"keep")
+        write_temp = pathsafe._write_temp_leaf
+
+        def write_then_swap(parent_fd, leaf, data):
+            name = write_temp(parent_fd, leaf, data)
+            os.symlink(outside, leaf, dir_fd=parent_fd)
+            return name
+
+        monkeypatch.setattr(pathsafe, "_write_temp_leaf", write_then_swap)
+        replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
+
+        leaf = tmp_path / "env" / "node.env"
+        assert outside.read_bytes() == b"keep"
+        assert not leaf.is_symlink()
+        assert leaf.read_bytes() == b"NEW=1\n"
+
+    def test_a_directory_swapped_mid_write_keeps_the_write_in_the_opened_one(
+        self, tmp_path, monkeypatch
+    ):
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        restrict = pathsafe._restrict_directory
+
+        def restrict_then_swap(dir_fd, forbidden, *, owned):
+            restrict(dir_fd, forbidden, owned=owned)
+            if owned:  # the leaf's parent, once it is open and private
+                (tmp_path / "env").rename(tmp_path / "moved")
+                (tmp_path / "env").symlink_to(outside)
+
+        monkeypatch.setattr(pathsafe, "_restrict_directory", restrict_then_swap)
+        replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
+
+        assert list(outside.iterdir()) == []
+        assert (tmp_path / "moved" / "node.env").read_bytes() == b"NEW=1\n"
+
+    @pytest.mark.parametrize(
+        ("owner", "step"),
+        [(pathsafe, "write_all"), (pathsafe.os, "rename")],
+        ids=["while-writing", "before-rename"],
+    )
+    def test_an_interrupted_replacement_keeps_the_previous_file(
+        self, tmp_path, monkeypatch, owner, step
+    ):
+        (tmp_path / "env").mkdir(mode=0o700)
+        leaf = tmp_path / "env" / "node.env"
+        leaf.write_bytes(b"OLD=1\n")
+        monkeypatch.setattr(owner, step, _interrupt)
+
+        with pytest.raises(_Interrupted):
+            replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
+
+        monkeypatch.undo()
+        assert leaf.read_bytes() == b"OLD=1\n"
+        assert list((tmp_path / "env").glob(".node.env*")) == []

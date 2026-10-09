@@ -13,11 +13,6 @@ declared init requirements, and copy checked-in project content into it.
 
 from __future__ import annotations
 
-import os
-import stat
-
-from aptl.core.env import load_dotenv
-
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -34,15 +29,36 @@ from aptl.core.deployment._compose_substrate_gate import (
     WRITABLE_CGROUPS_OPTION,
     require_substrate_daemon_support,
 )
+from aptl.core.deployment._environment_bindings import (
+    ENVIRONMENT_NAMES_LABEL,
+    EnvironmentBinding,
+    EnvironmentBindingError,
+    bind_spec_environment,
+    bound_names,
+    describe_bindings,
+    realized_environment_matches,
+)
+from aptl.core.deployment._realization_primitives import (
+    EnvironmentDeliveryRefused,
+    environment_file_line,
+)
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
     valid_environment_variable_name,
 )
 from aptl.core.ephemeral_containers import remove_container_command
+from aptl.utils.logging import get_logger
+from aptl.utils.pathsafe import (
+    PathContainmentError,
+    remove_contained_nofollow,
+    replace_private_nofollow,
+)
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
+
+log = get_logger("deployment.base_substrate")
 
 
 def _init_run_flags(init: "InitRequirements") -> list[str]:
@@ -185,9 +201,12 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
         A mismatch returns False and nothing more: the caller's ordinary
         recreate path owns removal, and that path carries the project-ownership
         proof (#964). Posture drift is never licence to force-remove a
-        same-named container APTL cannot prove it owns.
+        same-named container APTL cannot prove it owns. The environment is
+        resolved first, so a variable with no source fails before that path
+        removes anything (issue #965).
         """
 
+        bindings = self._base_environment_bindings(spec)
         try:
             info = self._raw_container_inspect(native_id)
         # A receipt-owned native object that cannot be inspected is uncertain,
@@ -208,6 +227,7 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
                 info, spec, volume_prefix=self._project_name
             )
             is None
+            and realized_environment_matches(info, bindings)
         )
 
     def _base_container_create_command(
@@ -266,81 +286,59 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
         argv += _base_process_args(spec, run_image_ref)
         return argv
 
-    def _project_dotenv(self) -> dict[str, str]:
-        """Return the project's generated credential bindings, or nothing.
+    def _base_environment_bindings(
+        self, spec: "BaseContainerSpec"
+    ) -> tuple[EnvironmentBinding, ...]:
+        """Resolve a node's declared environment from explicit sources (#965).
 
-        Reuses the existing dotenv boundary rather than re-parsing the file, so
-        quoting, comment, and validation behaviour stay in one place. A missing
-        or unreadable file yields no bindings; the caller then omits those
-        variables rather than binding them empty.
+        A same-named variable in this process or ``.env`` is never used alone.
         """
 
+        consumers = getattr(self, "_environment_consumers", {})
+        generated = getattr(self, "_base_container_generated_environment", {})
         try:
-            return load_dotenv(self._project_dir / ".env")
-        except (OSError, ValueError):
-            return {}
+            return bind_spec_environment(
+                getattr(self, "_environment_binding_context", None),
+                spec,
+                consumer=consumers.get(spec.node_address, spec.node_address),
+                generated=generated.get(spec.node_address, {}),
+            )
+        except EnvironmentBindingError as exc:
+            raise BackendSeedError(f"node {spec.node_address}: {exc}") from exc
 
     def _append_base_environment(
         self, argv: list[str], spec: "BaseContainerSpec"
     ) -> None:
         """Bind a node's declared environment through a contained env file.
 
-        The SDL declares *which* variables a node requires; their values come
-        from the operator environment through the existing secret boundary. The
-        binding is written to an owner-only file under the project's generated
-        realization directory and passed as ``--env-file``, never as ``-e
-        NAME=value``: a value on the command line would put credentials into
-        process argv, where any local process can read them, and into anything
-        that echoes the command.
-
-        A declared variable absent from the environment is omitted rather than
-        bound empty, so the container fails on its own missing-configuration
-        path instead of starting with a silently blank credential.
+        Each value comes from :meth:`_base_environment_bindings`. It is written
+        to an owner-only file and passed as ``--env-file``, never as ``-e
+        NAME=value``, which would expose credentials in process argv. Logs name
+        each variable's source, never its value.
         """
 
-        if not spec.environment_names:
-            return
-        if any(
-            not valid_environment_variable_name(name) for name in spec.environment_names
-        ):
-            raise BackendSeedError("invalid base-container environment variable name")
-        # Values come from the project's own credential boundary first: APTL
-        # keeps them in the generated `.env`, which is never exported into this
-        # process. A real process-environment entry still wins, so an operator
-        # can override one variable without editing generated credentials.
-        # Precedence: an operator's process environment, then the project's
-        # generated credentials, then the scenario's authored non-secret
-        # default. The author supplies what is safe to write down; the
-        # credential boundary supplies what is not.
-        available = {
-            **dict(spec.environment_defaults),
-            **self._project_dotenv(),
-            **os.environ,
-            **getattr(self, "_base_container_generated_environment", {}).get(
-                spec.node_address, {}
-            ),
-        }
-        bindings = {
-            name: available[name]
-            for name in spec.environment_names
-            if name in available
-        }
-        if any("\n" in value or "\r" in value for value in bindings.values()):
-            raise BackendSeedError("invalid base-container environment value")
-        if not bindings:
-            return
-        env_dir = self._project_dir / ".aptl" / "realization" / "env"
-        env_dir.mkdir(parents=True, exist_ok=True)
-        env_path = env_dir / f"{spec.container_name}.env"
-        # Create restricted before writing so the values are never briefly
-        # world-readable between creation and chmod.
-        descriptor = os.open(
-            env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR
+        bindings = self._base_environment_bindings(spec)
+        # Refuse any value Docker's env-file reader would alter, then replace
+        # the whole file through the no-follow, owner-only writer. A node that
+        # binds nothing keeps no env file from an earlier run (#966).
+        relative = f".aptl/realization/env/{spec.container_name}.env"
+        try:
+            if not bindings:
+                remove_contained_nofollow(self._project_dir, relative)
+                return
+            payload = "".join(environment_file_line(b.name, b.value) for b in bindings)
+            replace_private_nofollow(self._project_dir, relative, payload.encode())
+        except EnvironmentDeliveryRefused as exc:
+            raise BackendSeedError(f"node {spec.node_address}: {exc}") from exc
+        except PathContainmentError as exc:
+            raise BackendSeedError(
+                f"unsafe environment file for node {spec.node_address} ({exc.reason})"
+            ) from exc
+        log.info(
+            "Node %s environment: %s", spec.node_address, describe_bindings(bindings)
         )
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            for name, value in bindings.items():
-                handle.write(f"{name}={value}\n")
-        argv.extend(("--env-file", str(env_path)))
+        argv.extend(("--env-file", str(self._project_dir / relative)))
+        argv.extend(("--label", f"{ENVIRONMENT_NAMES_LABEL}={bound_names(bindings)}"))
 
     def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
         """Append declared named-volume mounts to a base-container command."""

@@ -24,6 +24,7 @@ from aptl.backends.raes_materializer import (
     package_family,
     plan_node_materialization,
 )
+from aptl.core.deployment._environment_bindings import declared_environment
 from aptl.core.deployment.realization import LOOPBACK_HOST_IP
 
 # Capabilities selected by APTL itself as part of an OPEN compute-substrate
@@ -144,6 +145,12 @@ class BaseContainerSpec:
     # operator secret is authored empty and supplied by the credential boundary,
     # so it cannot travel here.
     environment_defaults: tuple[tuple[str, str], ...] = ()
+    # Declared names whose value lives outside the scenario: a value-less
+    # operator_secret, redacted or secret_fixture variable. Each needs an
+    # operator grant or the admitted pack's startup adapter (issue #965).
+    environment_sourced: tuple[str, ...] = ()
+    # Declared names a generated-artifact output supplies (``value_from``).
+    environment_generated: tuple[str, ...] = ()
     # ADR-051 route 3 (issue #876): the node authored an open dynamic-composition
     # source, so it composes onto the generic substrate and proves its runtime by
     # readback. Its base container must start immutably — never pull, and run the
@@ -212,6 +219,7 @@ def base_container_spec(
             "capability: " + ", ".join(unauthorized_backend_capabilities)
         )
     runs_services = bool(runtime is not None and runtime.service_manager_units)
+    declared = declared_environment(runtime)
     return BaseContainerSpec(
         node_address=node_address,
         container_name=_container_name(node_address),
@@ -230,6 +238,12 @@ def base_container_spec(
         volume_mounts=_volume_mounts(runtime) + options.extra_volume_mounts,
         environment_names=_environment_names(runtime),
         environment_defaults=_environment_defaults(runtime),
+        environment_sourced=tuple(
+            name for name in declared.names if name in declared.sourced
+        ),
+        environment_generated=tuple(
+            name for name in declared.names if name in declared.generated
+        ),
         dynamic_composition=options.dynamic_composition,
         use_image_command=options.backend_base_use_image_command,
         backend_run_capabilities=options.backend_run_capabilities,
@@ -265,9 +279,10 @@ def _environment_names(runtime: RuntimeConfiguration | None) -> tuple[str, ...]:
     Only names travel. ``RuntimeEnvironmentVariable`` carries a classification
     and provenance alongside an optional value, and a declared value is only
     ever a non-secret default; anything classified as a secret is authored with
-    an empty value and supplied by the operator environment. Carrying values
-    through the realization spec would put credentials into a DTO that reaches
-    logs, diagnostics, and run evidence.
+    an empty value and supplied through an operator grant or the admitted pack's
+    startup adapter (issue #965). Carrying values through the realization spec
+    would put credentials into a DTO that reaches logs, diagnostics, and run
+    evidence.
     """
 
     if runtime is None:

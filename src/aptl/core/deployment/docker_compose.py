@@ -14,7 +14,7 @@ from aptl.core.appliance_boundary import (
     ApplianceBoundaryBinding,
     ApplianceBoundaryPolicy,
 )
-from aptl.core.config import validate_compose_project_name
+from aptl.core.config import EnvironmentGrant, validate_compose_project_name
 from aptl.core.deployment._operator_access import ComposeOperatorAccessMixin
 from aptl.core.deployment._compose_autoremove import ComposeAutoremoveMixin
 from aptl.core.deployment._compose_base_substrate import ComposeBaseSubstrateMixin
@@ -46,6 +46,7 @@ from aptl.core.deployment._compose_seed_attribution import (
 from aptl.core.deployment._compose_seed_execution import ComposeSeedExecutionMixin
 from aptl.core.deployment._compose_stop import stop_compose_lab
 from aptl.core.deployment._docker_endpoint_binding import DockerEndpointBindingMixin
+from aptl.core.deployment._environment_bindings import ComposeEnvironmentBindingMixin
 from aptl.core.deployment.errors import BackendTimeoutError
 from aptl.core.lab_types import LabResult, LabStatus
 from aptl.utils.logging import get_logger
@@ -115,6 +116,7 @@ class DockerComposeBackend(
     ComposeOperatorAccessMixin,
     ComposeProjectCleanupMixin,
     ComposeImageFetchMixin,
+    ComposeEnvironmentBindingMixin,
 ):
     """Docker Compose deployment backend.
 
@@ -131,6 +133,7 @@ class DockerComposeBackend(
         *,
         offline_staged: bool = False,
         docker_socket_path: Path | None = None,
+        environment_grants: Sequence[EnvironmentGrant] = (),
     ) -> None:
         if docker_socket_path is not None and not docker_socket_path.is_absolute():
             raise ValueError("managed Docker socket must be absolute")
@@ -144,6 +147,8 @@ class DockerComposeBackend(
         # its creation and receipt publication within this backend instance.
         self._project_volume_lock = threading.Lock()
         self._offline_staged = offline_staged
+        # Operator grants from aptl.json: locators only, read at preflight.
+        self.use_environment_grants(environment_grants)
         self._appliance_boundary: (
             tuple[
                 ApplianceBoundaryPolicy,

@@ -67,6 +67,68 @@ as `.env` and `.mcp.json`; they are not `aptl.json` fields and must not be
 committed. Wazuh `INDEXER_*` and `API_*` values are credentials declared by the
 admitted scenario, not APTL control-plane or operator login credentials.
 
+### Scenario Environment Grants
+
+A scenario node can declare runtime environment variables. These rules cover a
+base-container node: a node that declares runtime desired state and has no node
+image of its own, so APTL starts it from a base image (see
+[Node Realization Routes](components/node-realization.md)). On such a node,
+APTL delivers each variable from a single explicit source:
+
+- A value the scenario authors is delivered exactly as written.
+- A generated-artifact output reaches only the node that declares it with
+  `value_from`.
+- An `operator_secret`, `redacted` or `secret_fixture` variable declared
+  without a value needs an environment grant in `aptl.json` or a value that the
+  admitted pack's own startup adapter supplies.
+- Any other variable declared without a value is delivered empty, even when the
+  image sets a default for it. That is the value RAES expects such a
+  declaration to have.
+
+**This changes earlier behavior.** APTL used to fill a declared variable from
+any same-named variable in its own process environment or in `.env`, and a
+shell variable overrode an authored value. A matching name is not authority to
+read a credential, so neither happens now. If you passed a value to a
+base-container node by exporting it before `aptl lab start`, or by adding it to
+`.env`, add a grant. A value-less variable that is not `operator_secret`,
+`redacted` or `secret_fixture` takes no grant, so the scenario must author its
+value or give it one of those classifications. A missing or empty source stops
+`aptl lab start` before realization creates or changes any scenario network,
+volume or container. The error names the node and the variable, and either the
+pack, when no grant or adapter value applies, or the source that has no value.
+
+A grant names the admitted pack's identifier, the consuming node, the variable
+that node declares, and the source. The source is either an exact variable of
+the process that runs `aptl lab start`, or an exact key of the project `.env`:
+
+```json
+{
+  "deployment": {
+    "environment_grants": [
+      {
+        "pack": "example-pack",
+        "consumer": "webapp",
+        "variable": "DB_PASSWORD",
+        "source": {"kind": "process-environment", "variable": "LAB_DB_PASSWORD"}
+      },
+      {
+        "pack": "example-pack",
+        "consumer": "worker",
+        "variable": "API_TOKEN",
+        "source": {"kind": "project-env-file", "variable": "WORKER_API_TOKEN"}
+      }
+    ]
+  }
+}
+```
+
+A grant applies only to the pack, node and variable it names. A project-tree
+scenario has no pack identity, so no grant applies to it. `aptl lab start`
+reads each grant's source once, when it checks the scenario, and logs a warning
+for a grant that matches no value-less secret. Logs and errors name each source,
+such as `grant:process-environment:LAB_DB_PASSWORD`, and never its value.
+`aptl.json` stores only these names.
+
 ## Observe A Deployment
 
 Use APTL's runtime projections after startup:

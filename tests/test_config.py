@@ -302,6 +302,86 @@ class TestExperimentSettings:
             )
 
 
+_GRANT = {
+    "pack": "techvault",
+    "consumer": "webapp",
+    "variable": "DB_PASSWORD",
+    "source": {"kind": "process-environment", "variable": "LAB_DB_PASSWORD"},
+}
+
+
+class TestEnvironmentGrants:
+    """Operator grants for declared scenario environment (issue #965)."""
+
+    def test_no_grant_is_configured_by_default(self):
+        from aptl.core.config import DeploymentConfig
+
+        assert DeploymentConfig().environment_grants == []
+
+    @pytest.mark.parametrize(
+        ("source", "identity"),
+        [
+            (
+                {"kind": "process-environment", "variable": "LAB_DB_PASSWORD"},
+                "process-environment:LAB_DB_PASSWORD",
+            ),
+            (
+                {"kind": "project-env-file", "variable": "LAB_DB_PASSWORD"},
+                "project-env-file:LAB_DB_PASSWORD",
+            ),
+            (
+                {"kind": "project-env-file", "variable": "lab_db_password"},
+                "project-env-file:lab_db_password",
+            ),
+        ],
+        ids=["process-environment", "project-env-file", "lowercase-env-file-key"],
+    )
+    def test_a_grant_names_its_source_without_a_value(self, source, identity):
+        from aptl.core.config import DeploymentConfig
+
+        config = DeploymentConfig(environment_grants=[{**_GRANT, "source": source}])
+        grant = config.environment_grants[0]
+
+        assert grant.key == ("techvault", "webapp", "DB_PASSWORD")
+        assert grant.source_identity == identity
+
+    @pytest.mark.parametrize(
+        "change",
+        [
+            {"source": {"kind": "shell", "variable": "LAB_DB_PASSWORD"}},
+            {"source": {"kind": "process-environment", "variable": "lab-db"}},
+            {"source": {"kind": "process-environment"}},
+            {"variable": "DB-PASSWORD"},
+            {"pack": "../techvault"},
+            {"consumer": ""},
+            {"value": "s3cret"},
+        ],
+        ids=[
+            "unknown-kind",
+            "bad-source-variable",
+            "missing-source-variable",
+            "bad-target-variable",
+            "path-like-pack",
+            "empty-consumer",
+            "inline-value",
+        ],
+    )
+    def test_an_invalid_grant_is_rejected(self, change):
+        from aptl.core.config import DeploymentConfig
+
+        with pytest.raises(ValidationError):
+            DeploymentConfig(environment_grants=[{**_GRANT, **change}])
+
+    def test_two_grants_for_one_variable_are_rejected(self):
+        from aptl.core.config import DeploymentConfig
+
+        other_source = {"kind": "project-env-file", "variable": "OTHER"}
+        with pytest.raises(ValidationError, match="unique per variable"):
+            DeploymentConfig(
+                environment_grants=[_GRANT, {**_GRANT, "source": other_source}]
+            )
+
+
 class TestAptlConfig:
     """Tests for the top-level AptlConfig model."""
 

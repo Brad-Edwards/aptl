@@ -67,10 +67,7 @@ def render_start_result(result: LabResult) -> None:
     if result.outcome is StartupOutcome.FAILED and result.error:
         typer.echo(f"  error: {result.error}")
     emit_execution_boundary_summary(result.execution_boundary)
-    if result.admission_seconds is not None:
-        typer.echo(f"Scenario admission: {result.admission_seconds:.1f}s")
-    if result.residue is not None:
-        emit_start_residue(result.residue)
+    _emit_start_notes(result)
     if not result.diagnostics:
         return
     typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
@@ -87,6 +84,15 @@ def render_start_result(result: LabResult) -> None:
             )
             if diag.operator_action:
                 typer.echo(f"      action: {diag.operator_action}")
+
+
+def _emit_start_notes(result: LabResult) -> None:
+    """Print the admission time (#953) and any failed-start residue (#952)."""
+
+    if result.admission_seconds is not None:
+        typer.echo(f"Scenario admission: {result.admission_seconds:.1f}s")
+    if result.residue is not None:
+        emit_start_residue(result.residue)
 
 
 def emit_start_residue(residue: StartResidue) -> None:

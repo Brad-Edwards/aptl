@@ -13,7 +13,7 @@ import os
 import re
 import subprocess
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
 from time import monotonic
@@ -671,7 +671,7 @@ def _lifecycle_lock_unavailable_result() -> LabResult:
     )
 
 
-def clean_boot_lab(
+def clean_boot_lab(  # NOSONAR - one keyword per start option it forwards (#952).
     project_dir: Path,
     *,
     remove_volumes: bool = True,
@@ -738,7 +738,7 @@ def clean_boot_lab(
     return result
 
 
-def _clean_boot_lab_owned(
+def _clean_boot_lab_owned(  # NOSONAR - mirrors clean_boot_lab's keywords (#952).
     project_root: Path,
     *,
     remove_volumes: bool,
@@ -4210,7 +4210,8 @@ def _account_for_failed_start(
     residue = _observed_start_residue(ctx.backend)
     if residue is not None and ctx.teardown_on_failure:
         residue = _tear_down_failed_start(ctx, residue)
-    return result if residue is None else replace(result, residue=residue)
+    result.residue = residue
+    return result
 
 
 def _observed_start_residue(backend: "DeploymentBackend") -> StartResidue | None:
@@ -4251,8 +4252,17 @@ def _tear_down_failed_start(
         )
     remaining = _observed_start_residue(ctx.backend)
     if remaining is None:
-        return replace(residue, teardown_requested=True, torn_down=True)
-    return replace(remaining, teardown_requested=True)
+        return StartResidue(
+            container_count=residue.container_count,
+            network_count=residue.network_count,
+            teardown_requested=True,
+            torn_down=True,
+        )
+    return StartResidue(
+        container_count=remaining.container_count,
+        network_count=remaining.network_count,
+        teardown_requested=True,
+    )
 
 
 def orchestrate_lab_start(

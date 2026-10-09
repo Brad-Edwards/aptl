@@ -100,13 +100,16 @@ STOP_RECOVERY_ROUTES: tuple[tuple[str, str], ...] = (
 )
 
 
+def _count(number: int, noun: str) -> str:
+    """Return ``number`` with ``noun``, plural unless the number is one."""
+
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
 def describe_project_runtime(container_count: int, network_count: int) -> str:
     """Name project runtime counts for an operator, such as ``3 containers``."""
 
-    def count(number: int, noun: str) -> str:
-        return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
-
-    return f"{count(container_count, 'container')} and {count(network_count, 'network')}"
+    return f"{_count(container_count, 'container')} and {_count(network_count, 'network')}"
 
 
 @dataclass(frozen=True)

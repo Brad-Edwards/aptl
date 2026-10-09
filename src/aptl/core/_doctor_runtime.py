@@ -9,7 +9,7 @@ a summary or fix.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 from aptl.core import hostenv, sysreqs
 from aptl.core.config import AptlConfig
@@ -24,6 +24,9 @@ from aptl.core.doctor import (
     _skipped,
     _version_text,
 )
+
+if TYPE_CHECKING:
+    from aptl.core.execution_boundary import BoundaryProbeBackend
 
 # The prerequisites page: "the full `techvault` stack needs more than 20GB".
 _FULL_STACK_MEMORY_BYTES = 20 * 10**9
@@ -112,7 +115,7 @@ def _without_backend(daemon: DoctorCheck, reason: str) -> list[DoctorCheck]:
     ]
 
 
-def _backend_checks(backend: Any) -> list[DoctorCheck]:
+def _backend_checks(backend: BoundaryProbeBackend) -> list[DoctorCheck]:
     """Probe the selected daemon through the backend's own runner."""
 
     # The Compose and Buildx plugins belong to the Docker CLI, so they are
@@ -261,7 +264,7 @@ def _buildx_check() -> DoctorCheck:
     )
 
 
-def _max_map_count_check(backend: Any) -> DoctorCheck:
+def _max_map_count_check(backend: BoundaryProbeBackend) -> DoctorCheck:
     """Apply lab start's vm.max_map_count check to the selected daemon's host."""
 
     from aptl.core.execution_boundary import observe_execution_boundary

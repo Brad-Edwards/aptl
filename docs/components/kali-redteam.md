@@ -33,9 +33,7 @@ the full rationale.
   interactive bash).
 
 See [containers/kali/Dockerfile](https://github.com/OpenRAE/lilrae/blob/main/containers/kali/Dockerfile) for
-complete build configuration and
-[containers/kali/scripts/aptl-wrap-shell.sh](https://github.com/OpenRAE/lilrae/blob/main/containers/kali/scripts/aptl-wrap-shell.sh)
-for the session wrapper.
+complete build configuration.
 
 ## Network Access
 

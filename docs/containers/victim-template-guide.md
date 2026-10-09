@@ -1,5 +1,13 @@
 # Victim Container Template Guide
 
+> Historical record: this guide describes the in-tree victim container
+> template under `containers/victim/`, which #812 removed on 2026-07-24 when
+> issue #581 moved TechVault's nodes to realization from the SDL. Its file
+> paths, host ports and commands are not current. TechVault's `victim` node
+> now comes from the pinned TechVault pack; see
+> [Victim Containers](../components/victim-containers.md) and
+> [Node Realization Routes](../components/node-realization.md).
+
 ## Overview
 
 Guide for creating new victim containers based on the existing victim container template. All victim containers follow established patterns - **reference the actual files rather than duplicating code here**.

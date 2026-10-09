@@ -8,6 +8,7 @@ started, so a failing assertion cannot leave work running.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import os
 import selectors
 import signal
@@ -43,6 +44,22 @@ _HANG_DEADLINE = 5.0
 # Covers interpreter start-up and writing a few pipe buffers of output.
 _INPUT_DEADLINE = 3.0
 _RESULT = b'{"ok": true}\n'
+# Never periodic, so a lost, repeated or reordered chunk changes the digest.
+_PAYLOAD = hashlib.shake_256(b"#963 standard input").digest(1 << 20)
+
+# Reads its standard input to end of file, as a provider CLI reads its prompt.
+_READ_TO_END = (
+    "import hashlib, sys; data = sys.stdin.buffer.read();"
+    " print(len(data), hashlib.sha256(data).hexdigest())"
+)
+
+# Closes its standard input while most of the payload is still undelivered,
+# then stays alive long enough for the runner's next write to hit the closed
+# pipe, and fails.
+_CLOSES_INPUT_EARLY = (
+    "import os, sys, time; os.close(0); time.sleep(0.5);"
+    " sys.stderr.write('input closed early'); sys.exit(3)"
+)
 
 # Ignores SIGTERM, and publishes its pid by rename only after it does.
 _HELPER = """
@@ -232,6 +249,74 @@ def test_deadline_covers_launch_input_and_output(
     assert elapsed - cleanup.seconds < _INPUT_DEADLINE + _SLACK
 
 
+def _digest(payload: bytes) -> bytes:
+    """What ``_READ_TO_END`` prints for ``payload``."""
+
+    return f"{len(payload)} {hashlib.sha256(payload).hexdigest()}\n".encode()
+
+
+@pytest.mark.parametrize(
+    ("program", "payload", "returncode", "stdout", "stderr"),
+    [
+        pytest.param(
+            _READ_TO_END,
+            _PAYLOAD[:13],
+            0,
+            _digest(_PAYLOAD[:13]),
+            b"",
+            id="13-bytes",
+        ),
+        pytest.param(
+            _READ_TO_END,
+            _PAYLOAD,
+            0,
+            _digest(_PAYLOAD),
+            b"",
+            id="1-mib",
+        ),
+        pytest.param(
+            _CLOSES_INPUT_EARLY,
+            _PAYLOAD,
+            3,
+            b"",
+            b"input closed early",
+            id="child-closes-input-early",
+        ),
+    ],
+)
+def test_input_arrives_whole_and_then_closes(
+    program: str,
+    payload: bytes,
+    returncode: int,
+    stdout: bytes,
+    stderr: bytes,
+    tmp_path: Path,
+) -> None:
+    """The prompt reaches the child intact, followed by end of file.
+
+    Every provider turn sends its prompt on standard input, and a child that
+    reads it to the end waits for the runner to close the pipe after the last
+    byte. 1 MiB is more than a pipe buffer holds, so most of it can be written
+    only as the child reads, and a write can be partial. A child that closes
+    its input early still gets its exit status and error output returned, as
+    ``dev`` returned them.
+    """
+
+    result = _run(
+        (sys.executable, "-c", program),
+        cwd=tmp_path,
+        stdin=payload,
+        timeout_seconds=30.0,
+    )
+
+    assert (result.returncode, result.stdout, result.stderr) == (
+        returncode,
+        stdout,
+        stderr,
+    )
+    assert result.cleanup.residual == ()
+
+
 @pytest.mark.parametrize(
     ("ending", "timeout_seconds", "failure"),
     [
@@ -284,10 +369,10 @@ def test_capture_after_exit_takes_only_what_is_already_waiting() -> None:
 
     The pipe holds what the exited child wrote, and ``os.read`` is stubbed to
     keep returning more, the way the pipe looks to its reader while a
-    descendant floods it. The regression: capture after the exit read for as
-    long as the pipe stayed readable, so such a writer kept extending the
-    result until the budget ran out and a successful request failed as an
-    output overflow.
+    descendant floods it. The regression: capture went on after the exit for
+    as long as the pipe stayed readable, so output that a descendant wrote
+    after the exit was appended to the successful result until the budget
+    ran out.
     """
 
     stdout_read, stdout_write = os.pipe()

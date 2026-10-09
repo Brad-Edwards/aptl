@@ -818,9 +818,10 @@ def test_bounded_runner_kills_a_descendant_that_outlives_sigterm(
 def test_bounded_runner_tolerates_eperm_from_the_group_signal() -> None:
     """Neither errno killpg can raise is treated as an error.
 
-    Darwin answers EPERM where Linux answers ESRCH once a group holds only
-    unreaped zombies. Treating that platform-specific EPERM as a real failure
-    turned an "output exceeded" verdict into an unhandled PermissionError.
+    Darwin answers EPERM once a group holds only unreaped zombies, while Linux
+    still answers 0 for them. Treating that platform-specific EPERM as a real
+    failure turned an "output exceeded" verdict into an unhandled
+    PermissionError.
     """
 
     from aptl.workbench.process import _terminate_process_group

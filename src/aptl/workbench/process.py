@@ -473,9 +473,12 @@ def _terminate_process_group(
     behind, so escalation depends on the group, never on the one process the
     runner happens to hold a handle for.
 
-    Nothing is signalled once the group is proven gone. A remaining member
-    keeps the id allocated, so a stranger could get a signal only if the
-    kernel reused a freed id in the milliseconds before the next probe.
+    Nothing is signalled once the group is proven gone. After a success,
+    ``poll()`` has already reaped the child, so its group id may be free and
+    reused, and a signal sent regardless could reach a stranger's group. A
+    remaining member keeps the id allocated, so a stranger could get a signal
+    only if the kernel reused a freed id in the milliseconds before the next
+    probe.
     """
 
     if _group_ended(process):

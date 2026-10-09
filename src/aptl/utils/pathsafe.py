@@ -97,10 +97,11 @@ __all__ = [
 #: a wall clock or randomness.
 _TMP_COUNTER = itertools.count()
 
-#: Mode bits that let anyone but the owner reach a private directory, and the
-#: owner-only mode :func:`replace_private_nofollow` holds a parent to.
+#: Mode bits that let anyone but the owner reach a directory, and the bits that
+#: let them rename entries in it. :func:`replace_private_nofollow` clears the
+#: first on the leaf's parent and the second on every directory above it.
 _GROUP_OR_OTHER_ACCESS = 0o077
-_PRIVATE_DIRECTORY_MODE = 0o700
+_GROUP_OR_OTHER_WRITE = 0o022
 
 
 def write_all(fd: int, data: bytes) -> None:
@@ -179,11 +180,17 @@ def replace_private_nofollow(
     when missing, exactly as that function does, so a symlinked component is
     refused (``REASON_SYMLINK``) and never followed. Then:
 
+    - Docker and Compose read the file again by path, so no directory between
+      ``base_dir`` and the leaf may let anyone but its owner rename entries.
+      A group- or world-writable component loses those write bits through its
+      descriptor; one that someone else owns is refused
+      (``REASON_NOT_PRIVATE``).
     - the leaf's parent must belong to the caller. A group- or world-accessible
-      mode is tightened to ``0o700`` through the opened descriptor; a parent
-      owned by someone else, or one whose mode will not stay private, is
-      refused (``REASON_NOT_PRIVATE``). ``base_dir`` itself is trusted and is
-      never re-moded, so a leaf directly inside it gets no such treatment.
+      mode is tightened to owner-only; a parent owned by someone else, or one
+      whose mode will not stay private, is refused (``REASON_NOT_PRIVATE``).
+    - ``base_dir`` itself is trusted and never re-moded, so a leaf directly
+      inside it gets no such treatment, and a writable ``base_dir`` is outside
+      this boundary.
     - an existing leaf must be a regular file. A symlink (``REASON_SYMLINK``)
       or any other file type (``REASON_NOT_REGULAR_FILE``) is refused and left
       in place.
@@ -203,10 +210,10 @@ def replace_private_nofollow(
     parent_fd = base_fd
     try:
         parent_fd = _walk_to_parent(
-            components[:-1], base_fd, open_dir=_open_dir_nofollow_or_create
+            components[:-1], base_fd, open_dir=_open_restricted_dir
         )
         if parent_fd != base_fd:
-            _make_directory_private(parent_fd)
+            _restrict_directory(parent_fd, _GROUP_OR_OTHER_ACCESS, owned=True)
         _existing_regular_leaf(parent_fd, leaf_component, "replace")
         tmp_name = _write_temp_leaf(parent_fd, leaf_component, data)
         try:
@@ -223,19 +230,36 @@ def replace_private_nofollow(
         os.close(base_fd)
 
 
-def _make_directory_private(dir_fd: int) -> None:
-    """Hold an opened directory to owner-only access, or refuse it."""
+def _open_restricted_dir(component: str, parent_fd: int) -> int:
+    """Open or create one directory component that only its owner can rename in."""
+
+    fd = _open_dir_nofollow_or_create(component, parent_fd)
+    try:
+        _restrict_directory(fd, _GROUP_OR_OTHER_WRITE, owned=False)
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
+
+
+def _restrict_directory(dir_fd: int, forbidden: int, *, owned: bool) -> None:
+    """Clear ``forbidden`` mode bits on an opened directory, or refuse it.
+
+    Clearing bits needs ownership. ``owned`` also demands ownership when no
+    bit needs clearing, as it does for the leaf's parent.
+    """
 
     status = os.fstat(dir_fd)
-    if status.st_uid != os.geteuid():
+    mode = stat.S_IMODE(status.st_mode)
+    if (owned or mode & forbidden) and status.st_uid != os.geteuid():
         raise PathContainmentError(
             REASON_NOT_PRIVATE, "directory is not owned by the current user"
         )
-    if stat.S_IMODE(status.st_mode) & _GROUP_OR_OTHER_ACCESS:
-        os.fchmod(dir_fd, _PRIVATE_DIRECTORY_MODE)
-        if stat.S_IMODE(os.fstat(dir_fd).st_mode) & _GROUP_OR_OTHER_ACCESS:
+    if mode & forbidden:
+        os.fchmod(dir_fd, mode & ~forbidden)
+        if stat.S_IMODE(os.fstat(dir_fd).st_mode) & forbidden:
             raise PathContainmentError(
-                REASON_NOT_PRIVATE, "directory mode cannot be made owner-only"
+                REASON_NOT_PRIVATE, "directory mode cannot be restricted"
             )
 
 

@@ -27,6 +27,7 @@ from aptl.core.deployment._compose_stateful_artifact_helpers import (
 )
 from aptl.core.deployment._compose_stateful_model import (
     artifact_environment_file_path,
+    artifact_source_path,
 )
 from aptl.core.deployment._realization_primitives import EnvironmentDeliveryRefused
 from aptl.core.deployment._compose_stateful_realization import (
@@ -474,29 +475,167 @@ def test_base_container_environment_binding_rejects_variable_name_injection(
     assert backend._base_container_generated_environment == {}
 
 
-@pytest.mark.parametrize(
-    "value",
-    ["has$HOME", "has #hash", "it's", 'say"hi"', "back\\slash"],
-    ids=["dollar", "hash", "single-quote", "double-quote", "backslash"],
-)
-def test_generated_environment_value_compose_would_alter_is_refused(
-    tmp_path: Path, value: str
-) -> None:
-    """Compose would interpolate, cut or unquote these, so none is written (#966)."""
+def _write_cortex_outputs(root: Path, **values: str):
+    """Place generated Cortex outputs, as the generator would, and return them."""
 
     artifact = _cortex_credentials_spec().generated_artifacts[0]
-    source = tmp_path / "generated-output"
-    source.write_text(f"{value}\n", encoding="utf-8")
+    source_root = artifact_source_path(root, artifact)
+    source_root.joinpath("cortex").mkdir(parents=True, exist_ok=True)
+    sources = {}
+    for output in artifact.outputs:
+        source = source_root / output.path
+        source.write_text(values.get(output.name.replace("-", "_"), "x") + "\n")
+        sources[output.name] = source
+    return artifact, sources
+
+
+def test_a_generated_value_with_a_single_quote_is_refused_and_unwritten(
+    tmp_path: Path,
+) -> None:
+    """Compose reads the value single-quoted, so only a quote cannot travel."""
+
+    artifact, sources = _write_cortex_outputs(tmp_path, connector_api_key="it's")
 
     with pytest.raises(
-        EnvironmentDeliveryRefused, match="cannot carry TH_CORTEX_KEYS exactly"
+        EnvironmentDeliveryRefused,
+        match="cannot carry TH_CORTEX_KEYS exactly: the value contains a single quote",
     ) as excinfo:
         write_artifact_environment_files(
-            artifact, tmp_path, {"thehive": [("TH_CORTEX_KEYS", source)]}
+            artifact,
+            tmp_path,
+            {"thehive": [("TH_CORTEX_KEYS", sources["connector-api-key"])]},
         )
 
-    assert value not in str(excinfo.value)
-    assert not (tmp_path / ".aptl").exists()
+    assert "it's" not in str(excinfo.value)
+    assert not artifact_environment_file_path(tmp_path, artifact, "thehive").exists()
+
+
+def test_generated_values_are_single_quoted_and_never_trimmed(tmp_path: Path) -> None:
+    value = '  p$ss #1 "q" \\ end  '
+    artifact, sources = _write_cortex_outputs(tmp_path, connector_api_key=value)
+
+    write_artifact_environment_files(
+        artifact,
+        tmp_path,
+        {"thehive": [("TH_CORTEX_KEYS", sources["connector-api-key"])]},
+    )
+
+    target = artifact_environment_file_path(tmp_path, artifact, "thehive")
+    assert target.read_text(encoding="utf-8") == f"TH_CORTEX_KEYS='{value}'\n"
+
+
+def test_a_refused_service_leaves_every_env_file_of_the_set_unchanged(
+    tmp_path: Path,
+) -> None:
+    """The whole set is built and checked before any file is replaced."""
+
+    artifact, sources = _write_cortex_outputs(
+        tmp_path, connector_api_key="fine", initializer_api_key="it's"
+    )
+    existing = artifact_environment_file_path(tmp_path, artifact, "thehive")
+    existing.parent.mkdir(parents=True)
+    existing.write_text("TH_CORTEX_KEYS='previous'\n", encoding="utf-8")
+
+    with pytest.raises(EnvironmentDeliveryRefused):
+        write_artifact_environment_files(
+            artifact,
+            tmp_path,
+            {
+                "thehive": [("TH_CORTEX_KEYS", sources["connector-api-key"])],
+                "cortex-initializer": [
+                    ("CORTEX_ADMIN_KEY", sources["initializer-api-key"])
+                ],
+            },
+        )
+
+    assert existing.read_text(encoding="utf-8") == "TH_CORTEX_KEYS='previous'\n"
+
+
+def test_a_base_container_consumer_gets_no_compose_env_file(tmp_path: Path) -> None:
+    """A non-Compose consumer takes its value through Docker's env file instead."""
+
+    backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
+    spec = _cortex_credentials_spec()
+    without_thehive_image = replace(spec, images=spec.images[1:])
+    artifact = spec.generated_artifacts[0]
+
+    failure = backend._realize_one_generated_artifact(
+        artifact, tmp_path, without_thehive_image
+    )
+
+    assert failure is None
+    assert not artifact_environment_file_path(tmp_path, artifact, "thehive").exists()
+    assert artifact_environment_file_path(
+        tmp_path, artifact, "cortex-initializer"
+    ).is_file()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+@pytest.mark.parametrize("compose", [True, False], ids=["compose", "base-container"])
+def test_a_symlinked_generated_output_is_refused_not_read(
+    tmp_path: Path, compose: bool
+) -> None:
+    """A link planted at an output path never delivers its target as a value."""
+
+    from aptl.core.deployment._compose_stateful_artifact_helpers import (
+        base_container_environment_bindings,
+    )
+
+    artifact, sources = _write_cortex_outputs(tmp_path)
+    outside = tmp_path / "outside-secret"
+    outside.write_text("host-secret\n", encoding="utf-8")
+    sources["connector-api-key"].unlink()
+    sources["connector-api-key"].symlink_to(outside)
+    consumer = artifact.environment_consumers[0]
+
+    if compose:
+        failure = DockerComposeBackend._realize_artifact_environment_files(
+            artifact, tmp_path
+        )
+    else:
+        bound: dict[str, dict[str, str]] = {}
+        failure = base_container_environment_bindings(
+            bound, artifact, [consumer], tmp_path
+        )
+        assert bound == {}
+
+    assert failure is not None
+    assert failure.error.endswith("environment delivery failed.")
+    assert "host-secret" not in failure.error
+    assert not artifact_environment_file_path(tmp_path, artifact, "thehive").exists()
+
+
+@pytest.mark.parametrize(
+    ("value", "bound", "named"),
+    [
+        ("  inner\rcarriage  ", "  inner\rcarriage  ", None),
+        ("trailing\r", None, "Docker drops a trailing carriage return"),
+        ("multi\nline", None, "the value contains a line break"),
+    ],
+    ids=["exact-with-padding", "trailing-cr", "line-break"],
+)
+def test_base_container_generated_values_follow_the_docker_env_file_rules(
+    tmp_path: Path, value: str, bound: str | None, named: str | None
+) -> None:
+    """The early check and the env-file writer apply the same rules."""
+
+    from aptl.core.deployment._compose_stateful_artifact_helpers import (
+        base_container_environment_bindings,
+    )
+
+    artifact, _sources = _write_cortex_outputs(tmp_path, connector_api_key=value)
+    bindings: dict[str, dict[str, str]] = {}
+
+    failure = base_container_environment_bindings(
+        bindings, artifact, [artifact.environment_consumers[0]], tmp_path
+    )
+
+    if named is None:
+        assert failure is None
+        assert bindings == {"provision.node.thehive": {"TH_CORTEX_KEYS": bound}}
+    else:
+        assert named in failure.error
+        assert value not in failure.error
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
@@ -521,12 +660,16 @@ def test_generated_environment_file_refuses_a_symlinked_target_and_says_why(
     assert outside.read_text(encoding="utf-8") == "keep\n"
 
 
-# Generated values Compose's env_file reader keeps byte for byte (#966):
-# token_urlsafe output, inner blanks, "=", braces, punctuation and non-ASCII.
+# Generated values Compose's env_file reader keeps byte for byte (#966). The
+# writer single-quotes each value, so interpolation markers, comment marks,
+# quotes, backslashes, padding and line breaks all arrive as written.
 _COMPOSE_EXACT_VALUES = {
     "TOKEN_VALUE": "Zx-_09azAZ",
     "INNER_TEXT": "in ner\ttab=eq{}!*?&;|()[]<>^~%@,.:/+",
     "UNICODE_VALUE": "pässwörd-✓",
+    "MARKUP_VALUE": 'p$ss ${HOME} #hash "dq" \\back',
+    "PADDED_VALUE": "  padded  ",
+    "MULTILINE_VALUE": "first\nsecond\r",
 }
 
 
@@ -578,7 +721,12 @@ def test_compose_reads_the_generated_env_file_back_exactly(tmp_path: Path) -> No
     )
 
     services = json.loads(resolved.stdout)["services"]
-    assert services["thehive"]["environment"] == _COMPOSE_EXACT_VALUES
+    # `config` prints a literal "$" as "$$" so its output is not re-interpolated.
+    environment = {
+        name: value.replace("$$", "$")
+        for name, value in services["thehive"]["environment"].items()
+    }
+    assert environment == _COMPOSE_EXACT_VALUES
 
 
 def _certificate_outputs() -> tuple[DeploymentGeneratedArtifactOutput, ...]:

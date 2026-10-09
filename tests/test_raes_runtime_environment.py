@@ -125,6 +125,17 @@ def test_node_declaring_no_environment_binds_nothing(tmp_path):
     assert not (tmp_path / ".aptl" / "realization" / "env").exists()
 
 
+def test_a_node_that_binds_nothing_keeps_no_earlier_env_file(tmp_path):
+    """A credential file from an earlier run does not outlive its bindings (#966)."""
+
+    stale = tmp_path / ".aptl" / "realization" / "env" / "aptl-webapp.env"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("OLD_SECRET=previous\n", encoding="utf-8")
+
+    assert _append(_spec(()), tmp_path) == []
+    assert not stale.exists()
+
+
 def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
     """All declared variables absent yields no file rather than an empty one."""
 

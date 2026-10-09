@@ -43,7 +43,11 @@ from aptl.core.deployment.realization import (
     valid_environment_variable_name,
 )
 from aptl.core.ephemeral_containers import remove_container_command
-from aptl.utils.pathsafe import PathContainmentError, replace_private_nofollow
+from aptl.utils.pathsafe import (
+    PathContainmentError,
+    remove_contained_nofollow,
+    replace_private_nofollow,
+)
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
@@ -302,8 +306,6 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
         path instead of starting with a silently blank credential.
         """
 
-        if not spec.environment_names:
-            return
         if any(
             not valid_environment_variable_name(name) for name in spec.environment_names
         ):
@@ -329,12 +331,14 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             for name in spec.environment_names
             if name in available
         }
-        if not bindings:
-            return
         # Refuse any value Docker's env-file reader would alter, then replace
-        # the whole file through the no-follow, owner-only writer (#966).
+        # the whole file through the no-follow, owner-only writer. A node that
+        # binds nothing keeps no env file from an earlier run (#966).
         relative = f".aptl/realization/env/{spec.container_name}.env"
         try:
+            if not bindings:
+                remove_contained_nofollow(self._project_dir, relative)
+                return
             payload = "".join(environment_file_line(*item) for item in bindings.items())
             replace_private_nofollow(self._project_dir, relative, payload.encode())
         except EnvironmentDeliveryRefused as exc:

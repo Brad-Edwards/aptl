@@ -500,6 +500,35 @@ class TestReplacePrivateNofollow:
         assert excinfo.value.reason == "not_private"
         assert list((tmp_path / "env").iterdir()) == []
 
+    def test_a_writable_ancestor_loses_its_write_bits_before_the_write(
+        self, tmp_path
+    ):
+        # Docker reads the file again by path; a world-writable ancestor would
+        # let another user rename the directory and swap the file after it.
+        state = tmp_path / "state"
+        (state / "env").mkdir(parents=True)
+        state.chmod(0o777)
+
+        replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        assert stat.S_IMODE(state.stat().st_mode) == 0o755
+        assert stat.S_IMODE((state / "env").stat().st_mode) == 0o700
+
+    def test_a_writable_ancestor_owned_by_someone_else_is_refused(
+        self, tmp_path, monkeypatch
+    ):
+        state = tmp_path / "state"
+        (state / "env").mkdir(parents=True)
+        state.chmod(0o777)
+        monkeypatch.setattr(pathsafe.os, "geteuid", lambda: -1)
+
+        with pytest.raises(PathContainmentError) as excinfo:
+            replace_private_nofollow(tmp_path, "state/env/node.env", b"NEW=1\n")
+
+        monkeypatch.undo()
+        assert excinfo.value.reason == "not_private"
+        assert list((state / "env").iterdir()) == []
+
     def test_a_leaf_swapped_for_a_symlink_mid_write_is_replaced_not_followed(
         self, tmp_path, monkeypatch
     ):
@@ -525,14 +554,15 @@ class TestReplacePrivateNofollow:
     ):
         outside = tmp_path / "outside"
         outside.mkdir()
-        make_private = pathsafe._make_directory_private
+        restrict = pathsafe._restrict_directory
 
-        def make_private_then_swap(dir_fd):
-            make_private(dir_fd)
-            (tmp_path / "env").rename(tmp_path / "moved")
-            (tmp_path / "env").symlink_to(outside)
+        def restrict_then_swap(dir_fd, forbidden, *, owned):
+            restrict(dir_fd, forbidden, owned=owned)
+            if owned:  # the leaf's parent, once it is open and private
+                (tmp_path / "env").rename(tmp_path / "moved")
+                (tmp_path / "env").symlink_to(outside)
 
-        monkeypatch.setattr(pathsafe, "_make_directory_private", make_private_then_swap)
+        monkeypatch.setattr(pathsafe, "_restrict_directory", restrict_then_swap)
         replace_private_nofollow(tmp_path, "env/node.env", b"NEW=1\n")
 
         assert list(outside.iterdir()) == []

@@ -3,13 +3,14 @@
 SOC / control-plane management surfaces are operator tooling, not deliberately
 vulnerable victim targets. Per ADR-034 (Host Exposure Amendment) they must be
 published to ``127.0.0.1`` so they are not reachable from other machines on the
-operator's LAN. Deliberate attack-surface services (the enterprise victim
-targets) must stay published on all interfaces so the in-range red team can
-reach them.
+operator's LAN. No victim target is host-published: the in-range red team
+reaches the victims over the Docker networks. The webapp proxy's publication
+went with issue #1006, and the dns stub's all-interface publication with issue
+#1004.
 
-This test parses the base and backend-observability Compose assets and pins both
-halves of that boundary, so a future edit cannot silently re-expose a SOC
-management port nor accidentally loopback-bind a victim target.
+This test parses the base and backend-observability Compose assets and pins that
+boundary, so a future edit cannot silently re-expose a SOC management port or
+add a host publication nobody classified.
 """
 
 import re
@@ -66,15 +67,6 @@ MANAGEMENT_SURFACES = [
     ("aptl-web-ui", 3000),
     # The reverse-engineering workstation is defender tooling, not a target.
     ("reverse", 2027),
-]
-
-# Deliberate victim / attack-surface targets that MUST remain reachable on all
-# interfaces (NOT loopback-bound). Encodes the other half of the policy.
-TARGET_SURFACES = [
-    # webapp's host publication is gone with its proxy (issue #1006): TechVault
-    # declares no such node, nothing started it, and the attack path reaches the
-    # portal inside the range. dns is the remaining declared public surface.
-    ("dns", 5353),
 ]
 
 
@@ -137,28 +129,15 @@ def test_management_surface_is_loopback_bound(compose, service, host_port):
         )
 
 
-@pytest.mark.parametrize("service,host_port", TARGET_SURFACES)
-def test_victim_target_stays_publicly_reachable(compose, service, host_port):
-    matches = _published_for(compose, service, host_port)
-    assert matches, f"{service} no longer publishes host port {host_port}"
-    for host_ip, entry in matches:
-        assert host_ip in (None, "0.0.0.0", "::"), (
-            f"{service} host port {host_port} is a deliberate attack-surface "
-            f"target and must stay reachable on all interfaces (no host-IP "
-            f"prefix, or an explicit all-interfaces bind); a specific host IP "
-            f"would break red-team reachability, got {entry!r}"
-        )
-
-
 def test_every_published_port_is_classified(compose):
     """A host publication nobody classified is one nobody checked.
 
-    The management and target lists were hand-maintained, so the web API, web
-    UI and reverse workstation publications were never checked — and reverse
-    was published on all interfaces (issue #1006). Every host-published port
-    must now appear in exactly one list.
+    The management list was hand-maintained, so the web API, web UI and reverse
+    workstation publications were never checked — and reverse was published on
+    all interfaces (issue #1006). Every host-published port must now appear in
+    MANAGEMENT_SURFACES, which pins it to loopback.
     """
-    classified = set(MANAGEMENT_SURFACES) | set(TARGET_SURFACES)
+    classified = set(MANAGEMENT_SURFACES)
     unclassified = sorted(
         (service, host_port)
         for service, definition in compose["services"].items()
@@ -168,6 +147,5 @@ def test_every_published_port_is_classified(compose):
     )
     assert not unclassified, (
         f"host-published ports with no exposure classification: {unclassified}; "
-        "add each to MANAGEMENT_SURFACES or TARGET_SURFACES"
+        "add each to MANAGEMENT_SURFACES"
     )
-    assert not set(MANAGEMENT_SURFACES) & set(TARGET_SURFACES)

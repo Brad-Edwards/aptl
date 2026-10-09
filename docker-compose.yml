@@ -690,16 +690,6 @@ services:
       aptl-internal:
         ipv4_address: 172.20.2.25
 
-  # Host publication for webapp, same reason as kali-ssh-proxy below: webapp's
-  # own networks (aptl-dmz, aptl-internal) are both internal: true (SAF-002),
-  # which Docker never routes host traffic through, published port or not.
-  # webapp is a deliberate attack-surface target (test_docker_compose_port_
-  # bindings.py TARGET_SURFACES), so unlike kali-ssh-proxy this proxy's own
-  # publish stays on all interfaces, not loopback (issue #581). Targets the
-  # container name, not webapp's declared static IP: webapp is realized
-  # generically (ADR-048), and a base-container-materialized node's declared
-  # docker-compose.yml ipv4_address is reference data only, never actually applied
-  # to the running container's network attachment.
   mailserver:
     profiles: ["mail"]
     image: ghcr.io/docker-mailserver/docker-mailserver:latest
@@ -753,9 +743,6 @@ services:
     profiles: ["dns"]
     image: debian:13-slim
     container_name: aptl-dns
-    ports:
-      - "${APTL_DNS_HOST_PORT:-5353}:53/tcp"
-      - "${APTL_DNS_HOST_PORT:-5353}:53/udp"
     networks:
       aptl-dmz:
         ipv4_address: 172.20.1.22

@@ -457,25 +457,61 @@ def _base_node_realization(environment=None, **fields):
     )
 
 
+_GENERATED_API_KEY = {
+    "name": "API_KEY",
+    "value_from": {"generated_artifact": "keys", "output": "api-key"},
+    "value_classification": "redacted",
+}
+# The preflight reads only an artifact's environment consumers.
+_API_KEY_FOR_DB = SimpleNamespace(
+    environment_consumers=(
+        SimpleNamespace(
+            target_address="provision.node.db", environment_variable="API_KEY"
+        ),
+    )
+)
+
+
+@pytest.mark.parametrize(
+    ("environment", "artifacts", "refusal"),
+    [
+        (None, (), "DB_PASSWORD has no environment grant for pack techvault"),
+        ([_GENERATED_API_KEY], (), "API_KEY has no generated output for this node"),
+        (
+            [_GENERATED_API_KEY],
+            (_API_KEY_FOR_DB,),
+            "API_KEY has no generated output for this node",
+        ),
+    ],
+    ids=[
+        "secret-without-grant",
+        "value-from-without-artifact",
+        "value-from-bound-to-another-node",
+    ],
+)
 def test_a_missing_binding_stops_realize_before_any_docker_command(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, environment, artifacts, refusal
 ):
-    """Missing binding fails in the backend preflight, before any mutation."""
+    """Missing binding fails in the backend preflight, before any mutation.
+
+    A `value_from` variable is refused the same way when no generated artifact
+    binds it to this node, also when an artifact binds it to another node. A
+    same-named process variable fills neither.
+    """
 
     from aptl.core.deployment.docker_compose import DockerComposeBackend
 
     monkeypatch.setenv("DB_PASSWORD", _CANARY)
+    monkeypatch.setenv("API_KEY", _CANARY)
     backend = DockerComposeBackend(tmp_path, project_name="aptl-test")
     commands: list[list[str]] = []
     monkeypatch.setattr(backend, "_run", lambda cmd, **_: commands.append(cmd))
+    realization = _base_node_realization(environment, generated_artifacts=artifacts)
 
-    result = backend.realize(_base_node_realization(), scenario_root=tmp_path)
+    result = backend.realize(realization, scenario_root=tmp_path)
 
     assert result.success is False
-    assert result.error == (
-        "Environment binding refused for node webapp: DB_PASSWORD has no "
-        "environment grant for pack techvault."
-    )
+    assert result.error == f"Environment binding refused for node webapp: {refusal}."
     assert commands == []
     assert not (tmp_path / ".aptl" / "realization").exists()
 

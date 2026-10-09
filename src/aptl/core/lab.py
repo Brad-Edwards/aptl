@@ -26,7 +26,7 @@ import yaml
 
 from aptl.core.certs import ensure_ssl_certs
 from aptl.core.soc_ca import ensure_soc_certs
-from aptl.core.config import AptlConfig, find_config, load_config
+from aptl.core.config import AptlConfig, DeploymentConfig, find_config, load_config
 from aptl.core.contracts import (
     backend_is_initialized,
     config_is_loaded,
@@ -542,6 +542,13 @@ def _tear_down_owned(
 #: The command a failed reset names for the retry (#1218).
 _RESET_RETRY_COMMAND = "aptl lab reset --yes"
 
+#: Why a reset refuses when the recorded workspace scope can't be read (#1218).
+_RESET_WORKSPACE_STATE_UNREADABLE = (
+    "[lifecycle-state-invalid] Lab reset blocked: unreadable workspace "
+    "ownership state; refusing to guess which project to remove. Repair or "
+    "restore .aptl/lifecycle/workspace-ownership-v1.json and retry."
+)
+
 
 def reset_lab(
     project_dir: Path,
@@ -549,7 +556,7 @@ def reset_lab(
 ) -> LabResetResult:
     """Return the lab to a clean, stopped state (#1218).
 
-    Inside the lifecycle lock it observes the project, then runs the same
+    Inside the lifecycle lock it counts the project, then runs the same
     project-scoped teardown as ``aptl lab stop -v``: the project's containers,
     networks and volumes go, and every pending host-side cleanup record runs
     (``aptl.core.lifecycle_cleanup``). Other host files, such as ``aptl.json``,
@@ -570,7 +577,7 @@ def reset_lab(
 def _reset_lab_owned(
     project_root: Path, backend: Optional["DeploymentBackend"]
 ) -> LabResetResult:
-    """Observe the project, then reset it while the caller holds the lock."""
+    """Count the project, then reset it while the caller holds the lock."""
 
     config, profiles, failure = _stop_recovery_configuration(
         project_root, backend, command="reset"
@@ -578,8 +585,13 @@ def _reset_lab_owned(
     if failure is not None:
         return LabResetResult(failure)
     assert profiles is not None
+    recorded = _workspace_scope_recorded(project_root, config)
+    if recorded is None:
+        return LabResetResult(
+            LabResult(success=False, error=_RESET_WORKSPACE_STATE_UNREADABLE)
+        )
     selected = backend or _get_backend(project_root, config)
-    presence = selected.observe_project_runtime()
+    counts = _reset_counts(selected) if recorded else (0, 0)
     result = _tear_down_owned(
         project_root,
         selected,
@@ -587,9 +599,47 @@ def _reset_lab_owned(
         remove_volumes=True,
         retry_command=_RESET_RETRY_COMMAND,
     )
+    return LabResetResult(result, *counts)
+
+
+def _workspace_scope_recorded(
+    project_root: Path, config: AptlConfig | None
+) -> bool | None:
+    """Whether a start recorded the workspace scope that a reset removes.
+
+    Every start since #1054 labels its containers and networks with the
+    workspace-scoped project name recorded under ``.aptl/lifecycle``, and the
+    teardown removes only that project. Without the record, the teardown
+    creates a new, empty scope, so nothing there exists to count, even when an
+    unscoped project from before #1054 runs on the same daemon. ``None`` means
+    the record exists but can't be read.
+    """
+
+    from aptl.core.deployment._compose_resource_ownership import (
+        OwnershipConflictError,
+        WorkspaceOwnership,
+    )
+
+    deployment = DeploymentConfig() if config is None else config.deployment
+    try:
+        scope = WorkspaceOwnership.load(project_root, deployment.project_name)
+    except OwnershipConflictError:
+        return None
+    return scope is not None
+
+
+def _reset_counts(backend: "DeploymentBackend") -> tuple[int | None, int | None]:
+    """Count the workspace-scoped project's containers and networks.
+
+    ``observe_project_runtime`` binds the recorded workspace scope before it
+    counts, so this is the project the teardown removes. Both counts are
+    ``None`` when the backend could not observe them.
+    """
+
+    presence = backend.observe_project_runtime()
     if presence.error:
-        return LabResetResult(result)
-    return LabResetResult(result, presence.container_count, presence.network_count)
+        return None, None
+    return presence.container_count, presence.network_count
 
 
 def _stop_recovery_configuration(

@@ -82,7 +82,7 @@ as `[REDACTED]`.
 | `aptl doctor --json` | `counts`, the number of checks per status (`pass`, `warn`, `fail`, `skip`); `checks`, a list of `id`, `status`, `summary`, and `fix`. |
 | `aptl lab start --json` | `outcome` (`ready`, `degraded_usable`, `degraded_unusable`, or `failed`); `error`, a string or `null`; `execution_boundary`, the observed boundary or `null`; `admission_seconds`, a number or `null`; `diagnostics`, a list of `step`, `component`, `impact`, `severity`, `message`, and `operator_action`; `published_ports`, a list of `service`, `default_port`, `host_port`, `protocols`, `host_ip`, and `remapped`; `published_ports_observed`, whether Docker reported those ports; `residue`, `null` or the `container_count`, `network_count`, `teardown_requested`, and `torn_down` of a failed start. |
 | `aptl lab stop --json` | `volumes`, whether `--volumes` was requested; `error`, a string or `null`. |
-| `aptl lab reset --json` | `containers_found` and `networks_found`, the project containers and networks observed before the reset, or `null` when they couldn't be observed; `error`, a string or `null`. |
+| `aptl lab reset --json` | `containers_found` and `networks_found`, the containers and networks of the workspace-scoped project that the reset removes, counted before it (`0` when no `aptl lab start` recorded that project), or `null` when they couldn't be counted; `error`, a string or `null`. |
 
 `execution_boundary` is the observation behind the text summary's
 `Execution boundary:` line. It carries its own `schema_version`,

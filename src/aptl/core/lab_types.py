@@ -201,8 +201,10 @@ class LabResetResult:
 
     ``result`` is the project-scoped teardown with volume removal and pending
     host-side cleanup, the same work as ``aptl lab stop -v``. The counts are the
-    project containers and networks observed just before the reset, or ``None``
-    when that observation failed or the reset never reached it.
+    containers and networks of the workspace-scoped project that teardown
+    removes, observed just before it, and zero when no start recorded that
+    scope. They are ``None`` when that observation failed or the reset never
+    reached it.
     """
 
     result: LabResult

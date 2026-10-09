@@ -533,11 +533,24 @@ class _Project(_Backend):
         return result
 
 
+def _started(root: Path) -> str:
+    """Record the workspace scope a start leaves, and return its project name.
+
+    A reset counts only that workspace-scoped project, the one its teardown
+    removes (#1054), so a project without a recorded scope counts as empty.
+    """
+    from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
+
+    return WorkspaceOwnership.ensure(root, "aptl").project_name
+
+
 def _kept_host_files(root: Path) -> dict[Path, bytes]:
     """Write the host files a reset must keep, and return their bytes.
 
-    The run record goes where ``aptl runs list`` reads it: the run store that
-    ``aptl.json`` configures, ``./runs`` by default.
+    Each goes where `aptl lab init` or `aptl lab start` writes it: the public
+    half of the lab SSH key under ``keys/``, the Wazuh and SOC certificates
+    under ``config/``, and the run record in the run store that ``aptl.json``
+    configures, ``./runs`` by default.
     """
     from aptl.cli._common import resolve_run_store
 
@@ -547,7 +560,9 @@ def _kept_host_files(root: Path) -> dict[Path, bytes]:
     files = {
         root / "aptl.json": config,
         root / ".env": b"APTL_LAB_LABEL=keep-me\n",
-        root / "containers" / "keys" / "aptl_lab_key": b"lab-key-fixture\n",
+        root / "keys" / "aptl_lab_key.pub": b"ssh-ed25519 lab-key-fixture\n",
+        root / "config" / "wazuh_indexer_ssl_certs" / "root-ca.pem": b"wazuh-ca\n",
+        root / "config" / "soc_certs" / "lab-ca.pem": b"soc-ca\n",
         run_record: b'{"run": "1"}\n',
     }
     for path, content in files.items():
@@ -565,6 +580,7 @@ def test_reset_removes_the_project_and_finishes_pending_cleanup(
 
     _no_installed_providers(monkeypatch)
     kept = _kept_host_files(tmp_path)
+    _started(tmp_path)
     _legacy(tmp_path)
     baseline = _baseline(tmp_path)
     project = _Project()
@@ -584,6 +600,7 @@ def test_repeated_reset_is_safe(tmp_path: Path, monkeypatch) -> None:
     from aptl.core.lab import reset_lab
 
     _no_installed_providers(monkeypatch)
+    _started(tmp_path)
     _legacy(tmp_path)
     _baseline(tmp_path)
     project = _Project()
@@ -597,28 +614,55 @@ def test_repeated_reset_is_safe(tmp_path: Path, monkeypatch) -> None:
     assert len(list((tmp_path / LEGACY_DONE_DIR).iterdir())) == 1
 
 
-def test_repeated_stop_is_safe(tmp_path: Path, monkeypatch) -> None:
-    """A second plain stop finds nothing to remove and still succeeds (#1218)."""
-    from aptl.core.lab import stop_lab
+def test_repeated_teardown_on_the_real_backend_is_safe(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Repeated `stop`, `stop -v` and `reset` run the real teardown (#1218).
+
+    Docker holds nothing for the project, which is what a first teardown
+    leaves. Each call builds its backend as the CLI does, runs the Compose
+    teardown and its absence check, and succeeds, and every call removes the
+    same workspace-scoped project: the one the first call recorded.
+    """
+    from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
+    from aptl.core.lab import reset_lab, stop_lab
 
     _no_installed_providers(monkeypatch)
-    project = _Project()
+    commands: list[list[str]] = []
 
-    first = stop_lab(project_dir=tmp_path, backend=project)
-    second = stop_lab(project_dir=tmp_path, backend=project)
+    def run(cmd: list[str], *_args: object, **_kwargs: object):
+        commands.append(list(cmd))
+        return subprocess.CompletedProcess(cmd, 0, "", "")
 
-    assert first.success is True
-    assert second.success is True
-    assert [remove_volumes for _profiles, remove_volumes in project.calls] == [
-        False,
-        False,
+    def no_process(*_args: object, **_kwargs: object):
+        raise AssertionError("teardown started a process outside subprocess.run")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(subprocess, "Popen", no_process)
+
+    stops = [
+        stop_lab(remove_volumes=volumes, project_dir=tmp_path)
+        for volumes in (False, False, True, True)
     ]
+    resets = [reset_lab(tmp_path) for _ in range(2)]
+
+    assert [result.success for result in stops] == [True] * 4
+    assert [
+        (outcome.result.success, outcome.containers_found, outcome.networks_found)
+        for outcome in resets
+    ] == [(True, 0, 0)] * 2
+    scope = WorkspaceOwnership.load(tmp_path, "aptl")
+    assert scope is not None
+    downs = [cmd for cmd in commands if cmd[:2] == ["docker", "compose"]]
+    assert [cmd[cmd.index("-p") + 1] for cmd in downs] == [scope.project_name] * 6
+    assert ["down" in cmd for cmd in downs] == [True] * 6
 
 
 def test_reset_reports_cleanup_it_could_not_finish(tmp_path: Path, monkeypatch) -> None:
     from aptl.core.lab import reset_lab
 
     _install(monkeypatch, ("2.0.0", _provider(reset=lambda _context: None)))
+    _started(tmp_path)
     record = _legacy(
         tmp_path,
         pack_id="otherpack",
@@ -647,6 +691,7 @@ def test_reset_of_an_unobservable_project_still_resets(
     from aptl.core.lab import reset_lab
 
     _no_installed_providers(monkeypatch)
+    _started(tmp_path)
     project = _Project(observed=False)
 
     outcome = reset_lab(tmp_path, backend=project)
@@ -689,20 +734,20 @@ def test_reset_refuses_while_another_lifecycle_owner_holds_the_lock(
 
 
 class _Daemon:
-    """Docker's answers for one workspace-scoped project and a foreign one.
+    """The projects one Docker daemon holds, answered by exact label value.
 
-    It answers the project observation queries by the exact label value, as
-    the daemon filters them. ``stop`` stands in for the Compose teardown,
-    which needs ownership receipts this fake does not hold.
+    It answers the project observation queries as the daemon filters them.
+    ``stop`` stands in for the Compose teardown, which needs ownership
+    receipts this fake does not hold. Like the real one, it first binds the
+    workspace scope, recording a new one when none is recorded, and then
+    removes only that project.
     """
 
-    def __init__(self, project: str) -> None:
-        self.project = project
-        self.projects = {
-            project: (["c1", "c2", "c3"], ["n1", "n2"]),
-            # An unscoped project from before workspace scoping (#1054).
-            "aptl": (["legacy-c"], ["legacy-n"]),
-        }
+    def __init__(
+        self, backend: object, projects: dict[str, tuple[list[str], list[str]]]
+    ) -> None:
+        self.backend = backend
+        self.projects = projects
         self.stops: list[bool] = []
 
     def run(self, cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
@@ -718,8 +763,28 @@ class _Daemon:
     def stop(self, profiles: list[str], *, remove_volumes: bool = False) -> LabResult:
         del profiles
         self.stops.append(remove_volumes)
-        self.projects[self.project] = ([], [])
+        scope = self.backend._ensure_resource_ownership().project_name
+        self.projects.pop(scope, None)
         return LabResult(success=True)
+
+
+def _unscoped_project() -> dict[str, tuple[list[str], list[str]]]:
+    """An unscoped `aptl` project from before workspace scoping (#1054)."""
+
+    return {"aptl": (["legacy-c"], ["legacy-n"])}
+
+
+def _compose_daemon(
+    root: Path, monkeypatch, projects: dict[str, tuple[list[str], list[str]]]
+) -> tuple[object, _Daemon]:
+    """Build the real Compose backend that `reset_lab` builds, on a fake daemon."""
+    from aptl.core.deployment.docker_compose import DockerComposeBackend
+
+    backend = DockerComposeBackend(root)
+    daemon = _Daemon(backend, projects)
+    monkeypatch.setattr(backend, "_run", daemon.run)
+    monkeypatch.setattr(backend, "stop", daemon.stop)
+    return backend, daemon
 
 
 def test_reset_counts_the_project_that_start_labelled(
@@ -730,36 +795,78 @@ def test_reset_counts_the_project_that_start_labelled(
     `aptl lab start` binds the workspace-scoped name (`aptl-w<id>`) and labels
     every container and network with it. A backend built as `reset_lab` builds
     one holds the logical name `aptl` until the workspace scope loads, so the
-    count must not run before that (#1218).
+    count must not run before that (#1218). An unscoped project from before
+    #1054 on the same daemon is neither counted nor removed.
     """
-    from aptl.core.deployment._compose_resource_ownership import WorkspaceOwnership
-    from aptl.core.deployment.docker_compose import DockerComposeBackend
     from aptl.core.lab import reset_lab
 
     _no_installed_providers(monkeypatch)
-    daemon = _Daemon(WorkspaceOwnership.ensure(tmp_path, "aptl").project_name)
-    backend = DockerComposeBackend(tmp_path)
-    monkeypatch.setattr(backend, "_run", daemon.run)
-    monkeypatch.setattr(backend, "stop", daemon.stop)
+    scoped = _started(tmp_path)
+    backend, daemon = _compose_daemon(
+        tmp_path,
+        monkeypatch,
+        {scoped: (["c1", "c2", "c3"], ["n1", "n2"]), **_unscoped_project()},
+    )
 
     outcome = reset_lab(tmp_path, backend=backend)
 
     assert outcome.result.success is True
     assert (outcome.containers_found, outcome.networks_found) == (3, 2)
     assert daemon.stops == [True]
+    assert daemon.projects == _unscoped_project()
 
 
-def test_reset_with_unreadable_workspace_state_counts_nothing_and_fails(
-    tmp_path: Path, monkeypatch
+def test_reset_before_any_start_counts_nothing(tmp_path: Path, monkeypatch) -> None:
+    """Without a recorded workspace scope, a reset counts zero (#1218).
+
+    Its teardown records a new, empty scope and removes only that project, so
+    an unscoped `aptl` project from before #1054 on the same daemon is neither
+    counted nor removed.
+    """
+    from aptl.core.lab import reset_lab
+
+    _no_installed_providers(monkeypatch)
+    backend, daemon = _compose_daemon(tmp_path, monkeypatch, _unscoped_project())
+
+    outcome = reset_lab(tmp_path, backend=backend)
+
+    assert outcome.result.success is True
+    assert (outcome.containers_found, outcome.networks_found) == (0, 0)
+    assert daemon.stops == [True]
+    assert daemon.projects == _unscoped_project()
+
+
+def _malformed_state(state: Path) -> None:
+    state.write_text("{}\n", encoding="utf-8")
+
+
+def _linked_state(state: Path) -> None:
+    target = state.with_name("elsewhere.json")
+    target.write_text('{"schema": 1, "workspace_id": "' + "a" * 32 + '"}\n')
+    state.symlink_to(target)
+
+
+@pytest.mark.parametrize(
+    "write_state",
+    [_malformed_state, _linked_state],
+    ids=["malformed", "symlink"],
+)
+def test_reset_refuses_unreadable_workspace_state_before_teardown(
+    tmp_path: Path, monkeypatch, write_state
 ) -> None:
-    """Unreadable workspace state is an observation failure, never `0` (#1218)."""
+    """Unreadable workspace state stops a reset before anything changes (#1218).
+
+    That state names the project the teardown removes, so the refusal names
+    the file to repair, not a Docker failure, and no Docker command runs.
+    """
     from aptl.core.deployment.docker_compose import DockerComposeBackend
     from aptl.core.lab import reset_lab
 
     _no_installed_providers(monkeypatch)
     state = tmp_path / ".aptl" / "lifecycle" / "workspace-ownership-v1.json"
     state.parent.mkdir(parents=True)
-    state.write_text("{}\n", encoding="utf-8")
+    write_state(state)
+    before = state.read_bytes()
     commands: list[list[str]] = []
 
     def run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess:
@@ -771,14 +878,15 @@ def test_reset_with_unreadable_workspace_state_counts_nothing_and_fails(
 
     outcome = reset_lab(tmp_path, backend=backend)
 
-    assert (outcome.containers_found, outcome.networks_found) == (None, None)
+    assert outcome.result.success is False
     assert outcome.result.error == (
-        "[lifecycle-docker-teardown-failed] Docker teardown failed: Backend "
-        "resource ownership conflict before Compose cleanup. Host-side cleanup "
-        "was not attempted; 0 actions remain pending. Resolve the Docker failure, "
-        "then retry with `aptl lab reset --yes`."
+        "[lifecycle-state-invalid] Lab reset blocked: unreadable workspace "
+        "ownership state; refusing to guess which project to remove. Repair or "
+        "restore .aptl/lifecycle/workspace-ownership-v1.json and retry."
     )
+    assert (outcome.containers_found, outcome.networks_found) == (None, None)
     assert commands == []
+    assert state.read_bytes() == before
 
 
 @pytest.mark.parametrize(

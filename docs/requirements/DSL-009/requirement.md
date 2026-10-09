@@ -17,7 +17,9 @@ The SDL shall provide a way to declare normal user activity patterns (browsing, 
 
 ## Rationale
 
-NOT DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009, but open issue #436 still tracks this record together with REP-004. On 2026-07-03 the issue moved profile authoring to RAES (rae#659, later folded into rae#216) and kept only the LilRAE realization. See GitHub issue #436. --- Original rationale: The SDL currently has no first-class mechanism for user simulation. Injects model discrete narrative events, not continuous behavior. Green entities declare organizational identity but carry no behavioral specification. Without declarative user behavior, the full exercise model is incomplete: defenders cannot distinguish attack traffic from normal traffic unless the range generates realistic baselines, and that generation has no specification-layer anchor. CybORG Green agents are the closest precedent. Already noted in docs/sdl/limitations.md as a specification-layer gap. Tracked in GitHub as #242.
+The SDL currently has no first-class mechanism for user simulation. Injects model discrete narrative events, not continuous behavior. Green entities declare organizational identity but carry no behavioral specification. Without declarative user behavior, the full exercise model is incomplete: defenders cannot distinguish attack traffic from normal traffic unless the range generates realistic baselines, and that generation has no specification-layer anchor. CybORG Green agents are the closest precedent. Already noted in docs/sdl/limitations.md as a specification-layer gap. Tracked in GitHub as #242.
+
+NOT DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009, but open issue #436 still tracks this record together with REP-004. On 2026-07-03 the issue moved profile authoring to RAES (rae#659, later folded into rae#216) and kept only the LilRAE realization. No other record covers declared user activity: REP-004 covers only network traffic profiles, and its traceability already points at #436. See GitHub issue #436.
 
 ## Traceability
 

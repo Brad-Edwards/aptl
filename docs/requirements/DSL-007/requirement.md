@@ -17,7 +17,9 @@ The scenario DSL shall support cleanup and rollback definitions that specify how
 
 ## Rationale
 
-NOT DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009, but open issue #435 still tracks this record. On 2026-07-03 the issue moved the cleanup contract to RAES (rae#658) and kept only the LilRAE realization. See GitHub issue #435. --- Original rationale: Without cleanup definitions, environments must be fully rebuilt between runs. Atomic Red Team includes cleanup_command per test. Cleanup definitions enable faster iteration and reduce the dependency on ephemeral environments for every run.
+Without cleanup definitions, environments must be fully rebuilt between runs. Atomic Red Team includes cleanup_command per test. Cleanup definitions enable faster iteration and reduce the dependency on ephemeral environments for every run.
+
+NOT DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009, but open issue #435 still tracks this record. On 2026-07-03 the issue moved the cleanup contract to RAES (rae#658) and kept only the LilRAE realization. No other record covers declared cleanup or rollback: the cleanup in RNG-001, DEP-003 and SEC-008 tears down the whole lab. See GitHub issue #435.
 
 ## Traceability
 

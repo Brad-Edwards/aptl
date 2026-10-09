@@ -671,8 +671,8 @@ def _lifecycle_lock_unavailable_result() -> LabResult:
     )
 
 
-def clean_boot_lab(  # NOSONAR - one keyword per start option it forwards (#952).
-    project_dir: Path,
+def clean_boot_lab(
+    project_dir: Path,  # NOSONAR - one keyword per start option it forwards (#952).
     *,
     remove_volumes: bool = True,
     skip_seed: bool = False,
@@ -738,8 +738,8 @@ def clean_boot_lab(  # NOSONAR - one keyword per start option it forwards (#952)
     return result
 
 
-def _clean_boot_lab_owned(  # NOSONAR - mirrors clean_boot_lab's keywords (#952).
-    project_root: Path,
+def _clean_boot_lab_owned(
+    project_root: Path,  # NOSONAR - mirrors clean_boot_lab's keywords (#952).
     *,
     remove_volumes: bool,
     skip_seed: bool,

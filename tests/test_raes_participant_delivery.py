@@ -535,37 +535,49 @@ def test_host_adapter_rejects_non_success_result_envelopes(
         )
 
 
-def test_runtime_profile_rejects_unadmitted_mcp_environment(tmp_path: Path) -> None:
+def _render_red_profile(tmp_path: Path, environment: dict[str, str]) -> Path:
     project = tmp_path / "project"
     artifact = project / "mcp/mcp-red/build/index.js"
     artifact.parent.mkdir(parents=True)
     artifact.write_text("", encoding="utf-8")
     source = project / ".mcp.json"
     source.write_text(
-        json.dumps(
-            {
-                "mcpServers": {
-                    "aptl-red": {
-                        "env": {
-                            "APTL_STATE_DIR": "/state",
-                            "NODE_OPTIONS": "--require=/tmp/untrusted.js",
-                        }
-                    }
-                }
-            }
-        ),
+        json.dumps({"mcpServers": {"aptl-red": {"env": environment}}}),
         encoding="utf-8",
     )
+    path, _tools = _render_runtime_profile_config(
+        profile=ProfileId.RED,
+        project_dir=project,
+        source_config=source,
+        output_dir=tmp_path,
+        node_executable=_admitted_fixture_executable(tmp_path),
+    )
+    return path
 
-    node_executable = _admitted_fixture_executable(tmp_path)
+
+def test_runtime_profile_rejects_unadmitted_mcp_environment(tmp_path: Path) -> None:
     with pytest.raises(AgentExecutionError, match="environment is not admitted"):
-        _render_runtime_profile_config(
-            profile=ProfileId.RED,
-            project_dir=project,
-            source_config=source,
-            output_dir=tmp_path,
-            node_executable=node_executable,
+        _render_red_profile(
+            tmp_path,
+            {
+                "APTL_STATE_DIR": "/state",
+                "NODE_OPTIONS": "--require=/tmp/untrusted.js",
+            },
         )
+
+
+def test_runtime_profile_carries_workspace_capture_container(tmp_path: Path) -> None:
+    """#1242: the synced capture sidecar name survives role-scoped rendering."""
+    name = "aptl-w123456789abc-kali-capture"
+    path = _render_red_profile(
+        tmp_path, {"APTL_STATE_DIR": "/state", "LILRAE_MCP_CAPTURE_CONTAINER": name}
+    )
+
+    rendered = json.loads(path.read_text(encoding="utf-8"))
+    assert rendered["mcpServers"]["aptl-red"]["env"] == {
+        "APTL_STATE_DIR": "/state",
+        "LILRAE_MCP_CAPTURE_CONTAINER": name,
+    }
 
 
 class _FakeRuntimeManager(AptlRuntimeManager):

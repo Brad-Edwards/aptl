@@ -20,11 +20,16 @@ import {
   writeFileSync,
   mkdirSync,
   existsSync,
+  readFileSync,
   statSync,
+  symlinkSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
+
+type DockerResult = { code: number; stderr: string };
 
 // Module-level controls the mocked `spawn` reads on every invocation.
 // Each test resets them in `beforeEach`.
@@ -34,6 +39,8 @@ interface SpawnControl {
   capturedArgs: string[][];
   capturedCmds: string[];
   callCount: number;
+  /** When set, replay recorded results keyed by the `<container>:<src>` arg. */
+  recorded?: Record<string, DockerResult>;
 }
 const spawnControl: SpawnControl = {
   exitCode: 0,
@@ -41,6 +48,46 @@ const spawnControl: SpawnControl = {
   capturedArgs: [],
   capturedCmds: [],
   callCount: 0,
+};
+
+/** Replay one recorded result; an unrecorded argv fails loudly (rc 125). */
+function replay(args: string[]): DockerResult {
+  if (!spawnControl.recorded) {
+    return { code: spawnControl.exitCode, stderr: spawnControl.stderrText };
+  }
+  return spawnControl.recorded[args[1]] ?? { code: 125, stderr: `unrecorded: ${args[1]}` };
+}
+
+// #1242: `docker cp` results recorded on 2026-10-09 UTC against Docker CLI and
+// Engine 29.7.2 (API 1.55), with stdout and stderr piped as `execDockerCp`
+// spawns them. A `FROM scratch` image held `<root>/<run>/sess-1/pty/typescript`
+// and `<root>/_audit/audit.log` only; it was created, never started, as
+// `aptl-w123456789abc-kali-capture`. The absent rows ran with no such container:
+// the daemon answered every path with the same `No such container` line.
+const SCOPED = 'aptl-w123456789abc-kali-capture';
+const FIXED = 'aptl-kali-capture';
+const ROOT = '/var/log/aptl/captures';
+const RUN = 'a'.repeat(32);
+const missingFile = (path: string): DockerResult => ({
+  code: 1,
+  stderr: `Error response from daemon: Could not find the file ${ROOT}/${path} in container ${SCOPED}\n`,
+});
+const absent = (name: string): Record<string, DockerResult> =>
+  Object.fromEntries(
+    [`${RUN}/sess-1/.`, '_audit/.', '_proc-acct/.'].map((path) => [
+      `${name}:${ROOT}/${path}`,
+      { code: 1, stderr: `Error response from daemon: No such container: ${name}\n` },
+    ]),
+  );
+const RECORDED_DOCKER_CP = {
+  scopedPresent: {
+    [`${SCOPED}:${ROOT}/${RUN}/sess-1/.`]: { code: 0, stderr: '' },
+    [`${SCOPED}:${ROOT}/${RUN}/sess-gone/.`]: missingFile(`${RUN}/sess-gone/.`),
+    [`${SCOPED}:${ROOT}/_audit/.`]: { code: 0, stderr: '' },
+    [`${SCOPED}:${ROOT}/_proc-acct/.`]: missingFile('_proc-acct/.'),
+  },
+  scopedAbsent: absent(SCOPED),
+  fixedAbsent: absent(FIXED),
 };
 
 vi.mock('node:child_process', () => ({
@@ -62,8 +109,7 @@ vi.mock('node:child_process', () => ({
     };
     child.stdout = stdout;
     child.stderr = stderr;
-    const exit = spawnControl.exitCode;
-    const text = spawnControl.stderrText;
+    const { code: exit, stderr: text } = replay(args);
     setImmediate(() => {
       if (text) stderr.emit('data', Buffer.from(text));
       child.emit('close', exit);
@@ -73,6 +119,17 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { harvestSession } from '../src/captures.js';
+import { loadLabConfig } from '../src/config.js';
+import { resolveCaptureContainer } from '../src/tools/handlers.js';
+
+// tests/ -> aptl-mcp-common/ -> mcp/, then the shipped red server config.
+const RED_CONFIG = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'mcp-red',
+  'docker-lab-config.json',
+);
 
 let tmp = '';
 
@@ -83,8 +140,10 @@ beforeEach(() => {
   spawnControl.capturedArgs = [];
   spawnControl.capturedCmds = [];
   spawnControl.callCount = 0;
+  spawnControl.recorded = undefined;
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -304,6 +363,69 @@ describe('harvestSession', () => {
       'sess-1',
     );
     expect(spawnControl.capturedArgs[0][1]).toContain(`/var/log/aptl/captures/${'y'.repeat(32)}/sess-1/.`);
+  });
+});
+
+describe('#1242: workspace-scoped capture container (recorded docker cp)', () => {
+  const sessionDir = (session: string) => join(tmp, 'runs', RUN, 'kali-side', session);
+  const failureRecord = (session: string) =>
+    join(sessionDir(session), 'capture-harvest-failure.json');
+  const harvest = (containerName: string, session = 'sess-1') =>
+    harvestSession({ containerName, env: { APTL_STATE_DIR: tmp } }, session);
+
+  beforeEach(() => activateScenario(RUN));
+
+  it('harvests from the sidecar name lab start injects into the shipped red config', async () => {
+    vi.stubEnv('APTL_MCP_DISABLE_DOTENV', '1');
+    vi.stubEnv('LILRAE_MCP_CAPTURE_CONTAINER', SCOPED);
+    spawnControl.recorded = RECORDED_DOCKER_CP.scopedPresent;
+    const containerName = resolveCaptureContainer(await loadLabConfig(RED_CONFIG));
+    expect(containerName).toBe(SCOPED);
+
+    expect(await harvest(containerName as string)).toBe(true);
+    expect(spawnControl.capturedArgs[0]).toEqual([
+      'cp',
+      `${SCOPED}:${ROOT}/${RUN}/sess-1/.`,
+      sessionDir('sess-1'),
+    ]);
+    expect(existsSync(failureRecord('sess-1'))).toBe(false);
+  });
+
+  it.each([
+    ['workspace-scoped', SCOPED, RECORDED_DOCKER_CP.scopedAbsent],
+    ['fixed legacy', FIXED, RECORDED_DOCKER_CP.fixedAbsent],
+  ])('records a named failure in run evidence when the %s container is missing', async (_kind, name, recorded) => {
+    spawnControl.recorded = recorded;
+
+    expect(await harvest(name)).toBe(false);
+    expect(JSON.parse(readFileSync(failureRecord('sess-1'), 'utf-8'))).toEqual({
+      failure: 'aptl.capture-harvest.container-missing',
+      container: name,
+      run_id: RUN,
+      session_id: 'sess-1',
+      recorded_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    expect(statSync(failureRecord('sess-1')).mode & 0o777).toBe(0o600);
+    // ADR-042: the global `_audit` / `_proc-acct` harvest is still attempted.
+    expect(spawnControl.callCount).toBe(3);
+  });
+
+  it('keeps a missing per-session subtree distinct from a missing container', async () => {
+    spawnControl.recorded = RECORDED_DOCKER_CP.scopedPresent;
+
+    expect(await harvest(SCOPED, 'sess-gone')).toBe(false);
+    expect(existsSync(failureRecord('sess-gone'))).toBe(false);
+  });
+
+  it('never writes through a link already at the failure record path', async () => {
+    spawnControl.recorded = RECORDED_DOCKER_CP.scopedAbsent;
+    const outside = join(tmp, 'outside.txt');
+    writeFileSync(outside, 'untouched');
+    mkdirSync(sessionDir('sess-1'), { recursive: true });
+    symlinkSync(outside, failureRecord('sess-1'));
+
+    expect(await harvest(SCOPED)).toBe(false);
+    expect(readFileSync(outside, 'utf-8')).toBe('untouched');
   });
 });
 

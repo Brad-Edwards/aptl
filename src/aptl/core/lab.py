@@ -4450,10 +4450,14 @@ def _inject_mcp_server_ports(
 def _sync_native_mcp_ingress(
     project_dir: Path, backend: object, run_id: str | None
 ) -> None:
-    """Connect native Kali clients to captured ingress in the same host/guest."""
+    """Connect native Kali clients to captured ingress in the same host/guest.
+
+    The red server also learns the workspace-scoped capture sidecar name, so
+    its capture harvest copies from the container this workspace owns.
+    """
     import json
 
-    from aptl.core.mcp_ingress import native_kali_ingress
+    from aptl.core.mcp_ingress import kali_capture_container, native_kali_ingress
     from aptl.workbench.profiles import profile_for
 
     path = project_dir / ".mcp.json"
@@ -4466,8 +4470,10 @@ def _sync_native_mcp_ingress(
     if not run_id:
         raise ValueError("native MCP run identity is unavailable")
     observed = backend.container_inspect("aptl-kali")
-    server.setdefault("env", {}).update(
-        native_kali_ingress(observed, observed.get("Id", ""))
+    red_env = server.setdefault("env", {})
+    red_env.update(native_kali_ingress(observed, observed.get("Id", "")))
+    red_env.update(
+        kali_capture_container(backend.project_dir, backend.logical_project_name)
     )
     run_store_base = str(_expected_transcript_store(project_dir).resolve())
     for role in ("red", "blue"):

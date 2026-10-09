@@ -145,9 +145,9 @@ class BaseContainerSpec:
     # operator secret is authored empty and supplied by the credential boundary,
     # so it cannot travel here.
     environment_defaults: tuple[tuple[str, str], ...] = ()
-    # Declared names whose value lives outside the scenario (an operator_secret,
-    # or a secret_fixture authored without a value). Each needs an operator
-    # grant or the admitted pack's startup adapter (issue #965).
+    # Declared names whose value lives outside the scenario: a value-less
+    # operator_secret, redacted or secret_fixture variable. Each needs an
+    # operator grant or the admitted pack's startup adapter (issue #965).
     environment_sourced: tuple[str, ...] = ()
     # Declared names a generated-artifact output supplies (``value_from``).
     environment_generated: tuple[str, ...] = ()
@@ -280,9 +280,9 @@ def _environment_names(runtime: RuntimeConfiguration | None) -> tuple[str, ...]:
     and provenance alongside an optional value, and a declared value is only
     ever a non-secret default; anything classified as a secret is authored with
     an empty value and supplied through an operator grant or the admitted pack's
-    startup adapter (issue #965). Carrying values
-    through the realization spec would put credentials into a DTO that reaches
-    logs, diagnostics, and run evidence.
+    startup adapter (issue #965). Carrying values through the realization spec
+    would put credentials into a DTO that reaches logs, diagnostics, and run
+    evidence.
     """
 
     if runtime is None:

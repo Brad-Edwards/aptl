@@ -87,8 +87,11 @@ any same-named variable in its own process environment or in `.env`, and a
 shell variable overrode an authored value. A matching name is not authority to
 read a credential, so neither happens now. If you passed a value to a
 base-container node by exporting it before `aptl lab start`, or by adding it to
-`.env`, add a grant. A missing or empty source stops `aptl lab start` before it
-changes any container. The error names the node, the variable and the pack.
+`.env`, add a grant. A value-less variable that is not `operator_secret`,
+`redacted` or `secret_fixture` takes no grant, so the scenario must author its
+value or give it one of those classifications. A missing or empty source stops
+`aptl lab start` before realization creates or changes any scenario network,
+volume or container. The error names the node, the variable and the pack.
 
 A grant names the admitted pack's identifier, the consuming node, the variable
 that node declares, and the source. The source is either an exact variable of

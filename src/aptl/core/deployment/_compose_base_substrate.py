@@ -14,7 +14,6 @@ declared init requirements, and copy checked-in project content into it.
 from __future__ import annotations
 
 import os
-import stat
 
 from aptl.core.env import load_dotenv
 
@@ -34,12 +33,21 @@ from aptl.core.deployment._compose_substrate_gate import (
     WRITABLE_CGROUPS_OPTION,
     require_substrate_daemon_support,
 )
+from aptl.core.deployment._realization_primitives import (
+    EnvironmentDeliveryRefused,
+    environment_file_line,
+)
 from aptl.core.deployment.errors import BackendSeedError
 from aptl.core.deployment.realization import (
     DeploymentNetworkAttachment,
     valid_environment_variable_name,
 )
 from aptl.core.ephemeral_containers import remove_container_command
+from aptl.utils.pathsafe import (
+    PathContainmentError,
+    remove_contained_nofollow,
+    replace_private_nofollow,
+)
 
 if TYPE_CHECKING:
     from aptl.backends.raes_base_substrate import BaseContainerSpec, InitRequirements
@@ -298,8 +306,6 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
         path instead of starting with a silently blank credential.
         """
 
-        if not spec.environment_names:
-            return
         if any(
             not valid_environment_variable_name(name) for name in spec.environment_names
         ):
@@ -325,22 +331,23 @@ class ComposeBaseSubstrateMixin(ComposeGenericBaseImageMixin):
             for name in spec.environment_names
             if name in available
         }
-        if any("\n" in value or "\r" in value for value in bindings.values()):
-            raise BackendSeedError("invalid base-container environment value")
-        if not bindings:
-            return
-        env_dir = self._project_dir / ".aptl" / "realization" / "env"
-        env_dir.mkdir(parents=True, exist_ok=True)
-        env_path = env_dir / f"{spec.container_name}.env"
-        # Create restricted before writing so the values are never briefly
-        # world-readable between creation and chmod.
-        descriptor = os.open(
-            env_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, stat.S_IRUSR | stat.S_IWUSR
-        )
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            for name, value in bindings.items():
-                handle.write(f"{name}={value}\n")
-        argv.extend(("--env-file", str(env_path)))
+        # Refuse any value Docker's env-file reader would alter, then replace
+        # the whole file through the no-follow, owner-only writer. A node that
+        # binds nothing keeps no env file from an earlier run (#966).
+        relative = f".aptl/realization/env/{spec.container_name}.env"
+        try:
+            if not bindings:
+                remove_contained_nofollow(self._project_dir, relative)
+                return
+            payload = "".join(environment_file_line(*item) for item in bindings.items())
+            replace_private_nofollow(self._project_dir, relative, payload.encode())
+        except EnvironmentDeliveryRefused as exc:
+            raise BackendSeedError(f"node {spec.node_address}: {exc}") from exc
+        except PathContainmentError as exc:
+            raise BackendSeedError(
+                f"unsafe environment file for node {spec.node_address} ({exc.reason})"
+            ) from exc
+        argv.extend(("--env-file", str(self._project_dir / relative)))
 
     def _append_base_mounts(self, argv: list[str], spec: "BaseContainerSpec") -> None:
         """Append declared named-volume mounts to a base-container command."""

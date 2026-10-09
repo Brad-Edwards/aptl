@@ -14,14 +14,20 @@ process able to read `/proc`, and to anything that echoes the command.
 
 from __future__ import annotations
 
+import json
 import os
+import shutil
 import stat
+import subprocess
+import tarfile
+import uuid
 from pathlib import Path
 
 import pytest
 from raes.parser import parse_sdl_file
 
 from aptl.backends.raes_base_substrate import BaseContainerSpec, _environment_names
+from aptl.core.deployment.errors import BackendSeedError
 from tests.helpers import techvault_scenario_path
 
 
@@ -117,6 +123,17 @@ def test_node_declaring_no_environment_binds_nothing(tmp_path):
 
     assert _append(_spec(()), tmp_path) == []
     assert not (tmp_path / ".aptl" / "realization" / "env").exists()
+
+
+def test_a_node_that_binds_nothing_keeps_no_earlier_env_file(tmp_path):
+    """A credential file from an earlier run does not outlive its bindings (#966)."""
+
+    stale = tmp_path / ".aptl" / "realization" / "env" / "aptl-webapp.env"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("OLD_SECRET=previous\n", encoding="utf-8")
+
+    assert _append(_spec(()), tmp_path) == []
+    assert not stale.exists()
 
 
 def test_no_environment_is_bound_when_nothing_is_set(tmp_path, monkeypatch):
@@ -263,3 +280,176 @@ def test_closed_pack_environment_has_no_values_to_reclassify(
 
     assert scenario.nodes["db"].runtime.environment == []
     assert scenario.nodes["webapp"].runtime.environment == []
+
+
+# Values Docker's env-file reader keeps byte for byte (#966). The last one makes
+# its line exactly 65535 bytes, the longest line Docker accepts.
+_EXACT_VALUES = {
+    "FIXTURE_PADDED": "  padded value  ",
+    "FIXTURE_MARKUP": "a#b $HOME ${X} 'single' \"double\" \\back",
+    "FIXTURE_EQUALS": "=leading=and=inner=",
+    "FIXTURE_UNICODE": "pässwörd-✓",
+    "FIXTURE_INNER_CR": "carriage\rreturn",
+    "FIXTURE_LONGEST": "x" * (65535 - len("FIXTURE_LONGEST=")),
+}
+
+
+def _fixture_spec(values: dict[str, str]) -> BaseContainerSpec:
+    return BaseContainerSpec(
+        node_address="provision.node.webapp",
+        container_name="aptl-webapp",
+        image_ref="debian:13-slim",
+        runs_services=True,
+        environment_names=tuple(values),
+        environment_defaults=tuple(values.items()),
+    )
+
+
+def _docker_env_file_values(path: Path) -> dict[str, str]:
+    """Read an env file by Docker's --env-file rules.
+
+    Lines split on line feeds and lose one trailing carriage return; blank and
+    ``#`` lines are skipped; a value is everything after the first ``=``,
+    untrimmed. Confirmed against Docker 29.7.2 while fixing #966.
+    """
+
+    values = {}
+    for raw in path.read_bytes().decode("utf-8").split("\n"):
+        line = raw.removesuffix("\r").lstrip()
+        if line and not line.startswith("#"):
+            name, _, value = line.partition("=")
+            values[name] = value
+    return values
+
+
+def test_env_file_carries_exact_values_through_dockers_reader(tmp_path):
+    """Authored values arrive unchanged, never trimmed, quoted or escaped."""
+
+    argv = _append(_fixture_spec(_EXACT_VALUES), tmp_path)
+
+    assert _docker_env_file_values(Path(argv[1])) == _EXACT_VALUES
+
+
+@pytest.mark.parametrize(
+    ("value", "problem"),
+    [
+        ("trailing\r", "trailing carriage return"),
+        ("nul\x00byte", "NUL character"),
+        ("lone-\udcff-surrogate", "not valid UTF-8"),
+        ("x" * 65536, "64 KiB"),
+    ],
+    ids=["trailing-cr", "nul", "surrogate", "over-64k"],
+)
+def test_values_dockers_reader_would_alter_are_refused_before_writing(
+    tmp_path, value, problem
+):
+    """A value Docker cannot carry exactly is a reported limitation, not a guess."""
+
+    backend = _backend(tmp_path)
+    spec = _fixture_spec({"FIXTURE": value})
+    argv: list[str] = []
+    with pytest.raises(BackendSeedError, match=problem) as excinfo:
+        backend._append_base_environment(argv, spec)
+
+    assert "cannot carry FIXTURE exactly" in str(excinfo.value)
+    assert value not in str(excinfo.value)
+    assert argv == []
+    assert not (tmp_path / ".aptl").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX symlinks")
+@pytest.mark.parametrize(
+    "link",
+    [".aptl/realization/env/aptl-webapp.env", ".aptl/realization/env"],
+    ids=["env-file", "env-directory"],
+)
+def test_a_symlinked_env_path_is_refused_and_its_target_untouched(tmp_path, link):
+    """The writer used to follow these links and truncate what they named."""
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "aptl-webapp.env").write_text("keep\n", encoding="utf-8")
+    target = outside / Path(link).name if link.endswith(".env") else outside
+    (tmp_path / link).parent.mkdir(parents=True)
+    (tmp_path / link).symlink_to(target)
+
+    backend = _backend(tmp_path)
+    spec = _fixture_spec({"FIXTURE": "value"})
+    argv: list[str] = []
+    with pytest.raises(BackendSeedError, match=r"\(symlink\)"):
+        backend._append_base_environment(argv, spec)
+
+    assert argv == []
+    assert sorted(path.name for path in outside.iterdir()) == ["aptl-webapp.env"]
+    assert (outside / "aptl-webapp.env").read_text(encoding="utf-8") == "keep\n"
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX hard links and modes")
+def test_an_existing_env_file_is_replaced_owner_only_and_never_truncated(tmp_path):
+    """A stale permissive file, or one hard-linked elsewhere, is replaced whole."""
+
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep\n", encoding="utf-8")
+    env_dir = tmp_path / ".aptl" / "realization" / "env"
+    env_dir.mkdir(parents=True)
+    stale = env_dir / "aptl-webapp.env"
+    stale.hardlink_to(outside)
+    stale.chmod(0o644)
+
+    argv = _append(_fixture_spec({"FIXTURE": "value"}), tmp_path)
+
+    assert Path(argv[1]).read_text(encoding="utf-8") == "FIXTURE=value\n"
+    assert stat.S_IMODE(Path(argv[1]).stat().st_mode) == 0o600
+    assert stat.S_IMODE(env_dir.stat().st_mode) == 0o700
+    assert outside.read_text(encoding="utf-8") == "keep\n"
+
+
+def _docker_ready() -> bool:
+    if shutil.which("docker") is None:
+        return False
+    probe = subprocess.run(["docker", "info"], capture_output=True, check=False)
+    return probe.returncode == 0
+
+
+@pytest.mark.integration
+def test_docker_reads_the_env_file_back_exactly(tmp_path):
+    """Value readback through the real Docker CLI, not a model of its parser.
+
+    The container is created from an empty imported image and never started,
+    so the check needs no registry access and leaves nothing behind.
+    """
+
+    if not _docker_ready():
+        pytest.skip("requires a Docker daemon")
+    env_file = _append(_fixture_spec(_EXACT_VALUES), tmp_path)[1]
+    archive = tmp_path / "empty.tar"
+    with tarfile.open(archive, "w"):
+        pass
+    image = f"lilrae-env-readback:{uuid.uuid4().hex[:12]}"
+    subprocess.run(
+        ["docker", "image", "import", str(archive), image],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        created = subprocess.run(
+            ["docker", "create", "--env-file", env_file, image, "/none"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        container = created.stdout.strip()
+        try:
+            inspected = subprocess.run(
+                ["docker", "inspect", "--format", "{{json .Config.Env}}", container],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        finally:
+            subprocess.run(["docker", "rm", container], capture_output=True)
+    finally:
+        subprocess.run(["docker", "image", "rm", image], capture_output=True)
+
+    realized = dict(entry.split("=", 1) for entry in json.loads(inspected.stdout))
+    assert realized == _EXACT_VALUES

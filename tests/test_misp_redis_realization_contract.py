@@ -10,6 +10,9 @@ import re
 import pytest
 from raes.parser import parse_sdl_file
 
+from aptl.core.deployment._compose_stateful_artifact_helpers import (
+    read_generated_output,
+)
 from aptl.core.deployment._misp_cache_credential import (
     MISP_CACHE_CONFIG_OUTPUT,
     MISP_CACHE_PASSWORD_OUTPUT,
@@ -290,6 +293,23 @@ def test_a_drifted_cache_config_is_regenerated_rather_than_reused(tmp_path):
     assert regenerated != original
     credential_matches = _cache_acl_token(config_file) == regenerated
     assert credential_matches
+
+
+@pytest.mark.parametrize("rewrite", ["  {key}\n", "{key}\r\n"], ids=["padded", "crlf"])
+def test_a_padded_cache_password_is_regenerated_rather_than_reused(tmp_path, rewrite):
+    """MISP would receive the padding while redis.conf holds the bare token (#966)."""
+
+    assert realize_misp_cache_credential(_cache_artifact(), tmp_path) is None
+    password_file, config_file = _cache_paths(tmp_path)
+    original = password_file.read_bytes().removesuffix(b"\n").decode()
+    password_file.write_bytes(rewrite.format(key=original).encode())
+
+    assert realize_misp_cache_credential(_cache_artifact(), tmp_path) is None
+
+    delivered = read_generated_output(tmp_path, password_file)
+    credential_matches = _cache_acl_token(config_file) == delivered
+    assert credential_matches
+    assert delivered != original
 
 
 def test_a_symlinked_cache_output_is_never_reused(tmp_path):

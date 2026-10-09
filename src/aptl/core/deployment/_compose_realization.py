@@ -35,6 +35,9 @@ from aptl.core.deployment._compose_port_readback import (
 from aptl.core.deployment._compose_service_index_realization import (
     ComposeRealizationServiceIndexMixin,
 )
+from aptl.core.deployment._compose_stateful_artifact_helpers import (
+    base_container_environment_bindings,
+)
 from aptl.core.deployment._compose_stateful_realization import (
     ComposeStatefulRealizationMixin,
 )
@@ -285,7 +288,7 @@ class ComposeRealizationMixin(
                     ops_by_address, artifact, consumers, realization_root
                 )
             if failure is None:
-                failure = _append_base_container_environment_bindings(
+                failure = base_container_environment_bindings(
                     generated_environment,
                     artifact,
                     environment_consumers,
@@ -458,39 +461,4 @@ def _append_base_container_artifact_ops(
             ops_by_address.setdefault(consumer.target_address, []).append(
                 PlaceFileOp(path=destination, content=content, mode=mode)
             )
-    return None
-
-
-def _append_base_container_environment_bindings(
-    bindings_by_address: dict[str, dict[str, str]],
-    artifact: object,
-    consumers: list[object],
-    realization_root: Path,
-) -> LabResult | None:
-    """Resolve admitted generated outputs for generic-container env delivery."""
-
-    from aptl.core.deployment._compose_stateful_model import artifact_source_path
-    from aptl.core.deployment.realization import valid_environment_variable_name
-
-    source_root = artifact_source_path(realization_root, artifact)
-    outputs = {output.name: source_root / output.path for output in artifact.outputs}
-    try:
-        for consumer in consumers:
-            if not valid_environment_variable_name(consumer.environment_variable):
-                raise ValueError("invalid generated environment variable name")
-            output = outputs.get(consumer.output_name)
-            if output is None or not output.is_file():
-                raise ValueError("missing generated output")
-            value = output.read_text(encoding="utf-8").strip()
-            if not value or "\n" in value or "\r" in value:
-                raise ValueError("invalid generated environment value")
-            node_bindings = bindings_by_address.setdefault(consumer.target_address, {})
-            if consumer.environment_variable in node_bindings:
-                raise ValueError("duplicate generated environment target")
-            node_bindings[consumer.environment_variable] = value
-    except (OSError, ValueError):
-        return LabResult(
-            success=False,
-            error=f"Generated artifact {artifact.address} environment delivery failed.",
-        )
     return None

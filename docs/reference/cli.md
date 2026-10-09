@@ -62,18 +62,42 @@ one exit status contract. Tests lock it.
 | `2` | Invalid usage, such as an unknown option, conflicting scenario selectors, or `--json` with `--clean` or `--volumes` but without `--yes`. |
 
 A start that ends `degraded_usable` or `degraded_unusable` still exits with
-status 0; read its outcome. With `--json`, `aptl doctor`, `aptl lab start`, and
-`aptl lab stop` print one JSON object on standard output, and start progress
-goes to standard error. Each object has `command`, `schema_version` (now `1`),
-and `ok`, which is `true` exactly when the exit status is `0`. A new field keeps
-the schema version; removing or retyping a field raises it. The JSON and text
-outputs render the same result.
+status 0; read its outcome. Declining the confirmation that `--clean` or
+`--volumes` asks for prints `Aborted.`, changes nothing, and also exits with
+status 0.
+
+With `--json`, `aptl doctor`, `aptl lab start`, and `aptl lab stop` print one
+JSON object on standard output, and start progress goes to standard error.
+Exit status 2 prints no JSON object; the usage error goes to standard error.
+Each object has `command`, `schema_version` (now `1`), and `ok`, which is
+`true` exactly when the exit status is `0`. A new field keeps the schema
+version; removing or retyping a field raises it. The JSON and text outputs
+render the same result. Free-form text (`error`, `message`, `operator_action`,
+`summary`, and `fix`) is redacted first, so a credential-shaped value prints
+as `[REDACTED]`.
 
 | Command | Fields after `command`, `schema_version`, and `ok` |
 | --- | --- |
 | `aptl doctor --json` | `counts`, the number of checks per status (`pass`, `warn`, `fail`, `skip`); `checks`, a list of `id`, `status`, `summary`, and `fix`. |
-| `aptl lab start --json` | `outcome` (`ready`, `degraded_usable`, `degraded_unusable`, or `failed`); `error`, a string or `null`; `execution_boundary`, the observed boundary or `null`; `admission_seconds`, a number or `null`; `diagnostics`, a list of `step`, `component`, `impact`, `severity`, `message`, and `operator_action`; `published_ports`, a list of `service`, `default_port`, `host_port`, `protocols`, `host_ip`, and `remapped`; `residue`, `null` or the `container_count`, `network_count`, `teardown_requested`, and `torn_down` of a failed start. |
+| `aptl lab start --json` | `outcome` (`ready`, `degraded_usable`, `degraded_unusable`, or `failed`); `error`, a string or `null`; `execution_boundary`, the observed boundary or `null`; `admission_seconds`, a number or `null`; `diagnostics`, a list of `step`, `component`, `impact`, `severity`, `message`, and `operator_action`; `published_ports`, a list of `service`, `default_port`, `host_port`, `protocols`, `host_ip`, and `remapped`; `published_ports_observed`, whether Docker reported those ports; `residue`, `null` or the `container_count`, `network_count`, `teardown_requested`, and `torn_down` of a failed start. |
 | `aptl lab stop --json` | `volumes`, whether `--volumes` was requested; `error`, a string or `null`. |
+
+`execution_boundary` is the observation behind the text summary's
+`Execution boundary:` line. It carries its own `schema_version`,
+`aptl.execution-boundary/v1`, and `transport`, `override_source`,
+`daemon_runtime`, `host_containment`, `observation_status`, `host_os`,
+`host_kernel`, `docker_version`, `containment_verified`, `profile_ref`, and
+`evidence_refs`.
+
+`published_ports` lists the host ports the text access summary reads. Once the
+range is up, they're the bindings Docker reports, and
+`published_ports_observed` is `true`. When Docker reports none, the list is
+the start-time port plan, which can name a port the scenario never published.
+`published_ports_observed` is then `false`, and the text summary marks its
+access locations as unverified. Service names use hyphens, so
+`wazuh.dashboard` from the plan and `wazuh-dashboard` from Docker both appear
+as `wazuh-dashboard`. A failed start reports an empty list, because its text
+output has no access summary.
 
 `aptl lab status --json` keeps its existing output, the redacted range
 snapshot with `timestamp`, `software`, `containers`, `wazuh_rules`, `networks`,

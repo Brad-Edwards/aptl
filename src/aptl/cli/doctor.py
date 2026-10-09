@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from aptl.cli._common import emit_json_result, exit_status
+from aptl.cli._common import emit_json_result, exit_status, redact_text
 
 if TYPE_CHECKING:
     from aptl.core.doctor import DoctorReport
@@ -47,7 +47,10 @@ def doctor(
 
 
 def doctor_result_fields(report: DoctorReport) -> dict[str, object]:
-    """Return the ``--json`` fields; they carry what the text lines show."""
+    """Return the ``--json`` fields; they carry what the text lines show.
+
+    The summary and fix are redacted like every free-form JSON string.
+    """
     from aptl.core.doctor import CheckStatus
 
     return {
@@ -56,8 +59,8 @@ def doctor_result_fields(report: DoctorReport) -> dict[str, object]:
             {
                 "id": check.check_id,
                 "status": check.status.value,
-                "summary": check.summary,
-                "fix": check.fix,
+                "summary": redact_text(check.summary),
+                "fix": redact_text(check.fix),
             }
             for check in report.checks
         ],

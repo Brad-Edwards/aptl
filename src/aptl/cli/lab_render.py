@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,8 +34,8 @@ _REVERSE_DEFAULT = 2027
 # hardcodes the host port on localhost. If one of these is remapped, the MCP
 # server config still points at the default port, so flag it for the operator.
 _MCP_BACKED_SERVICES = {
-    "wazuh.indexer",
-    "wazuh.manager",
+    "wazuh-indexer",
+    "wazuh-manager",
     "thehive",
     "misp",
     "shuffle-frontend",
@@ -291,6 +292,20 @@ def live_resolved_ports(project_dir: Path) -> list[ResolvedPort]:
     return _coalesce_resolved_ports(resolved)
 
 
+def published_access_ports(
+    project_dir: Path, planned: list[ResolvedPort] | None
+) -> tuple[list[ResolvedPort], bool]:
+    """Return the ports to report and whether Docker observed them (#1218).
+
+    The access summary and `lab start --json` share this. Live bindings win; the
+    start-time plan can name ports a scenario never published (TechVault's
+    Grafana), so it stands in only for an empty, failed query. Dots become hyphens.
+    """
+    live = live_resolved_ports(project_dir)
+    ports = live or planned or []
+    return [replace(p, service=p.service.replace(".", "-")) for p in ports], bool(live)
+
+
 def live_services(project_dir: Path) -> set[str]:
     """Return the Compose service names that are currently running.
 
@@ -346,12 +361,12 @@ def _emit_dashboard_access(
     port: int | None,
     remote: bool,
     caller_reported_no_ports: bool,
-    live_ports: list[ResolvedPort],
+    observed: bool,
     active_services: set[str],
 ) -> None:
     """Print the dashboard address only when a published port is supported."""
 
-    if _published_access_port(port, caller_reported_no_ports, live_ports, active_services):
+    if _published_access_port(port, caller_reported_no_ports, observed, active_services):
         if remote:
             typer.echo(f"  Wazuh Dashboard: remote Docker host port {port} (HTTPS)")
         else:
@@ -365,12 +380,12 @@ def _emit_grafana_access(
     port: int | None,
     remote: bool,
     caller_reported_no_ports: bool,
-    live_ports: list[ResolvedPort],
+    observed: bool,
     active_services: set[str],
 ) -> None:
     """Print Grafana access only when the selected host publishes its port."""
 
-    if _published_access_port(port, caller_reported_no_ports, live_ports, active_services):
+    if _published_access_port(port, caller_reported_no_ports, observed, active_services):
         if remote:
             typer.echo(f"  Grafana: remote Docker host port {port} (HTTP)")
         else:
@@ -398,20 +413,11 @@ def emit_lab_access_summary(
 ) -> None:
     """Print the credential locations and common lab entry points.
 
-    ``resolved_ports`` (host_ports.ResolvedPort list from a lab-start run) makes
-    the printed URLs reflect the real published ports — important on hosts where
-    a default port was in use and the service was remapped to a free one.
+    ``resolved_ports`` is the caller's list (a start's plan or a live query);
+    :func:`published_access_ports` prefers live bindings, so remaps show real ports.
     """
-    # Live Docker state is ground truth once the range is up. The list a
-    # `lab start` hands over comes from resolving the checked-in Compose
-    # stack's convenience ports, so it can carry a default for a service the
-    # realized scenario never published -- TechVault does exactly that with
-    # Grafana. Prefer what is actually bound; fall back to the caller's list
-    # only when the query returns nothing, which means it failed rather than
-    # that the range published nothing.
     caller_reported_no_ports = resolved_ports == []
-    live_ports = live_resolved_ports(project_dir)
-    resolved_ports = live_ports or resolved_ports or []
+    resolved_ports, observed = published_access_ports(project_dir, resolved_ports)
     if active_services is None:
         active_services = live_services(project_dir)
     remote = (
@@ -432,16 +438,16 @@ def emit_lab_access_summary(
     )
     typer.echo("")
     typer.echo("Access:")
-    if not live_ports and (resolved_ports or active_services):
+    if not observed and (resolved_ports or active_services):
         typer.echo(
             "  Published host ports are unverified; access locations below "
             "may be planned or default guesses."
         )
     _emit_dashboard_access(
-        dashboard_port, remote, caller_reported_no_ports, live_ports, active_services
+        dashboard_port, remote, caller_reported_no_ports, observed, active_services
     )
     _emit_grafana_access(
-        grafana_port, remote, caller_reported_no_ports, live_ports, active_services
+        grafana_port, remote, caller_reported_no_ports, observed, active_services
     )
     _emit_reverse_access(reverse_port, remote, active_services)
     _emit_host_port_remaps(resolved_ports)
@@ -450,11 +456,11 @@ def emit_lab_access_summary(
 def _published_access_port(
     port: int | None,
     caller_reported_no_ports: bool,
-    live_ports: list[ResolvedPort],
+    observed: bool,
     active_services: set[str],
 ) -> bool:
     """Never advertise a planned default when neither source observed a port."""
 
     return port is not None and not (
-        caller_reported_no_ports and not live_ports and not active_services
+        caller_reported_no_ports and not observed and not active_services
     )

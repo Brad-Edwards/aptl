@@ -18,6 +18,7 @@ import typer
 
 from aptl.core.config import AptlConfig, find_config, load_config
 from aptl.core.runstore import LocalRunStore
+from aptl.utils.redaction import redact
 
 
 _NO_CONFIG_TEMPLATE = "no aptl.json found in {project_dir}"
@@ -47,6 +48,17 @@ def emit_json_result(command: str, ok: bool, fields: Mapping[str, object]) -> No
         **fields,
     }
     typer.echo(json.dumps(payload, indent=2))
+
+
+def redact_text(text: str | None) -> str:
+    """Return free-form ``text`` for a JSON result with secrets redacted (ADR-012).
+
+    Only the free-form strings go through it. Redacting the whole payload would
+    also hide fields whose key looks sensitive, such as the doctor count
+    ``pass``.
+    """
+
+    return str(redact(text)) if text else ""
 
 
 def exit_status(ok: bool) -> typer.Exit:

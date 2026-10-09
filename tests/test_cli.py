@@ -500,6 +500,43 @@ class TestLabStartCommand:
         assert "Wazuh Dashboard: https://localhost:443" in result.stdout
         assert "Grafana" not in result.stdout
 
+    @pytest.mark.parametrize("observed", [True, False], ids=["docker", "plan"])
+    def test_lab_start_flags_a_remapped_mcp_port_in_either_spelling(
+        self, runner, mocker, observed
+    ):
+        """The plan says `wazuh.indexer` and Docker says `wazuh-indexer` (#1218).
+
+        Both print as `wazuh-indexer`, and both get the note that the MCP
+        server config pins the default host port.
+        """
+        from dataclasses import replace
+
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import LabResult
+
+        planned = ResolvedPort(
+            "wazuh.indexer", "APTL_HP_WAZUH_INDEXER_9200", 9200, 19200, ("tcp",),
+            "127.0.0.1", True,
+        )
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(success=True, resolved_ports=[planned]),
+        )
+        mocker.patch(
+            "aptl.cli.lab_render.live_resolved_ports",
+            return_value=[replace(planned, service="wazuh-indexer")] if observed else [],
+        )
+        mocker.patch("aptl.cli.lab_render.live_services", return_value=set())
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 0
+        assert "  wazuh-indexer: 9200 -> 19200 (tcp)" in result.stdout.splitlines()
+        assert "pin the default host port in mcp/<name>/docker-lab-config.json" in (
+            " ".join(result.stdout.split())
+        )
+
     def test_lab_info_matches_live_service_names_against_spec_names(
         self, runner, tmp_path, mocker
     ):
@@ -1442,7 +1479,9 @@ class TestJsonOutputAndExitStatus:
             return result_in
 
         mocker.patch("aptl.cli.lab.orchestrate_lab_start", side_effect=start)
-        mocker.patch("aptl.cli.lab.emit_lab_access_summary")
+        # Docker reports no bindings, so a started range falls back to the plan.
+        # The access summary is not mocked: text on stdout would break the parse.
+        mocker.patch("aptl.cli.lab_render.live_resolved_ports", return_value=[])
 
         result = runner.invoke(app, ["lab", "start", "--json"])
 
@@ -1456,6 +1495,7 @@ class TestJsonOutputAndExitStatus:
             "admission_seconds",
             "diagnostics",
             "published_ports",
+            "published_ports_observed",
             "residue",
         }
         assert payload["command"] == "lab start"
@@ -1473,16 +1513,22 @@ class TestJsonOutputAndExitStatus:
                 "operator_action": "Install Node.js 20 or newer",
             }
         ]
-        assert payload["published_ports"] == [
-            {
-                "service": "wazuh.dashboard",
-                "default_port": 443,
-                "host_port": 8443,
-                "protocols": ["tcp"],
-                "host_ip": "127.0.0.1",
-                "remapped": True,
-            }
-        ]
+        # A failed start prints no access summary, so it reports no ports.
+        assert payload["published_ports"] == (
+            [
+                {
+                    "service": "wazuh-dashboard",
+                    "default_port": 443,
+                    "host_port": 8443,
+                    "protocols": ["tcp"],
+                    "host_ip": "127.0.0.1",
+                    "remapped": True,
+                }
+            ]
+            if succeeded
+            else []
+        )
+        assert payload["published_ports_observed"] is False
         assert payload["residue"] == (
             None
             if succeeded
@@ -1521,6 +1567,141 @@ class TestJsonOutputAndExitStatus:
         )
         assert payload["residue"]["container_count"] == 4
         assert payload["residue"]["network_count"] == 1
+        assert "Access:" not in text.stdout.splitlines()
+        assert payload["published_ports"] == []
+
+    @pytest.mark.parametrize(
+        "observed", [True, False], ids=["docker-observed", "docker-unobserved"]
+    )
+    def test_lab_start_json_and_text_report_the_same_published_ports(
+        self, runner, mocker, observed
+    ):
+        """One started result, two renderings: both read live Docker first (#1218).
+
+        The start-time plan remaps Grafana to 3101, but the range published
+        only the Wazuh dashboard, which Docker names `wazuh-dashboard`. Neither
+        output may advertise Grafana or a remap Docker did not show. When
+        Docker cannot be read, both fall back to the plan and say so.
+        """
+        from dataclasses import replace
+
+        from aptl.cli.main import app
+        from aptl.core.host_ports import ResolvedPort
+        from aptl.core.lab import LabResult
+
+        dashboard = ResolvedPort(
+            "wazuh.dashboard", "APTL_HP_WAZUH_DASHBOARD_5601", 443, 443, ("tcp",),
+            "127.0.0.1", False,
+        )
+        grafana = ResolvedPort(
+            "aptl-grafana-otel", "APTL_HP_APTL_GRAFANA_OTEL_3000", 3100, 3101,
+            ("tcp",), "127.0.0.1", True,
+        )
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(success=True, resolved_ports=[dashboard, grafana]),
+        )
+        mocker.patch(
+            "aptl.cli.lab_render.live_resolved_ports",
+            return_value=[replace(dashboard, service="wazuh-dashboard")] if observed else [],
+        )
+        mocker.patch(
+            "aptl.cli.lab_render.live_services",
+            return_value={"wazuh-dashboard"} if observed else set(),
+        )
+
+        text = runner.invoke(app, ["lab", "start"])
+        machine = runner.invoke(app, ["lab", "start", "--json"])
+
+        assert text.exit_code == machine.exit_code == 0
+        payload = _json_result(machine)
+        assert payload["published_ports_observed"] is observed
+        ports = {port["service"]: port for port in payload["published_ports"]}
+        assert sorted(ports) == (
+            ["wazuh-dashboard"] if observed else ["aptl-grafana-otel", "wazuh-dashboard"]
+        )
+        lines = text.stdout.splitlines()
+        assert (
+            f"  Wazuh Dashboard: https://localhost:{ports['wazuh-dashboard']['host_port']}"
+            in lines
+        )
+        assert ("  Grafana: http://localhost:3101" in lines) is ("aptl-grafana-otel" in ports)
+        assert [line for line in lines if " -> " in line] == [
+            f"  {name}: {port['default_port']} -> {port['host_port']} "
+            f"({'/'.join(port['protocols'])})"
+            for name, port in sorted(ports.items())
+            if port["remapped"]
+        ]
+        assert ("Published host ports are unverified" in text.stdout) is not observed
+
+    @pytest.mark.parametrize(
+        ("args", "redactions"),
+        [(["doctor"], 2), (["lab", "start"], 3), (["lab", "stop"], 1)],
+        ids=["doctor", "start", "stop"],
+    )
+    def test_json_redacts_credentials_in_free_form_text(
+        self, runner, mocker, args, redactions
+    ):
+        """ADR-012: CLI JSON output is redacted before serialization.
+
+        Only the free-form strings are: the doctor summary and fix, the start
+        error and diagnostic text, and the stop error. Keys such as the doctor
+        count `pass` stay readable.
+        """
+        from aptl.cli.main import app
+        from aptl.core.doctor import CheckStatus, DoctorCheck, DoctorReport
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import (
+            DiagnosticImpact,
+            DiagnosticSeverity,
+            StartupDiagnostic,
+        )
+
+        leaked = "upstream said Authorization: Bearer leaked-test-value"
+        mocker.patch(
+            "aptl.core.doctor.run_doctor",
+            return_value=DoctorReport(
+                (DoctorCheck("docker-daemon", CheckStatus.FAILED, leaked, leaked),)
+            ),
+        )
+        diagnostic = StartupDiagnostic(
+            step="handoff",
+            impact=DiagnosticImpact.READINESS,
+            severity=DiagnosticSeverity.ERROR,
+            message=leaked,
+            operator_action=leaked,
+        )
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(success=False, error=leaked, diagnostics=[diagnostic]),
+        )
+        mocker.patch(
+            "aptl.cli.lab.stop_lab", return_value=LabResult(success=False, error=leaked)
+        )
+
+        result = runner.invoke(app, [*args, "--json"])
+
+        assert result.exit_code == 1
+        payload = _json_result(result)
+        assert "leaked-test-value" not in result.stdout
+        assert result.stdout.count("Bearer [REDACTED]") == redactions
+        # Nothing else is redacted: a whole-payload redact() would also hide
+        # the doctor count `pass`.
+        assert result.stdout.count("[REDACTED]") == redactions
+        assert payload["command"] == " ".join(args)
+
+    @pytest.mark.parametrize(
+        "args", [["doctor"], ["lab", "start"], ["lab", "stop"]], ids=["doctor", "start", "stop"]
+    )
+    def test_usage_error_exits_2_with_no_json_object(self, runner, args):
+        """Exit status 2 prints no JSON: the usage error goes to stderr."""
+        from aptl.cli.main import app
+
+        result = runner.invoke(app, [*args, "--json", "--no-such-option"])
+
+        assert result.exit_code == 2
+        assert result.stdout == ""
+        assert "No such option" in result.stderr
 
     @pytest.mark.parametrize(
         ("args", "option", "entry_point"),
@@ -1594,13 +1775,21 @@ class TestJsonOutputAndExitStatus:
 
         assert result.exit_code == exit_code
 
-    def test_lab_status_json_keeps_the_range_snapshot_shape(self, runner, mocker):
+    def test_lab_status_json_keeps_the_range_snapshot_shape(
+        self, runner, mocker, tmp_path
+    ):
         """Existing consumers parse these keys (the curated live gate script)."""
         import json
 
         from aptl.cli.main import app
+        from aptl.core.config import AptlConfig
         from aptl.core.snapshot import RangeSnapshot
 
+        mocker.patch(
+            "aptl.cli._common.resolve_config_for_cli",
+            return_value=(AptlConfig(), tmp_path),
+        )
+        mocker.patch("aptl.core.deployment.get_backend", return_value=MagicMock())
         mocker.patch("aptl.core.snapshot.capture_snapshot", return_value=RangeSnapshot())
 
         result = runner.invoke(app, ["lab", "status", "--json"])
@@ -1666,15 +1855,20 @@ class TestLabStopCommand:
         mock_stop.assert_called_once_with(remove_volumes=True, project_dir=Path("."))
 
     def test_stop_volumes_shows_warning(self, runner, mocker):
-        """stop --volumes without --yes should show data loss warning."""
+        """stop --volumes without --yes should show data loss warning.
+
+        Declining stops nothing and exits 0, as documented (#1218).
+        """
         from aptl.cli.main import app
 
-        mocker.patch("aptl.cli.lab.stop_lab")
+        mock_stop = mocker.patch("aptl.cli.lab.stop_lab")
 
         result = runner.invoke(app, ["lab", "stop", "--volumes"], input="n\n")
 
         assert "WARNING" in result.output
         assert "Aborted" in result.output
+        assert result.exit_code == 0
+        mock_stop.assert_not_called()
 
     def test_stop_volumes_confirm_proceeds(self, runner, mocker):
         """stop --volumes with confirmation should proceed."""

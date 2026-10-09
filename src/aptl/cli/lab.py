@@ -14,6 +14,7 @@ from aptl.cli._common import (
     EXIT_FAILED,
     emit_json_result,
     exit_status,
+    redact_text,
     refuse_json_prompt,
 )
 from aptl.cli.participant_profile import qualify_profile
@@ -23,6 +24,7 @@ from aptl.cli.lab_render import (
     emit_execution_boundary_summary,
     fresh_execution_boundary,
     live_resolved_ports,
+    published_access_ports,
     render_start_result,
 )
 from aptl.core.lab import (
@@ -299,18 +301,19 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
     _report_start_result(project_dir, result, output_json)
 
 
-def _start_result_fields(result: LabResult) -> dict[str, object]:
+def _start_result_fields(project_dir: Path, result: LabResult) -> dict[str, object]:
     """Return the ``lab start --json`` fields for one start result (#1218).
 
     They carry the same result the text summary renders: the outcome and
     error, the execution boundary, the admission time, every diagnostic, the
-    published host ports and any failed-start residue.
+    host ports the access summary reports and any failed-start residue.
+    Free-form text is redacted before serialization (ADR-012).
     """
 
     boundary = result.execution_boundary
     return {
         "outcome": result.outcome.value,
-        "error": result.error or None,
+        "error": redact_text(result.error) or None,
         "execution_boundary": (
             boundary.model_dump(mode="json") if boundary is not None else None
         ),
@@ -321,23 +324,42 @@ def _start_result_fields(result: LabResult) -> dict[str, object]:
                 "component": diag.component,
                 "impact": diag.impact.value,
                 "severity": diag.severity.value,
-                "message": diag.message,
-                "operator_action": diag.operator_action,
+                "message": redact_text(diag.message),
+                "operator_action": redact_text(diag.operator_action),
             }
             for diag in result.diagnostics
         ],
+        **_published_port_fields(project_dir, result),
+        "residue": asdict(result.residue) if result.residue is not None else None,
+    }
+
+
+def _published_port_fields(project_dir: Path, result: LabResult) -> dict[str, object]:
+    """Return the host ports the text access summary reports for this start.
+
+    Both read :func:`published_access_ports`: live Docker bindings first, the
+    start-time plan only when Docker reports none. A failed start prints no
+    access summary, so it reports no ports.
+    """
+
+    ports, observed = (
+        published_access_ports(project_dir, result.resolved_ports)
+        if result.success
+        else ([], False)
+    )
+    return {
         "published_ports": [
             {
-                "service": getattr(port, "service", ""),
-                "default_port": getattr(port, "default_port", None),
-                "host_port": getattr(port, "resolved_port", None),
-                "protocols": list(getattr(port, "protos", ()) or ()),
-                "host_ip": getattr(port, "host_ip", None),
-                "remapped": bool(getattr(port, "remapped", False)),
+                "service": port.service,
+                "default_port": port.default_port,
+                "host_port": port.resolved_port,
+                "protocols": list(port.protos),
+                "host_ip": port.host_ip,
+                "remapped": port.remapped,
             }
-            for port in result.resolved_ports
+            for port in ports
         ],
-        "residue": asdict(result.residue) if result.residue is not None else None,
+        "published_ports_observed": observed,
     }
 
 
@@ -346,7 +368,8 @@ def _report_start_result(
 ) -> None:
     """Print the start result as text or JSON and exit with its status."""
     if output_json:
-        emit_json_result("lab start", result.success, _start_result_fields(result))
+        fields = _start_result_fields(project_dir, result)
+        emit_json_result("lab start", result.success, fields)
     else:
         render_start_result(result, project_dir)
         if result.success:
@@ -456,7 +479,7 @@ def stop(
         emit_json_result(
             "lab stop",
             result.success,
-            {"volumes": volumes, "error": result.error or None},
+            {"volumes": volumes, "error": redact_text(result.error) or None},
         )
     elif result.success:
         typer.echo("Lab stopped successfully.")

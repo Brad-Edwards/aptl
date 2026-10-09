@@ -69,8 +69,11 @@ admitted scenario, not APTL control-plane or operator login credentials.
 
 ### Scenario Environment Grants
 
-A scenario node can declare runtime environment variables. On a base-container
-node, APTL delivers each one from a single explicit source:
+A scenario node can declare runtime environment variables. These rules cover a
+base-container node: a node that declares runtime desired state and has no node
+image of its own, so APTL starts it from a base image (see
+[Node Realization Routes](components/node-realization.md)). On such a node,
+APTL delivers each variable from a single explicit source:
 
 - A value the scenario authors is delivered exactly as written.
 - A generated-artifact output reaches only the node that declares it with
@@ -91,7 +94,8 @@ base-container node by exporting it before `aptl lab start`, or by adding it to
 `redacted` or `secret_fixture` takes no grant, so the scenario must author its
 value or give it one of those classifications. A missing or empty source stops
 `aptl lab start` before realization creates or changes any scenario network,
-volume or container. The error names the node, the variable and the pack.
+volume or container. The error names the node and the variable, and either the
+pack, when no grant or adapter value applies, or the source that has no value.
 
 A grant names the admitted pack's identifier, the consuming node, the variable
 that node declares, and the source. The source is either an exact variable of

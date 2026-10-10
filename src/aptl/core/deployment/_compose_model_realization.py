@@ -24,7 +24,10 @@ from aptl.core.deployment._compose_node_generation import (
     base_compose_file,
 )
 from aptl.core.deployment._compose_port_realization import write_port_override
-from aptl.core.deployment._compose_runtime_config import compose_readback
+from aptl.core.deployment._compose_runtime_config import (
+    compose_literal,
+    compose_readback,
+)
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
     stateful_override_payload,
@@ -129,7 +132,9 @@ class ComposeRealizationModelMixin:
 
         Content bytes are resolved from the pack (``scenario_root``) and written
         under ``realization_root``; base-container-materialized node content is delivered by the
-        generic materializer, not here (issue #875).
+        generic materializer, not here (issue #875). Each bind keeps the
+        authored destination and a pack directory's file names, so the
+        override is written as a Compose literal (issue #965).
         """
 
         from aptl.core.deployment._compose_content_mounts import (
@@ -150,7 +155,9 @@ class ComposeRealizationModelMixin:
         override_path = realization_root / _CONTENT_OVERRIDE_RELATIVE_PATH
         override_path.parent.mkdir(parents=True, exist_ok=True)
         override_path.write_text(
-            yaml.safe_dump(payload, sort_keys=True), encoding="utf-8", newline="\n"
+            yaml.safe_dump(compose_literal(payload), sort_keys=True),
+            encoding="utf-8",
+            newline="\n",
         )
         return override_path
 

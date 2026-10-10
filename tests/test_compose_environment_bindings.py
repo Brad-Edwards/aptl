@@ -11,6 +11,7 @@ through that service's own env file.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -26,8 +27,22 @@ from unittest.mock import MagicMock
 import pytest
 import yaml
 from raes.runtime_configuration import RuntimeConfiguration
+from raes_contracts.planning import PlannedResource, RuntimeDomain
 
+from aptl.backends.raes_literal_content_realization import (
+    resolve_literal_content_placement,
+)
 from aptl.core.config import EnvironmentGrant
+from aptl.core.deployment._compose_capture_config import (
+    CAPTURE_COMPOSE_FILE,
+    KALI_CAPTURE_SERVICE,
+    capture_compose_file,
+    capture_credential_paths,
+)
+from aptl.core.deployment._compose_content_mounts import (
+    CONTENT_MOUNT_ROOT_RELPATH,
+    image_node_content_override,
+)
 from aptl.core.deployment._compose_environment import (
     SOURCED_ENVIRONMENT_DIR,
     SOURCED_ENVIRONMENT_OVERRIDE,
@@ -44,6 +59,7 @@ from aptl.core.deployment._compose_runtime_config import (
 from aptl.core.deployment._environment_bindings import EnvironmentBindingError
 from aptl.core.deployment.docker_compose import DockerComposeBackend
 from aptl.core.deployment.realization import (
+    DeploymentContentRealization,
     DeploymentImageRealization,
     DeploymentNodeRealization,
     DeploymentPersistentVolumeRealization,
@@ -57,6 +73,8 @@ from aptl.core.deployment.runtime_materialization import (
 )
 from aptl.core.deployment.ssh_compose import SSHComposeBackend
 from aptl.core.scenario_bundle import PackIdentity
+from tests.test_capture_apparatus import _capture_spec
+from tests.test_env_pack_realization import _StubResolved, _tar_bytes
 
 _CANARY = "ambient-canary-value"
 # Granted and adapter values are built at run time, so no password-shaped
@@ -569,9 +587,83 @@ _AUTHORED_VALUE = "p@ss$HOME"
 _MOUNT_TARGET = "/run/${APTL_API_TOKEN}"
 _VOLUME_TARGET = "/var/lib/${INDEXER_PASSWORD}"
 
+# Content that node app's pack places. The literal-destination lowering keeps
+# an authored path as written, and a pack directory's files are bound under
+# their own names, so either can name a variable.
+_CONTENT_PATH = "/etc/${INDEXER_PASSWORD}/app.conf"
+_CONTENT_DIRECTORY = "/etc/app/conf.d"
+_CONTENT_MEMBER = "${GRAFANA_ADMIN_PASSWORD}.ini"
+_CONTENT_TREE = _tar_bytes({_CONTENT_MEMBER: b"mode = test\n"})
+_CONTENT_DIGEST = "sha256:" + hashlib.sha256(_CONTENT_TREE).hexdigest()
+# Each placement's Content spec, then its bind source under the placement's
+# output root and its bind target.
+_CONTENT = {
+    "authored-path": (
+        {"type": "file", "path": _CONTENT_PATH, "text": "mode = test\n"},
+        "app.conf",
+        _CONTENT_PATH,
+    ),
+    "pack-directory-member": (
+        {
+            "type": "directory",
+            "destination": _CONTENT_DIRECTORY,
+            "source": {
+                "name": "app-conf",
+                "artifact_requirement": {
+                    "explicitness": "exact",
+                    "exact_artifact": {
+                        "artifact_id": "app-conf",
+                        "version": _CONTENT_DIGEST,
+                        "digest": _CONTENT_DIGEST,
+                        "media_type": "application/x-tar",
+                    },
+                },
+            },
+        },
+        f"tree/{_CONTENT_MEMBER}",
+        f"{_CONTENT_DIRECTORY}/{_CONTENT_MEMBER}",
+    ),
+}
+
+
+@pytest.fixture
+def content_pack(monkeypatch):
+    """Resolve the placed pack directory to a tree with `$` in a file name."""
+
+    resolved = _StubResolved(_CONTENT_TREE, _CONTENT_DIGEST)
+    monkeypatch.setattr(
+        "raes_env_packs.resolve_pack_artifact", lambda *_args, **_kwargs: resolved
+    )
+
+
+def _placed_content(case: str) -> DeploymentContentRealization:
+    """Lower one placement on node app the way image-node content is lowered."""
+
+    payload = {"content_name": case, "spec": _CONTENT[case][0]}
+    resource = PlannedResource(
+        address=f"provision.content-placement.{case}",
+        domain=RuntimeDomain.PROVISIONING,
+        resource_type="content-placement",
+        payload=payload,
+    )
+    content, diagnostics = resolve_literal_content_placement(
+        resource, payload, "provision.node.app"
+    )
+    assert diagnostics == []
+    assert content is not None
+    return content
+
+
+def _content_bind(root: Path, case: str) -> tuple[str, str]:
+    """Return the bind source and target one placement must reach Compose as."""
+
+    _spec, source, target = _CONTENT[case]
+    return str(root.resolve() / CONTENT_MOUNT_ROOT_RELPATH / case / source), target
+
 
 def _authored_realization(
     host_ip: str | None = "${bind_ip}",
+    content: tuple[DeploymentContentRealization, ...] = (),
 ) -> DeploymentRealizationSpec:
     """One generated service whose authored fields name Compose variables."""
 
@@ -593,7 +685,7 @@ def _authored_realization(
     volume = DeploymentPersistentVolumeRealization(
         "provision.volume.data", "data", "ephemeral", "read_write_once", (consumer,)
     )
-    return replace(_realization(node), persistent_volumes=(volume,))
+    return replace(_realization(node), persistent_volumes=(volume,), content=content)
 
 
 def _interpolates_nothing(text: str) -> bool:
@@ -603,28 +695,80 @@ def _interpolates_nothing(text: str) -> bool:
 
 
 def _generated_files(backend, realization, root: Path) -> tuple[Path, ...]:
-    """Write the generated base and every override APTL adds to it."""
+    """Write the generated base and every override APTL adds to it.
 
+    As in ``realize()``, the workspace's project name is settled before any
+    file names a volume, and the image override comes right after the base.
+    """
+
+    backend._ensure_resource_ownership()
     assert backend._environment_binding_preflight(realization, root) is None
     base = base_compose_file(realization, root)
-    files = backend._realization_compose_files((base,), realization, root)
+    images = backend._write_image_override(realization.images, root)
+    files = backend._realization_compose_files((base, images), realization, root)
     assert files is not None
     return files
 
 
-def test_every_generated_compose_file_writes_authored_text_as_a_literal(tmp_path):
-    """Command, entrypoint, value, mount paths and host address: no `$` is live."""
+def _compose_config(backend, realization, root: Path) -> list[str]:
+    """Return the ``docker compose config`` command for the generated files."""
 
-    realization = _authored_realization()
+    files = _generated_files(backend, realization, root)
+    return backend._build_command("config", [], compose_files=files, scenario_root=root)
+
+
+def _plant_compose_canaries(root: Path, monkeypatch) -> tuple[str, ...]:
+    """Give `.env` and the client environment values Compose could fill.
+
+    Returns every planted value, none of which may reach the rendered model.
+    """
+
+    wazuh = f"wazuh-{uuid.uuid4().hex[:12]}"
+    grafana = f"grafana-{uuid.uuid4().hex[:12]}"
+    (root / ".env").write_text(
+        f"INDEXER_PASSWORD={wazuh}\nGRAFANA_ADMIN_PASSWORD={grafana}\n"
+        "bind_ip=0.0.0.0\n",
+        encoding="utf-8",
+    )
+    proxy_host = f"proxy-{uuid.uuid4().hex[:12]}.example.test"
+    monkeypatch.setenv("HTTPS_PROXY", f"http://{proxy_host}:3128")
+    monkeypatch.setenv("APTL_API_TOKEN", _GRANTED)
+    monkeypatch.setenv("GITHUB_TOKEN", _CANARY)
+    return wazuh, grafana, proxy_host, _GRANTED, _CANARY
+
+
+def test_every_generated_compose_file_writes_authored_text_as_a_literal(
+    tmp_path, content_pack
+):
+    """Command, value, mount and content paths, image, host address: no live `$`."""
+
+    authored = _authored_realization(
+        content=tuple(_placed_content(case) for case in _CONTENT)
+    )
+    # APTL's own image-name check admits `$`. Docker refuses such a reference
+    # when it pulls, builds or inspects it, which precedes the override.
+    image = replace(authored.images[0], image_ref="example/${INDEXER_PASSWORD}:1")
+    realization = replace(authored, images=(image,))
     files = _generated_files(DockerComposeBackend(tmp_path), realization, tmp_path)
     text = {path.name: path.read_text(encoding="utf-8") for path in files}
 
-    for name in ("compose-base.yml", "compose.ports.yml", "compose.stateful.yml"):
-        assert _interpolates_nothing(text[name])
+    assert set(text) == {
+        "compose-base.yml",
+        "compose-images.yml",
+        "compose.ports.yml",
+        "compose.stateful.yml",
+        "compose.content.yml",
+    }
+    assert all(_interpolates_nothing(item) for item in text.values())
+    assert "$${INDEXER_PASSWORD}" in text["compose-images.yml"]
     assert "$${INDEXER_PASSWORD}" in text["compose.stateful.yml"]
     assert "$${bind_ip}" in text["compose.ports.yml"]
     base = yaml.safe_load(text["compose-base.yml"])
     assert compose_readback(base) == render_realization_compose(realization)
+    content = yaml.safe_load(text["compose.content.yml"])
+    assert compose_readback(content) == image_node_content_override(
+        realization, tmp_path, tmp_path
+    )
 
 
 def test_the_generated_model_check_reads_escaped_text_back_as_values(
@@ -667,30 +811,15 @@ def test_compose_never_fills_a_variable_that_pack_text_names(tmp_path, monkeypat
     """
 
     _require_compose_cli()
-    wazuh = f"wazuh-{uuid.uuid4().hex[:12]}"
-    grafana = f"grafana-{uuid.uuid4().hex[:12]}"
-    (tmp_path / ".env").write_text(
-        f"INDEXER_PASSWORD={wazuh}\nGRAFANA_ADMIN_PASSWORD={grafana}\n"
-        "bind_ip=0.0.0.0\n",
-        encoding="utf-8",
-    )
-    proxy_host = f"proxy-{uuid.uuid4().hex[:12]}.example.test"
-    monkeypatch.setenv("HTTPS_PROXY", f"http://{proxy_host}:3128")
-    monkeypatch.setenv("APTL_API_TOKEN", _GRANTED)
-    monkeypatch.setenv("GITHUB_TOKEN", _CANARY)
+    planted = _plant_compose_canaries(tmp_path, monkeypatch)
     backend = DockerComposeBackend(tmp_path)
-
-    def config(realization: DeploymentRealizationSpec) -> list[str]:
-        files = _generated_files(backend, realization, tmp_path)
-        return backend._build_command(
-            "config", [], compose_files=files, scenario_root=tmp_path
-        )
-
     realization = _authored_realization(host_ip=None)
-    result = backend._run([*config(realization), "--format", "json"])
+    command = _compose_config(backend, realization, tmp_path)
+
+    result = backend._run([*command, "--format", "json"])
 
     assert result.returncode == 0, result.stderr
-    for value in (wazuh, grafana, proxy_host, _GRANTED, _CANARY):
+    for value in planted:
         assert value not in result.stdout
     app = compose_readback(json.loads(result.stdout)["services"]["app"])
     assert app["command"] == ["sh", "-c", _NAMED_VARIABLES]
@@ -701,11 +830,78 @@ def test_compose_never_fills_a_variable_that_pack_text_names(tmp_path, monkeypat
         _VOLUME_TARGET,
     }
     # The pre-start model check accepts the escaped model Compose reads back.
-    command = config(realization)
     assert backend._effective_compose_model_error(command, realization, tmp_path) is None
     # A host address naming `.env`'s bind_ip never binds all interfaces.
-    published = backend._run([*config(_authored_realization()), "--format", "json"])
-    assert "0.0.0.0" not in published.stdout
+    published = _compose_config(backend, _authored_realization(), tmp_path)
+    assert "0.0.0.0" not in backend._run([*published, "--format", "json"]).stdout
+
+
+@pytest.mark.parametrize("case", list(_CONTENT))
+def test_compose_never_fills_a_variable_that_placed_content_names(
+    tmp_path, monkeypatch, content_pack, case
+):
+    """Canary through Compose: content binds at its authored path and file name.
+
+    The content override binds an image node's placement at the path the pack
+    authors and each file of a pack directory under its own name. Before
+    this, an authored ``/etc/${INDEXER_PASSWORD}/app.conf`` was bound at a
+    path holding the `.env` value, and a pack file named
+    ``${GRAFANA_ADMIN_PASSWORD}.ini`` under the Grafana credential, with no
+    grant. The model ``up`` would use and the uninterpolated readback that
+    the pre-start check compares must both show the bind as written.
+    """
+
+    _require_compose_cli()
+    planted = _plant_compose_canaries(tmp_path, monkeypatch)
+    backend = DockerComposeBackend(tmp_path)
+    realization = _authored_realization(host_ip=None, content=(_placed_content(case),))
+    command = _compose_config(backend, realization, tmp_path)
+
+    rendered = backend._run([*command, "--format", "json"])
+    readback = backend._run([*command, "--no-interpolate", "--format", "json"])
+
+    assert rendered.returncode == readback.returncode == 0, rendered.stderr
+    for value in planted:
+        assert value not in rendered.stdout
+    for result in (rendered, readback):
+        app = compose_readback(json.loads(result.stdout))["services"]["app"]
+        binds = {
+            (mount["source"], mount["target"])
+            for mount in app["volumes"]
+            if mount["type"] == "bind"
+        }
+        assert _content_bind(tmp_path, case) in binds
+    error = backend._effective_compose_model_error(command, realization, tmp_path)
+    assert error is None
+
+
+def test_the_capture_model_binds_pack_key_paths_as_literals(tmp_path):
+    """The Kali capture sidecar binds the pack's key outputs at their paths.
+
+    RAES admits `$` in a generated output path, and those paths reach the
+    capture model's bind sources, so the model is a Compose literal too.
+    """
+
+    repository = Path(__file__).resolve().parents[1]
+    shutil.copyfile(repository / CAPTURE_COMPOSE_FILE, tmp_path / CAPTURE_COMPOSE_FILE)
+    realization = _capture_spec(tmp_path, keys="kali/${INDEXER_PASSWORD}")
+
+    text = capture_compose_file(tmp_path, realization, tmp_path).read_text(
+        encoding="utf-8"
+    )
+
+    sources, _public = capture_credential_paths(
+        realization, tmp_path, require_files=True
+    )
+    service = compose_readback(yaml.safe_load(text))["services"][KALI_CAPTURE_SERVICE]
+    binds = {
+        mount["target"]: mount["source"]
+        for mount in service["volumes"]
+        if mount["type"] == "bind"
+    }
+    assert _interpolates_nothing(text)
+    assert "$${INDEXER_PASSWORD}" in text
+    assert binds == {target: str(source) for target, source in sources.items()}
 
 
 def test_compose_gives_a_granted_value_to_its_service_only(tmp_path, monkeypatch):

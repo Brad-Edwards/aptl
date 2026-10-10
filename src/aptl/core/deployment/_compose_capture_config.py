@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from aptl.core.deployment._compose_runtime_config import compose_literal
 from aptl.core.deployment._compose_stateful_model import artifact_source_path
 from aptl.core.deployment._ssh_key_bundle import SSH_ACCESS_PROFILE_V1
 from aptl.core.deployment.realization import DeploymentRealizationSpec
@@ -106,7 +107,12 @@ def capture_compose_file(
     realization: DeploymentRealizationSpec,
     realization_root: Path,
 ) -> Path:
-    """Write the trusted apparatus model with engine-anchored local sources."""
+    """Write the trusted apparatus model with engine-anchored local sources.
+
+    The key sources follow the output paths the pack declares, so the model
+    is written as a Compose literal. APTL's own model names no variable for
+    Compose to fill (issue #965).
+    """
 
     root = project_dir.resolve()
     source = root / CAPTURE_COMPOSE_FILE
@@ -128,7 +134,9 @@ def capture_compose_file(
     target = root / ".aptl" / "realization" / CAPTURE_COMPOSE_FILE
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
-        yaml.safe_dump(model, sort_keys=True), encoding="utf-8", newline="\n"
+        yaml.safe_dump(compose_literal(model), sort_keys=True),
+        encoding="utf-8",
+        newline="\n",
     )
     return target
 

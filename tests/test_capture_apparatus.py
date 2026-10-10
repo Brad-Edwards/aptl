@@ -33,7 +33,9 @@ def _apparatus() -> DeploymentCaptureApparatus:
     )
 
 
-def _capture_spec(project: Path) -> DeploymentRealizationSpec:
+def _capture_spec(project: Path, keys: str = "kali/.ssh") -> DeploymentRealizationSpec:
+    """Return a capture request whose key outputs the pack declares in ``keys``."""
+
     artifact = DeploymentGeneratedArtifactRealization(
         address="provision.generated-artifact.techvault-ssh-keys",
         name="techvault-ssh-keys",
@@ -43,23 +45,23 @@ def _capture_spec(project: Path) -> DeploymentRealizationSpec:
         outputs=(
             DeploymentGeneratedArtifactOutput(
                 name="kali-pivot-private-key",
-                path="kali/.ssh/kali_pivot_key",
+                path=f"{keys}/kali_pivot_key",
                 sensitivity="secret",
             ),
             DeploymentGeneratedArtifactOutput(
                 name="kali-authorized-keys",
-                path="kali/.ssh/authorized_keys",
+                path=f"{keys}/authorized_keys",
                 sensitivity="restricted",
             ),
         ),
         consumers=(),
     )
     source = artifact_source_path(project, artifact)
-    private_key = source / "kali/.ssh/kali_pivot_key"
+    private_key = source / keys / "kali_pivot_key"
     private_key.parent.mkdir(parents=True, exist_ok=True)
     private_key.write_text("private-test-key")
     Path(f"{private_key}.pub").write_text("ssh-ed25519 AAAATEST aptl-kali-pivot\n")
-    (source / "kali/.ssh/authorized_keys").write_text(
+    (source / keys / "authorized_keys").write_text(
         "ssh-ed25519 AAAAOPERATOR aptl-control-plane\n"
     )
     return DeploymentRealizationSpec(

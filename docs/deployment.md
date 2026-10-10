@@ -120,12 +120,14 @@ the project share, so a reference would let a value granted to one node reach
 another service, or APTL's own Grafana. An in-tree scenario that ships its own
 `docker-compose.yml` keeps its own references, resolved from `.env`.
 
-The Compose model that APTL generates from a scenario names no variable for
-Compose to fill. APTL writes each `$` in scenario-authored text, such as a
-command, an environment value, a mount path or a host address, as `$$`, which
-Compose reads as one literal `$`. A `${INDEXER_PASSWORD}` in a node's command
-therefore reaches the container as written instead of as the `.env` value, and
-a container-shell `"$@"` reaches the shell unchanged.
+In the Compose model that APTL generates, no text that the scenario or its
+pack authors names a variable for Compose to fill. APTL writes each `$` in such
+text as `$$`, which Compose reads as one literal `$`. This covers a command, an
+environment value, a mount path, a content destination, the name of a file in
+a pack directory, an image reference and a host address. A
+`${INDEXER_PASSWORD}` in a node's command or in a content path therefore
+reaches the container as written instead of as the `.env` value, and a
+container-shell `"$@"` reaches the shell unchanged.
 
 A grant names the admitted pack's identifier, the consuming node, the variable
 that node declares, and the source. The source is either an exact variable of

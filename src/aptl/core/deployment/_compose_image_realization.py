@@ -7,6 +7,7 @@ from pathlib import Path
 import yaml
 
 from aptl.core.deployment._compose_node_generation import base_compose_file
+from aptl.core.deployment._compose_runtime_config import compose_literal
 from aptl.core.deployment._compose_spawn_image_realization import (
     prepare_spawn_images,
 )
@@ -401,7 +402,8 @@ class ComposeRealizationImageMixin:
         """Write a contained Compose override for scenario-resolved images.
 
         The override is a scenario-local generated artifact, written under
-        ``scenario_root`` (the bundle root).
+        ``scenario_root`` (the bundle root). An image reference holds pack
+        text, so it is written as a Compose literal (issue #965).
         """
 
         override_path = scenario_root / _IMAGE_OVERRIDE_RELATIVE_PATH
@@ -412,7 +414,7 @@ class ComposeRealizationImageMixin:
         }
         override_path.write_text(
             yaml.dump(
-                {"services": services},
+                compose_literal({"services": services}),
                 Dumper=_ImageOverrideDumper,
                 sort_keys=True,
             ),

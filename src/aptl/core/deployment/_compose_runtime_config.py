@@ -62,11 +62,13 @@ def compose_literal(value: object) -> object:
 
     Compose interpolates ``$NAME`` and ``${NAME}`` in every string value of a
     Compose file, from its process environment and the project ``.env``, and
-    it does not interpolate mapping keys. The generated base model and its
-    port and stateful overrides carry scenario-authored text, such as a
-    command, a mount path or a host address, so APTL writes them through this
-    function. Compose then delivers that text exactly as written, and no field
-    can name a variable to read its value (issue #965).
+    it does not interpolate mapping keys. The generated base model, its port,
+    stateful, content and image overrides, and the capture apparatus model
+    carry scenario or pack text, such as a command, a mount path, a content
+    destination, a pack file name, an image reference or a host address, so
+    APTL writes them through this function. Compose then delivers that text
+    exactly as written, and no field can name a variable to read its value
+    (issue #965).
     """
 
     return _map_strings(value, lambda text: text.replace("$", "$$"))

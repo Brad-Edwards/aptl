@@ -27,6 +27,7 @@ from pathlib import Path
 
 import yaml
 
+from aptl.core.deployment._compose_runtime_config import compose_literal
 from aptl.core.deployment.realization import (
     DeploymentNodeRealization,
     DeploymentPublishedPort,
@@ -136,6 +137,8 @@ def write_port_override(
 
     Returns ``None`` when no realized node declares a published port, so the
     caller adds no override file and the checked-in compose stack is untouched.
+    Every string is written as a Compose literal, so an authored host address
+    is never interpolated (issue #965).
     """
 
     # Only an image-backed node becomes a Compose service. A base-container node
@@ -156,7 +159,7 @@ def write_port_override(
     override_path = project_dir / _PORT_OVERRIDE_RELATIVE_PATH
     override_path.parent.mkdir(parents=True, exist_ok=True)
     override_path.write_text(
-        yaml.safe_dump({"services": services}, sort_keys=True),
+        yaml.safe_dump(compose_literal({"services": services}), sort_keys=True),
         encoding="utf-8",
         newline="\n",
     )

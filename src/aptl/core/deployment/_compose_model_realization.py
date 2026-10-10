@@ -24,6 +24,10 @@ from aptl.core.deployment._compose_node_generation import (
     base_compose_file,
 )
 from aptl.core.deployment._compose_port_realization import write_port_override
+from aptl.core.deployment._compose_runtime_config import (
+    compose_literal,
+    compose_readback,
+)
 from aptl.core.deployment._compose_stateful_realization import (
     effective_stateful_model_errors,
     stateful_override_payload,
@@ -88,6 +92,10 @@ class ComposeRealizationModelMixin:
                 realization_root,
                 container_name_for_semantic=self._ensure_resource_ownership().container_name,
             )
+        # Each service's out-of-band values, bound by the preflight (#965).
+        sourced_override = self._write_sourced_environment_override(
+            realization, realization_root
+        )
         overrides = tuple(
             path
             for path in (
@@ -96,6 +104,7 @@ class ComposeRealizationModelMixin:
                 content_override,
                 startup_override,
                 service_override,
+                sourced_override,
             )
             if path is not None
         )
@@ -123,7 +132,9 @@ class ComposeRealizationModelMixin:
 
         Content bytes are resolved from the pack (``scenario_root``) and written
         under ``realization_root``; base-container-materialized node content is delivered by the
-        generic materializer, not here (issue #875).
+        generic materializer, not here (issue #875). Each bind keeps the
+        authored destination and a pack directory's file names, so the
+        override is written as a Compose literal (issue #965).
         """
 
         from aptl.core.deployment._compose_content_mounts import (
@@ -144,7 +155,9 @@ class ComposeRealizationModelMixin:
         override_path = realization_root / _CONTENT_OVERRIDE_RELATIVE_PATH
         override_path.parent.mkdir(parents=True, exist_ok=True)
         override_path.write_text(
-            yaml.safe_dump(payload, sort_keys=True), encoding="utf-8", newline="\n"
+            yaml.safe_dump(compose_literal(payload), sort_keys=True),
+            encoding="utf-8",
+            newline="\n",
         )
         return override_path
 
@@ -245,7 +258,9 @@ class ComposeRealizationModelMixin:
 
         ``realization_root`` is where generated artifacts and their mount sources
         live; the expected-mount set is computed against it so it matches the
-        override that was actually written (issue #875).
+        override that was actually written (issue #875). The generated files
+        write each ``$`` as ``$$``, so the uninterpolated model is read back as
+        the values Compose delivers before it is compared (issue #965).
         """
 
         command.extend(["--no-interpolate", "--format", "json"])
@@ -253,7 +268,7 @@ class ComposeRealizationModelMixin:
         if result.returncode != 0:
             return _COMPOSE_MODEL_VALIDATION_ERROR
         try:
-            payload = json.loads(result.stdout)
+            payload = compose_readback(json.loads(result.stdout))
         except (TypeError, ValueError):
             return _COMPOSE_MODEL_VALIDATION_ERROR
         errors = effective_stateful_model_errors(

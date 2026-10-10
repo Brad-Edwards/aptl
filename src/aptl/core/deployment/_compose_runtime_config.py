@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-_ENVIRONMENT_BOUND_CLASSIFICATIONS = frozenset({"operator_secret", "secret_fixture"})
+import copy
+from collections.abc import Callable
+
+from aptl.core.deployment._environment_bindings import declared_environment
+
 _CONTAINER_SEQUENCE_FIELDS = ("command", "entrypoint", "dns", "group_add")
 _UNSUPPORTED_CONTAINER_FIELDS = (
     "masked_paths",
@@ -33,25 +37,71 @@ def _enum_value(value: object) -> str:
     return str(getattr(value, "value", value) or "")
 
 
-def _environment_config(runtime: object) -> dict[str, str]:
-    """Return the declared Compose environment map."""
+def _map_strings(value: object, transform: Callable[[str], str]) -> object:
+    """Return ``value`` with ``transform`` applied to every string it holds.
 
-    environment: dict[str, str] = {}
-    for variable in getattr(runtime, "environment", ()):
-        name = getattr(variable, "name", "")
-        if not name or getattr(variable, "value_from", None) is not None:
-            continue
-        classification = _enum_value(getattr(variable, "value_classification", ""))
-        environment[name] = (
-            f"${{{name}}}"
-            if classification == "operator_secret"
-            or (
-                classification in _ENVIRONMENT_BOUND_CLASSIFICATIONS
-                and not variable.value
-            )
-            else variable.value
-        )
-    return environment
+    Mapping keys are kept, and so is each mapping's type, such as the
+    ``!override`` mapping of a stateful override.
+    """
+
+    mapped = value
+    if isinstance(value, str):
+        mapped = transform(value)
+    elif isinstance(value, dict):
+        mapping = copy.copy(value)
+        for key, item in value.items():
+            mapping[key] = _map_strings(item, transform)
+        mapped = mapping
+    elif isinstance(value, list | tuple):
+        mapped = [_map_strings(item, transform) for item in value]
+    return mapped
+
+
+def compose_literal(value: object) -> object:
+    """Return ``value`` with each ``$`` in its strings written as ``$$``.
+
+    Compose interpolates ``$NAME`` and ``${NAME}`` in every string value of a
+    Compose file, from its process environment and the project ``.env``, and
+    it does not interpolate mapping keys. The generated base model, its port,
+    stateful, content and image overrides, and the capture apparatus model
+    carry scenario or pack text, such as a command, a mount path, a content
+    destination, a pack file name, an image reference or a host address, so
+    APTL writes them through this function. Compose then delivers that text
+    exactly as written, and no field can name a variable to read its value
+    (issue #965).
+    """
+
+    return _map_strings(value, lambda text: text.replace("$", "$$"))
+
+
+def compose_readback(value: object) -> object:
+    """Return a ``config --no-interpolate`` payload with ``$$`` read as ``$``.
+
+    That readback keeps each escaped ``$$`` of the generated files, so this
+    turns it into the value Compose delivers before the model is compared
+    with the admitted realization.
+    """
+
+    return _map_strings(value, lambda text: text.replace("$$", "$"))
+
+
+def _environment_config(runtime: object) -> dict[str, str]:
+    """Return the declared Compose environment map.
+
+    Only authored values appear here; the generated Compose file escapes each
+    ``$`` in them (:func:`compose_literal`). A declaration without a value is
+    delivered empty. A ``value_from`` variable reaches the service through its
+    generated env file and an out-of-band one through its bound env file
+    (issue #965), so neither is a ``${NAME}`` reference that any value in
+    Compose's environment could fill.
+    """
+
+    declared = declared_environment(runtime)
+    return {
+        name: declared.authored.get(name, "")
+        for name in dict.fromkeys(declared.names)
+        if name not in declared.generated and name not in declared.sourced
+    }
 
 
 def _policy_config(runtime: object) -> dict[str, object]:

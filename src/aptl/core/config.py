@@ -3,7 +3,6 @@
 Uses Pydantic v2 for validation. Config is loaded from aptl.json files.
 """
 
-import hashlib
 import json
 import re
 from pathlib import Path, PurePosixPath
@@ -11,6 +10,10 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from aptl.core._credential_sources import (
+    EnvironmentGrant,
+    ProcessEnvironmentCredentialSource,
+)
 from aptl.utils.logging import get_logger
 
 log = get_logger("config")
@@ -18,7 +21,6 @@ log = get_logger("config")
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]*$")
 _COMPOSE_PROJECT_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,62}$")
 _PARTICIPANT_MODEL_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._:/@-]{0,127}$")
-_CREDENTIAL_SOURCE_VARIABLE_PATTERN = re.compile(r"^[A-Z_][A-Z0-9_]{0,127}$")
 _IMMUTABLE_PARTICIPANT_MODEL_PATTERNS = {
     "claude": re.compile(
         r"^claude-(?:[a-z0-9-]+[-@]\d{8}|(?:sonnet|opus|haiku)-[1-9]\d*)$",
@@ -187,6 +189,22 @@ class DeploymentConfig(BaseModel):
     ssh_port: int = 22
     remote_dir: str | None = None
 
+    # Operator grants: the only way an operator-supplied value reaches a
+    # declared scenario variable (issue #965). Locators, never values.
+    environment_grants: list[EnvironmentGrant] = Field(default_factory=list)
+
+    @field_validator("environment_grants")
+    @classmethod
+    def validate_unique_grants(
+        cls, grants: list[EnvironmentGrant]
+    ) -> list[EnvironmentGrant]:
+        """Refuse two grants for the same pack, consumer and variable."""
+
+        keys = [grant.key for grant in grants]
+        if len(keys) != len(set(keys)):
+            raise ValueError("environment grants must be unique per variable")
+        return grants
+
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
@@ -316,34 +334,6 @@ class InstalledParticipantModels(BaseModel):
                 f"installed participant model is not configured for {provider}"
             )
         return model
-
-
-class ProcessEnvironmentCredentialSource(BaseModel):
-    """Select one exact parent-process variable without storing its value."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    kind: Literal["process-environment"]
-    variable: str = Field(strict=True, min_length=1, max_length=128)
-
-    @field_validator("variable")
-    @classmethod
-    def validate_variable(cls, value: str) -> str:
-        """Admit one bounded POSIX-style environment variable locator."""
-
-        if not _CREDENTIAL_SOURCE_VARIABLE_PATTERN.fullmatch(value):
-            raise ValueError("participant credential source variable is invalid")
-        return value
-
-    def descriptor_digest(self) -> str:
-        """Identify this non-secret descriptor without publishing its locator."""
-
-        payload = json.dumps(
-            self.model_dump(mode="json"),
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-        return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 class InstalledParticipantCredentialSources(BaseModel):

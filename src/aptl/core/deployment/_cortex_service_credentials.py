@@ -67,13 +67,19 @@ def realize_cortex_service_credentials(
 
 
 def _read_valid_token(path: Path) -> str | None:
-    """Read one generated token only when its bytes match the contract."""
+    """Return the token only when its file holds exactly the bytes written here.
+
+    That is the token and one line feed. Environment delivery keeps any other
+    byte, such as padding or a carriage return, so a file that differs is
+    regenerated rather than reused (#966).
+    """
 
     try:
-        token = path.read_text(encoding="utf-8").strip()
+        data = path.read_bytes()
     except OSError:
         return None
-    return token if _TOKEN.fullmatch(token) else None
+    token = data.removesuffix(b"\n").decode("ascii", errors="replace")
+    return token if data.endswith(b"\n") and _TOKEN.fullmatch(token) else None
 
 
 def _distinct_tokens() -> dict[str, str]:

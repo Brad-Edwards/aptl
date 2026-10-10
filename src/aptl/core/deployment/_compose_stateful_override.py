@@ -11,6 +11,7 @@ from aptl.core.credentials import (
     _canonical_generated_path,
     _ensure_secure_dir,
 )
+from aptl.core.deployment._compose_runtime_config import compose_literal
 from aptl.core.deployment._compose_stateful_constants import STATEFUL_OVERRIDE_RELPATH
 from aptl.core.deployment._compose_stateful_model import stateful_override_payload
 from aptl.core.deployment._compose_stateful_services import StatefulDumper
@@ -22,7 +23,11 @@ def write_stateful_override(
     project_name: str,
     realization: DeploymentRealizationSpec,
 ) -> Path | None:
-    """Atomically write the contained Compose stateful-resource override."""
+    """Atomically write the contained Compose stateful-resource override.
+
+    Every string is written as a Compose literal, so a declared mount path
+    is never interpolated (issue #965).
+    """
 
     override_path: Path | None = None
     if realization.generated_artifacts or realization.persistent_volumes:
@@ -34,7 +39,7 @@ def write_stateful_override(
         _ensure_secure_dir(override_path.parent)
         _atomic_write_secure(
             override_path,
-            yaml.dump(payload, Dumper=StatefulDumper, sort_keys=True),
+            yaml.dump(compose_literal(payload), Dumper=StatefulDumper, sort_keys=True),
         )
     return override_path
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import yaml
@@ -141,9 +140,10 @@ class ComposeObservabilityMixin:
         )
         if _spec_collides(realization) or _model_collides(model):
             return _OWNERSHIP_CONFLICT
+        # The Compose process no longer inherits APTL's environment, so its
+        # interpolation reads this credential from the bound .env only (#965).
         env_file = self._project_dir / ".env"
         environment = load_dotenv(env_file) if env_file.exists() else {}
-        environment.update(os.environ)
         password = environment.get("GRAFANA_ADMIN_PASSWORD", "")
         unavailable = validate_required_env(
             environment, ["GRAFANA_ADMIN_PASSWORD"]

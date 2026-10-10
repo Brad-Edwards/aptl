@@ -35,11 +35,13 @@ from aptl.core.deployment._compose_stateful_constants import (
     ENVIRONMENT_DELIVERY_PROVENANCES as _ENVIRONMENT_DELIVERY_PROVENANCES,
 )
 from aptl.core.deployment._compose_stateful_model import (
+    _non_compose_consumer_addresses,
     artifact_source_path as _artifact_source_path,
     effective_stateful_model_errors as _effective_stateful_model_errors,
     stateful_override_payload as _stateful_override_payload,
 )
 from aptl.core.deployment._compose_stateful_override import write_stateful_override
+from aptl.core.deployment._realization_primitives import EnvironmentDeliveryRefused
 from aptl.core.deployment._cortex_service_credentials import (
     CORTEX_SERVICE_CREDENTIALS_PROFILE,
     realize_cortex_service_credentials,
@@ -167,7 +169,9 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             )
         failure = realizer(artifact, scenario_root)
         if failure is None and artifact.environment_consumers:
-            failure = self._realize_artifact_environment_files(artifact, scenario_root)
+            failure = self._realize_artifact_environment_files(
+                artifact, scenario_root, _non_compose_consumer_addresses(realization)
+            )
         return failure
 
     @staticmethod
@@ -296,8 +300,13 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
     def _realize_artifact_environment_files(
         artifact: DeploymentGeneratedArtifactRealization,
         scenario_root: Path,
+        excluded_targets: frozenset[str] = frozenset(),
     ) -> LabResult | None:
-        """Write exact output-to-variable bindings without putting secrets in YAML."""
+        """Write exact output-to-variable bindings without putting secrets in YAML.
+
+        ``excluded_targets`` are consumers that are not Compose services; they
+        receive their values through the base-container env file instead.
+        """
 
         failure = None
         if artifact.provenance not in _ENVIRONMENT_DELIVERY_PROVENANCES:
@@ -310,12 +319,18 @@ class ComposeStatefulRealizationMixin(ComposeStatefulReadinessMixin):
             )
         else:
             try:
-                by_service = _artifact_environment_bindings(artifact, scenario_root)
+                by_service = _artifact_environment_bindings(
+                    artifact, scenario_root, excluded_targets
+                )
                 _write_artifact_environment_files(artifact, scenario_root, by_service)
-            except (OSError, ValueError):
+            except (OSError, ValueError) as exc:
+                # A refusal names the variable or the unsafe target, never a value.
+                reason = (
+                    f": {exc}" if isinstance(exc, EnvironmentDeliveryRefused) else "."
+                )
                 failure = LabResult(
                     success=False,
-                    error=f"Generated artifact {artifact.address} environment delivery failed.",
+                    error=f"Generated artifact {artifact.address} environment delivery failed{reason}",
                 )
         return failure
 

@@ -22,6 +22,98 @@ def valid_environment_variable_name(value: object) -> bool:
     )
 
 
+# Docker's --env-file reader keeps everything after a line's first "=" as is,
+# but it splits lines on line feeds, drops one trailing carriage return, and
+# refuses a line longer than 65535 bytes before its newline (Go bufio.Scanner).
+_DOCKER_ENV_FILE_LINE_LIMIT = 65535
+
+
+class EnvironmentDeliveryRefused(ValueError):
+    """An env-file transport cannot carry a binding exactly or safely.
+
+    The message names the variable and the reason, never the value.
+    """
+
+
+def environment_file_line(name: str, value: str, *, compose: bool = False) -> str:
+    """Return the env-file line that carries ``value`` exactly.
+
+    Docker's ``--env-file`` reads ``NAME=value`` raw, line by line. Compose's
+    ``env_file`` would trim, unquote, cut at a comment or interpolate a raw
+    value, so a Compose line single-quotes it. Compose reads a single-quoted
+    value literally, line breaks included, except that a backslash before a
+    single quote escapes that quote. A Compose value therefore cannot contain a
+    single quote or end in an odd number of backslashes, whose last one would
+    escape the closing quote. ``compose`` selects the reader. The value either
+    survives that reader unchanged or is refused with
+    :class:`EnvironmentDeliveryRefused`. It is never trimmed, escaped or cut.
+    """
+
+    if not valid_environment_variable_name(name):
+        raise EnvironmentDeliveryRefused("invalid environment variable name")
+    line = f"{name}='{value}'" if compose else f"{name}={value}"
+    problem = _env_file_value_problem(value) or (
+        _compose_env_file_problem(value) if compose else _docker_env_file_problem(line)
+    )
+    if problem is not None:
+        reader = "a Compose env file" if compose else "a Docker env file"
+        raise EnvironmentDeliveryRefused(
+            f"{reader} cannot carry {name} exactly: {problem}"
+        )
+    return line + "\n"
+
+
+def _env_file_value_problem(value: str) -> str | None:
+    """Return why no env-file line can hold ``value``, or ``None``."""
+
+    problem = None
+    if "\x00" in value:
+        problem = "the value contains a NUL character"
+    elif not _is_utf8_encodable(value):
+        problem = "the value is not valid UTF-8"
+    return problem
+
+
+def _is_utf8_encodable(value: str) -> bool:
+    """Whether ``value`` has a UTF-8 encoding (no lone surrogates)."""
+
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
+def _docker_env_file_problem(line: str) -> str | None:
+    """Return what Docker's env-file reader would change in ``line``."""
+
+    problem = None
+    if "\n" in line:
+        problem = "the value contains a line break"
+    elif line.endswith("\r"):
+        problem = "Docker drops a trailing carriage return"
+    elif len(line.encode("utf-8")) > _DOCKER_ENV_FILE_LINE_LIMIT:
+        problem = "the line exceeds Docker's 64 KiB env-file line limit"
+    return problem
+
+
+def _compose_env_file_problem(value: str) -> str | None:
+    """Return what Compose's single-quoted env-file value cannot hold.
+
+    Compose's reader (compose-go ``dotenv``) skips a backslash-escaped quote
+    while it looks for the closing one. An unpaired final backslash would run
+    the value into the next line, or leave it unterminated on the last one.
+    """
+
+    trailing_backslashes = len(value) - len(value.rstrip("\\"))
+    problem = None
+    if "'" in value:
+        problem = "the value contains a single quote"
+    elif trailing_backslashes % 2:
+        problem = "the value ends in an odd number of backslashes"
+    return problem
+
+
 @dataclass(frozen=True)
 class DeploymentImageRealization:
     """One image operation resolved from authored or open backend authority."""

@@ -351,6 +351,81 @@ def test_a_fixture_that_drifts_from_its_manifest_is_refused(tmp_path, mutation, 
         env_pack_bundle(tmp_path / "staged", FIXTURE_PACK_IDENTITY, source_pack=source)
 
 
+# A pack-authored Compose model whose command names an operator `.env`
+# credential, and the two places a pack can carry it.
+_PACK_COMPOSE = (
+    "services:\n  leak:\n    image: example/leak:1\n"
+    "    command: echo ${INDEXER_PASSWORD}\n"
+)
+_ROOT_COMPOSE = "docker-compose.yml"
+_REFERENCE_COMPOSE = "build/runtime/docker-compose.yml"
+
+
+def _declare_member(source: Path, relpath: str, text: str) -> None:
+    """Add one file to a copied pack as a declared, byte-bound artifact.
+
+    env-packs' own ``derive_pack_content_manifest`` recomputes every digest
+    and the set digest, so env-packs' gates admit the result.
+    """
+
+    import json
+
+    from raes_env_packs import derive_pack_content_manifest
+
+    member = source / relpath
+    member.parent.mkdir(parents=True, exist_ok=True)
+    member.write_text(text, encoding="utf-8")
+    manifest_path = source / "associated-artifacts.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    artifact_id = "pack-" + relpath.replace("/", "-").replace(".", "-")
+    manifest["artifacts"][artifact_id] = {
+        **manifest["artifacts"]["materialization-envelope-pack-yaml"],
+        "artifact_id": artifact_id,
+        "uri": f"raes-environment-pack:/{relpath}",
+        "description": "A Compose file.",
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    derived = derive_pack_content_manifest(source)
+    manifest_path.write_text(derived.model_dump_json(indent=2), encoding="utf-8")
+
+
+def test_a_pack_that_ships_a_root_compose_file_is_refused(tmp_path):
+    """A pack's Compose model is generated, never taken from the pack (#965).
+
+    The Compose consumers use a root ``docker-compose.yml`` as written: its
+    services skip the environment-binding preflight, and Compose fills its
+    ``${INDEXER_PASSWORD}`` from `.env` with no grant. env-packs' gates admit
+    the file as an ordinary declared member, so the refusal is APTL's. A
+    reference deployment's Compose file under ``build/`` is not a model APTL
+    reads, and the pack still stages with it.
+    """
+
+    from raes_env_packs import validate_pack, validate_pack_content_manifest
+
+    from aptl.core.scenario_bundle import EnvPackError, env_pack_bundle
+    from tests.fixture_pack import FIXTURE_PACK_IDENTITY
+
+    source = _copied_fixture(tmp_path / "src")
+    _declare_member(source, _REFERENCE_COMPOSE, _PACK_COMPOSE)
+    reference = env_pack_bundle(
+        tmp_path / "reference", FIXTURE_PACK_IDENTITY, source_pack=source
+    )
+    assert (reference.root / _REFERENCE_COMPOSE).is_file()
+    assert not (reference.root / _ROOT_COMPOSE).exists()
+
+    _declare_member(source, _ROOT_COMPOSE, _PACK_COMPOSE)
+    assert validate_pack(str(source)).ok is True
+    manifest = validate_pack_content_manifest(str(source))
+    assert str(manifest.set_digest).startswith("sha256:")
+    staging = tmp_path / "staged"
+
+    with pytest.raises(EnvPackError, match=r"ships docker-compose\.yml at its root"):
+        env_pack_bundle(staging, FIXTURE_PACK_IDENTITY, source_pack=source)
+
+    # As with every other refusal, no staged tree is left behind.
+    assert list(staging.iterdir()) == []
+
+
 def test_staged_members_are_singly_linked_even_from_a_hardlinked_source(tmp_path):
     """Installers hardlink package data; staging must yield singly-linked files.
 

@@ -1,12 +1,12 @@
 ---
 id: DSL-006
 title: "CACAO and Attack Flow Alignment"
-status: DRAFT
+status: DEPRECATED
 type: INTERFACE
 priority: WONT
 wave: 3
 created_at: 2026-03-21T07:52:39.348426Z
-updated_at: 2026-10-05T07:51:12.874346Z
+updated_at: 2026-10-09T00:00:00.000000Z
 ---
 
 # DSL-006: CACAO and Attack Flow Alignment

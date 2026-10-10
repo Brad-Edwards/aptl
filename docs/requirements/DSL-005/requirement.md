@@ -1,12 +1,12 @@
 ---
 id: DSL-005
 title: "Pre/Post-Conditions and Assertions in Scenarios"
-status: DRAFT
+status: DEPRECATED
 type: FUNCTIONAL
 priority: SHOULD
 wave: 2
 created_at: 2026-03-21T07:52:35.252096Z
-updated_at: 2026-03-21T07:52:35.252096Z
+updated_at: 2026-10-09T00:00:00.000000Z
 ---
 
 # DSL-005: Pre/Post-Conditions and Assertions in Scenarios
@@ -17,7 +17,7 @@ The scenario DSL shall support pre-conditions ("this step requires root access o
 
 ## Rationale
 
-SCN-009 validates only container/profile presence. Semantic pre/post-conditions enable the engine to skip inapplicable steps, verify expected state, and provide meaningful error messages when scenarios fail mid-execution.
+DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009. #434 delivered part of the LilRAE side: the manifest declares propositions and assertions, and `_raes_proposition_truth.py` projects truth from real evidence (#911, #1020). The maintainer closed the remaining paper-scenario target. See GitHub issue #434. --- Original rationale: SCN-009 validates only container/profile presence. Semantic pre/post-conditions enable the engine to skip inapplicable steps, verify expected state, and provide meaningful error messages when scenarios fail mid-execution.
 
 ## Traceability
 

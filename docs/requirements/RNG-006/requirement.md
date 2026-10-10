@@ -3,10 +3,10 @@ id: RNG-006
 title: "CI/CD Pipeline Attack Targets"
 status: DRAFT
 type: FUNCTIONAL
-priority: COULD
+priority: WONT
 wave: 3
 created_at: 2026-03-21T07:50:30.517320Z
-updated_at: 2026-03-21T07:50:30.517320Z
+updated_at: 2026-10-09T00:00:00.000000Z
 ---
 
 # RNG-006: CI/CD Pipeline Attack Targets
@@ -17,7 +17,7 @@ The lab shall include CI/CD pipeline infrastructure (for example, Gitea + Jenkin
 
 ## Rationale
 
-Modern attack chains increasingly target CI/CD pipelines (SolarWinds, Codecov, ua-parser-js). Current lab infrastructure has no software supply chain components for these attack categories.
+WITHDRAWN 2026-10-09: The issue closed as not planned on 2026-06-28 without a closing comment. See GitHub issue #481. --- Original rationale: Modern attack chains increasingly target CI/CD pipelines (SolarWinds, Codecov, ua-parser-js). Current lab infrastructure has no software supply chain components for these attack categories.
 
 ## Traceability
 

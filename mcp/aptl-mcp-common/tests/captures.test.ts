@@ -15,16 +15,22 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
+  cpSync,
   mkdtempSync,
   rmSync,
   writeFileSync,
   mkdirSync,
   existsSync,
+  readFileSync,
   statSync,
+  symlinkSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
+
+type DockerResult = { code: number; stderr: string };
 
 // Module-level controls the mocked `spawn` reads on every invocation.
 // Each test resets them in `beforeEach`.
@@ -34,6 +40,8 @@ interface SpawnControl {
   capturedArgs: string[][];
   capturedCmds: string[];
   callCount: number;
+  /** When set, `docker cp` reads from `root` as the filesystem of `name`. */
+  container?: { name: string; root: string };
 }
 const spawnControl: SpawnControl = {
   exitCode: 0,
@@ -42,6 +50,53 @@ const spawnControl: SpawnControl = {
   capturedCmds: [],
   callCount: 0,
 };
+
+/** Answer one `docker cp` from the stand-in container, else with the set reply. */
+function replay(args: string[]): DockerResult {
+  if (spawnControl.container) return copyFromContainer(spawnControl.container, args);
+  return { code: spawnControl.exitCode, stderr: spawnControl.stderrText };
+}
+
+/** `docker cp <name>:<dir>/. <dest>` against a directory standing in for the container. */
+function copyFromContainer(container: { name: string; root: string }, args: string[]): DockerResult {
+  const [, source, dest] = args;
+  const name = source.slice(0, source.indexOf(':'));
+  const path = source.slice(name.length + 1);
+  if (name !== container.name) return noSuchContainer(name);
+  const local = join(container.root, path);
+  if (!existsSync(local)) return missingFile(name, path);
+  cpSync(local, dest, { recursive: true });
+  return { code: 0, stderr: '' };
+}
+
+// #1242: `docker cp` replies recorded on 2026-10-09 UTC against Docker CLI and
+// Engine 29.7.2 (API 1.55), with stdout and stderr piped as `execDockerCp`
+// spawns them. A created, never-started `FROM scratch` container named
+// `aptl-w123456789abc-kali-capture` copied a present path with exit 0 and no
+// output, and answered a missing one with the `Could not find the file` line
+// below. With no such container, the daemon answered every path with the same
+// `No such container` line.
+const SCOPED = 'aptl-w123456789abc-kali-capture';
+/** Another workspace's sidecar, never the one a harvest names. */
+const OTHER_WORKSPACE = 'aptl-wcba987654321-kali-capture';
+const FIXED = 'aptl-kali-capture';
+const ROOT = '/var/log/aptl/captures';
+const RUN = 'a'.repeat(32);
+const missingFile = (name: string, path: string): DockerResult => ({
+  code: 1,
+  stderr: `Error response from daemon: Could not find the file ${path} in container ${name}\n`,
+});
+const noSuchContainer = (name: string): DockerResult => ({
+  code: 1,
+  stderr: `Error response from daemon: No such container: ${name}\n`,
+});
+
+// One session as containers/kali-capture/broker.py records it: the frames and
+// metadata under `<root>/<run>/sessions/<session>/`, and the run's ledger of
+// accepted sessions beside `sessions/`.
+const FRAMES =
+  '{"data_b64":"aGVsbG8K","direction":"output","sequence":1,"timestamp":"2026-10-09T00:00:01Z"}\n';
+const METADATA = '{"close_reason":"clean-exit","frame_count":1,"session_id":"sess-1"}';
 
 vi.mock('node:child_process', () => ({
   spawn: (cmd: string, args: string[]) => {
@@ -62,8 +117,7 @@ vi.mock('node:child_process', () => ({
     };
     child.stdout = stdout;
     child.stderr = stderr;
-    const exit = spawnControl.exitCode;
-    const text = spawnControl.stderrText;
+    const { code: exit, stderr: text } = replay(args);
     setImmediate(() => {
       if (text) stderr.emit('data', Buffer.from(text));
       child.emit('close', exit);
@@ -73,6 +127,17 @@ vi.mock('node:child_process', () => ({
 }));
 
 import { harvestSession } from '../src/captures.js';
+import { loadLabConfig } from '../src/config.js';
+import { resolveCaptureContainer } from '../src/tools/handlers.js';
+
+// tests/ -> aptl-mcp-common/ -> mcp/, then the shipped red server config.
+const RED_CONFIG = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'mcp-red',
+  'docker-lab-config.json',
+);
 
 let tmp = '';
 
@@ -83,8 +148,10 @@ beforeEach(() => {
   spawnControl.capturedArgs = [];
   spawnControl.capturedCmds = [];
   spawnControl.callCount = 0;
+  spawnControl.container = undefined;
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -137,7 +204,7 @@ describe('harvestSession', () => {
     expect(spawnControl.callCount).toBe(3);
     const [cmd, src, destArg] = spawnControl.capturedArgs[0];
     expect(cmd).toBe('cp');
-    expect(src).toBe(`aptl-kali:/var/log/aptl/captures/${tid}/sess-1/.`);
+    expect(src).toBe(`aptl-kali:/var/log/aptl/captures/${tid}/sessions/sess-1/.`);
     expect(destArg).toBe(dest);
     // Globals land under <dest>/_global/audit and _global/proc-acct.
     expect(spawnControl.capturedArgs[1][1]).toBe(
@@ -162,7 +229,7 @@ describe('harvestSession', () => {
 
     expect(ok).toBe(true);
     expect(spawnControl.capturedArgs[0][1]).toBe(
-      'aptl-kali:/var/log/aptl/captures/_unbound/sess-1/.',
+      'aptl-kali:/var/log/aptl/captures/_unbound/sessions/sess-1/.',
     );
     // Globals still get harvested in the _unbound fallback path.
     expect(spawnControl.callCount).toBe(3);
@@ -222,7 +289,7 @@ describe('harvestSession', () => {
     // First call is the per-session attempt; the next two are globals.
     // With the retry helper removed, the per-session "no such file"
     // failure is NOT retried — it fails fast and harvest moves on.
-    const perSessionSrc = `aptl-kali:/var/log/aptl/captures/${tid}/sess-1/.`;
+    const perSessionSrc = `aptl-kali:/var/log/aptl/captures/${tid}/sessions/sess-1/.`;
     const perSessionCalls = spawnControl.capturedArgs.filter(
       (args) => args[1] === perSessionSrc,
     );
@@ -303,7 +370,91 @@ describe('harvestSession', () => {
       },
       'sess-1',
     );
-    expect(spawnControl.capturedArgs[0][1]).toContain(`/var/log/aptl/captures/${'y'.repeat(32)}/sess-1/.`);
+    expect(spawnControl.capturedArgs[0][1]).toContain(`/var/log/aptl/captures/${'y'.repeat(32)}/sessions/sess-1/.`);
+  });
+});
+
+describe('#1242: workspace-scoped capture container (recorded docker cp)', () => {
+  const sessionDir = (session: string) => join(tmp, 'runs', RUN, 'kali-side', session);
+  const failureRecord = (session: string) =>
+    join(sessionDir(session), 'capture-harvest-failure.json');
+  const harvest = (containerName: string, session = 'sess-1') =>
+    harvestSession({ containerName, env: { APTL_STATE_DIR: tmp } }, session);
+  /** Stand in for the sidecar `name` after the broker recorded `session`. */
+  const brokerContainer = (name: string, session: string) => {
+    const root = join(tmp, 'container');
+    const runRoot = join(root, ROOT, RUN);
+    mkdirSync(join(runRoot, 'sessions', session), { recursive: true });
+    writeFileSync(join(runRoot, 'accepted-sessions.jsonl'), `{"session_id":"${session}"}\n`);
+    writeFileSync(join(runRoot, 'sessions', session, 'frames.jsonl'), FRAMES);
+    writeFileSync(join(runRoot, 'sessions', session, 'metadata.json'), METADATA);
+    spawnControl.container = { name, root };
+  };
+
+  beforeEach(() => activateScenario(RUN));
+
+  it('harvests from the sidecar name lab start injects into the shipped red config', async () => {
+    vi.stubEnv('APTL_MCP_DISABLE_DOTENV', '1');
+    vi.stubEnv('LILRAE_MCP_CAPTURE_CONTAINER', SCOPED);
+    brokerContainer(SCOPED, 'sess-1');
+    const containerName = resolveCaptureContainer(await loadLabConfig(RED_CONFIG));
+    expect(containerName).toBe(SCOPED);
+
+    expect(await harvest(containerName as string)).toBe(true);
+    expect(spawnControl.capturedArgs[0]).toEqual([
+      'cp',
+      `${SCOPED}:${ROOT}/${RUN}/sessions/sess-1/.`,
+      sessionDir('sess-1'),
+    ]);
+    expect(existsSync(failureRecord('sess-1'))).toBe(false);
+  });
+
+  it('copies the session files the capture broker writes into the run evidence', async () => {
+    brokerContainer(SCOPED, 'sess-1');
+
+    expect(await harvest(SCOPED)).toBe(true);
+    expect(readFileSync(join(sessionDir('sess-1'), 'frames.jsonl'), 'utf-8')).toBe(FRAMES);
+    expect(readFileSync(join(sessionDir('sess-1'), 'metadata.json'), 'utf-8')).toBe(METADATA);
+    // The run's ledger of accepted sessions stays out of one session's evidence.
+    expect(existsSync(join(sessionDir('sess-1'), 'accepted-sessions.jsonl'))).toBe(false);
+  });
+
+  it.each([
+    ['workspace-scoped', SCOPED, OTHER_WORKSPACE],
+    ['fixed legacy', FIXED, SCOPED],
+  ])('records a named failure in run evidence when the %s container is missing', async (_kind, name, present) => {
+    // The broker recorded the session, but in a sidecar with another name.
+    brokerContainer(present, 'sess-1');
+
+    expect(await harvest(name)).toBe(false);
+    expect(JSON.parse(readFileSync(failureRecord('sess-1'), 'utf-8'))).toEqual({
+      failure: 'aptl.capture-harvest.container-missing',
+      container: name,
+      run_id: RUN,
+      session_id: 'sess-1',
+      recorded_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+    });
+    expect(statSync(failureRecord('sess-1')).mode & 0o777).toBe(0o600);
+    // ADR-042: the global `_audit` / `_proc-acct` harvest is still attempted.
+    expect(spawnControl.callCount).toBe(3);
+  });
+
+  it('keeps a missing per-session subtree distinct from a missing container', async () => {
+    brokerContainer(SCOPED, 'sess-1');
+
+    expect(await harvest(SCOPED, 'sess-gone')).toBe(false);
+    expect(existsSync(failureRecord('sess-gone'))).toBe(false);
+  });
+
+  it('never writes through a link already at the failure record path', async () => {
+    brokerContainer(OTHER_WORKSPACE, 'sess-1');
+    const outside = join(tmp, 'outside.txt');
+    writeFileSync(outside, 'untouched');
+    mkdirSync(sessionDir('sess-1'), { recursive: true });
+    symlinkSync(outside, failureRecord('sess-1'));
+
+    expect(await harvest(SCOPED)).toBe(false);
+    expect(readFileSync(outside, 'utf-8')).toBe('untouched');
   });
 });
 

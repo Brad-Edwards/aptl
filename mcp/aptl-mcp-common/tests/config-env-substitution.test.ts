@@ -8,6 +8,7 @@ import {
   parseDotEnv,
   loadLabConfig,
 } from '../src/config.js';
+import { resolveCaptureContainer } from '../src/tools/handlers.js';
 
 describe('native Kali capture ingress', () => {
   it('uses port 22 at the guest-admitted address and rejects malformed addresses', async () => {
@@ -24,6 +25,37 @@ describe('native Kali capture ingress', () => {
       expect(config.containers!.kali.ssh_port).toBe(22);
       vi.stubEnv('APTL_MCP_KALI_HOST', 'untrusted.example');
       await expect(loadLabConfig(path)).rejects.toThrow('native Kali');
+    } finally {
+      vi.unstubAllEnvs();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('workspace-scoped capture container (#1242)', () => {
+  it('keeps the configured sidecar when unset, stays Kali-only, and rejects non-Docker names', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'aptl-capture-container-'));
+    const path = join(root, 'docker-lab-config.json');
+    const reverse = join(root, 'reverse-lab-config.json');
+    writeFileSync(path, JSON.stringify({
+      server: { configKey: 'kali' }, lab: { name: 'test' },
+      containers: { kali: { capture_container_name: 'aptl-kali-capture', ssh_key: '/key' } },
+    }));
+    writeFileSync(reverse, JSON.stringify({
+      server: { configKey: 'reverse' }, lab: { name: 'test' },
+      containers: { reverse: { container_name: 'aptl-reverse', ssh_key: '/key' } },
+    }));
+    try {
+      vi.stubEnv('LILRAE_MCP_CAPTURE_CONTAINER', undefined);
+      const config = await loadLabConfig(path);
+      expect(config.containers!.kali.capture_container_name).toBe('aptl-kali-capture');
+      // The Kali sidecar name never redirects another server's harvest.
+      vi.stubEnv('LILRAE_MCP_CAPTURE_CONTAINER', 'aptl-w123456789abc-kali-capture');
+      expect(resolveCaptureContainer(await loadLabConfig(reverse))).toBe('aptl-reverse');
+      for (const invalid of ['--privileged', '-q', 'kali:/etc', 'a b', 'x', '']) {
+        vi.stubEnv('LILRAE_MCP_CAPTURE_CONTAINER', invalid);
+        await expect(loadLabConfig(path)).rejects.toThrow('Invalid capture container name');
+      }
     } finally {
       vi.unstubAllEnvs();
       rmSync(root, { recursive: true, force: true });

@@ -126,6 +126,15 @@ cd mcp/mcp-red && npm install && npm run build
 See [MCP Integration](mcp-integration.md) for detailed setup
 instructions.
 
+When a session closes, the red-team MCP server copies that session's capture
+directory from the capture sidecar,
+`/var/log/aptl/captures/<run_id>/sessions/<session_id>/`, into the run's
+`kali-side/<session_id>/` directory on the host. If `docker cp` reports that
+the capture container does not exist, the server writes
+`capture-harvest-failure.json` there instead. The record names the failure
+(`aptl.capture-harvest.container-missing`), the container, the run and session
+IDs, and the time.
+
 ## Experimental record redaction toggle
 
 By default the MCP-side captures (tool-calls.jsonl, ocsf.jsonl)

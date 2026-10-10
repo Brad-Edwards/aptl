@@ -13,9 +13,11 @@ Requires:
     APTL_SMOKE=1 pytest tests/test_range_integration.py -v
 """
 
+import base64
 import json
 import os
 import time
+from pathlib import Path
 
 import pytest
 
@@ -1525,19 +1527,31 @@ class TestMCPSessionHarvest:
     """Per-session harvest is complete and not truncated.
 
     #304 acceptance: after `PersistentSession.close()` awaits the remote
-    SSH channel close, the kali-side `script(1)` typescript that the
-    wrapper's EXIT trap flushes must be fully present in the host-side
-    harvest. We mark the end of the session with a known terminator and
-    assert it appears intact in the harvested typescript.
+    SSH channel close, the session that the capture broker
+    (`containers/kali-capture/broker.py`) recorded must be complete in
+    the host-side harvest. `run_broker()` writes `metadata.json` in its
+    `finally` block, just before the broker exits, so finding it in the
+    harvest proves that close() waited for the broker. We mark the end of
+    the session with a known terminator and assert it appears intact in
+    the harvested output frames.
 
     The whole flow runs through ONE MCP-server process so the harvest is
     invoked by the real `close_session` handler — `mcp_call_tool` spawns
     per call and would tear the server down between create and close.
+    The server gets the `aptl-red` env block of the `.mcp.json` that lab
+    start synced, as a participant's client does, so it reaches the
+    capture broker and harvests from the workspace-scoped sidecar.
     """
 
-    def test_typescript_ends_with_terminator(self, tmp_path):
-        import json as _json
+    def test_harvested_frames_carry_terminator(self, monkeypatch):
         import secrets
+
+        repo_root = Path(__file__).resolve().parent.parent
+        red_env = json.loads((repo_root / ".mcp.json").read_text())[
+            "mcpServers"
+        ]["aptl-red"]["env"]
+        for key, value in red_env.items():
+            monkeypatch.setenv(key, value)
 
         # Unique per-run id satisfying SESSION_ID_SCHEMA
         # ('^[A-Za-z0-9_][A-Za-z0-9._-]*$'). The previous fixed id used `#`,
@@ -1550,8 +1564,8 @@ class TestMCPSessionHarvest:
 
         # Bring up the lab's MCP server, open an interactive session,
         # run a command that emits the terminator, then close. The
-        # close handler triggers harvest from the kali container's
-        # capture volume into .aptl/runs/<run>/kali-side/<session>/.
+        # close handler harvests the session from the capture sidecar
+        # into <run store>/<run>/kali-side/<session>/.
         init = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -1621,44 +1635,26 @@ class TestMCPSessionHarvest:
             )
             content = resp.get("result", {}).get("content", [])
             assert content, f"empty content for id={call_id}"
-            body = _json.loads(content[0]["text"])
+            body = json.loads(content[0]["text"])
             assert body.get("success") is True, (
                 f"tool id={call_id} body reports failure: {body}"
             )
 
-        # Locate the harvested typescript. The harvest lands under
-        # .aptl/runs/<run_id>/kali-side/<session_id>/. The unique-per-run
-        # session_id guarantees we match only captures from this run.
-        import glob
-        from pathlib import Path
-
-        repo_root = Path(__file__).resolve().parent.parent
-        candidates = glob.glob(
-            str(
-                repo_root / ".aptl" / "runs" / "*" / "kali-side"
-                / session_id / "**" / "typescript*"
-            ),
-            recursive=True,
-        )
-        assert candidates, (
-            "No harvested typescript for the test session — harvest "
-            "may have run before remote close, or the kali capture "
-            "wrapper did not produce a typescript."
-        )
-
-        # Read every candidate (PTY + raw typescript variants) and
-        # assert at least one contains the unique terminator intact.
-        found_in_any = False
-        for path in candidates:
-            try:
-                contents = Path(path).read_bytes()
-            except OSError:
-                continue
-            if terminator.encode() in contents:
-                found_in_any = True
-                break
-        assert found_in_any, (
-            f"Terminator '{terminator}' not found in any harvested "
-            f"typescript — capture was truncated. Candidates: "
-            f"{candidates}"
+        # The harvest copies the broker's session directory into
+        # <run store>/<run_id>/kali-side/<session_id>/. The unique-per-run
+        # session_id guarantees we match only this run's capture.
+        [session_dir] = Path(
+            red_env.get("APTL_MCP_RUN_STORE_BASE", repo_root / ".aptl" / "runs")
+        ).glob(f"*/kali-side/{session_id}")
+        assert not (session_dir / "capture-harvest-failure.json").exists()
+        metadata = json.loads((session_dir / "metadata.json").read_text())
+        assert metadata["session_id"] == session_id
+        frames = [
+            json.loads(x)
+            for x in (session_dir / "frames.jsonl").read_text().splitlines()
+        ]
+        assert terminator.encode() in b"".join(
+            base64.b64decode(f["data_b64"])
+            for f in frames
+            if f["direction"] == "output"
         )

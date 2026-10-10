@@ -2,9 +2,10 @@
  * Per-session capture harvest from the Kali capture sidecar.
  *
  * OBS-003 / ADR-033 / ADR-041 design: the `aptl-kali-capture` sidecar (not the
- * Kali workload) writes per-session captures (PTY typescript, pcap,
- * audit/proc-acct snapshots) into a docker named volume at
- * `/var/log/aptl/captures/<run_id>/<session_id>/`. The Kali workload does not
+ * Kali workload) records each session through its SSH/PTY broker
+ * (`containers/kali-capture/broker.py`) into a docker named volume, as
+ * `frames.jsonl` and `metadata.json` under
+ * `/var/log/aptl/captures/<run_id>/sessions/<session_id>/`. The Kali workload does not
  * mount the volume at all, so a sudo-capable agent cannot read or tamper with
  * evidence (ADR-041). The volume is invisible to the host filesystem to
  * prevent cross-scenario tampering (codex pre-push cycle 1 finding-10).
@@ -15,11 +16,12 @@
  * per-session subtree out into `<run_store_base>/<run_id>/kali-side/<session_id>/`
  * on the host, then sets 0600 permissions on every file. The harvest is
  * best-effort — a missing container / docker / missing subdir logs to stderr
- * but does not throw out of the close path.
+ * but does not throw out of the close path. A missing capture container also
+ * leaves a named failure record in the session's kali-side evidence (#1242).
  */
 
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, readdir, stat } from 'node:fs/promises';
+import { chmod, mkdir, readdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { kaliSideSessionDir, loadActiveTraceId } from './runs.js';
@@ -29,7 +31,7 @@ export interface HarvestOptions {
    * sidecar (e.g. `aptl-kali-capture`), which owns the captures volume. */
   containerName: string;
   /** Path inside the container that holds per-run capture subdirs.
-   * Defaults to `/var/log/aptl/captures` to match the wrapper. */
+   * Defaults to `/var/log/aptl/captures` to match the capture broker. */
   containerCapturesRoot?: string;
   /** APTL state directory on the host (defaults to `APTL_STATE_DIR`
    * env var or `.aptl`). */
@@ -44,6 +46,11 @@ export interface HarvestOptions {
 }
 
 const DEFAULT_CONTAINER_CAPTURES_ROOT = '/var/log/aptl/captures';
+
+/** Named failure for a harvest whose capture container does not exist. */
+const CONTAINER_MISSING = 'aptl.capture-harvest.container-missing';
+/** Evidence record for that failure, inside the session's kali-side dir. */
+const HARVEST_FAILURE_FILE = 'capture-harvest-failure.json';
 
 // Override via `APTL_DOCKER_BIN` for non-standard installations.
 // Default to the standard absolute path so the spawn does NOT rely
@@ -132,11 +139,13 @@ function resolveHarvestParams(opts: HarvestOptions): ResolvedHarvestParams {
   };
 }
 
+type PerSessionCopy = 'copied' | 'failed' | 'container-missing';
+
 /**
  * Copy one session's per-session capture subtree out of the container.
- * Returns `false` (and logs) when docker cp failed for a reason worth
- * surfacing, including a missing source subtree; `true` on success or a clean
- * no-op.
+ * Returns `failed` (and logs) when docker cp failed for a reason worth
+ * surfacing, including a missing source subtree; `container-missing` when the
+ * container itself does not exist; `copied` on success.
  */
 async function copyPerSessionCaptures(
   containerName: string,
@@ -144,9 +153,15 @@ async function copyPerSessionCaptures(
   destDir: string,
   env: NodeJS.ProcessEnv,
   sessionId: string,
-): Promise<boolean> {
+): Promise<PerSessionCopy> {
   const cpResult = await execDockerCp(['cp', `${containerName}:${src}`, destDir], env);
-  if (cpResult.code === 0) return true;
+  if (cpResult.code === 0) return 'copied';
+  // Docker reports `No such container: <name>`; a missing path inside an
+  // existing container is `Could not find the file …` instead.
+  if (/No such container: /i.test(cpResult.stderr)) {
+    console.error(`[captures] capture container ${containerName} is missing (${CONTAINER_MISSING})`);
+    return 'container-missing';
+  }
   if (
     /No such file or directory/i.test(cpResult.stderr) ||
     /Could not find the file/i.test(cpResult.stderr)
@@ -156,7 +171,7 @@ async function copyPerSessionCaptures(
     // subtree, an attacker who deletes their own session dir
     // before close can wipe the Kali-side captures. Silent
     // success would convert that tampering into invisible data
-    // loss. We log + return false so the operator sees a real
+    // loss. We log + return `failed` so the operator sees a real
     // anomaly. The MCP-side PTY tee and tool-call JSONL remain
     // as the independent (and tamper-resistant) record.
     console.error(
@@ -169,7 +184,33 @@ async function copyPerSessionCaptures(
       cpResult.stderr.trim(),
     );
   }
-  return false;
+  return 'failed';
+}
+
+/**
+ * Record a missing capture container in the run evidence, not only on stderr.
+ * The record takes the captures' place in the run directory. `wx` refuses to
+ * follow or replace anything at its path.
+ */
+async function recordContainerMissing(
+  destDir: string,
+  containerName: string,
+  runId: string,
+  sessionId: string,
+): Promise<void> {
+  const record = {
+    failure: CONTAINER_MISSING,
+    container: containerName,
+    run_id: runId,
+    session_id: sessionId,
+    recorded_at: new Date().toISOString(),
+  };
+  const path = join(destDir, HARVEST_FAILURE_FILE);
+  try {
+    await writeFile(path, `${JSON.stringify(record, null, 2)}\n`, { flag: 'wx', mode: 0o600 });
+  } catch (err) {
+    console.error(`[captures] could not record ${CONTAINER_MISSING} at ${path}:`, err);
+  }
 }
 
 /**
@@ -254,19 +295,22 @@ export async function harvestSession(opts: HarvestOptions, sessionId: string): P
   // into dest. The trailing `/.` is important — without it docker cp
   // copies the source directory itself into dest, producing
   // dest/<session_id>/... which would nest one level too deep.
-  const src = `${containerCapturesRoot}/${tid}/${sessionId}/.`;
+  const src = `${containerCapturesRoot}/${tid}/sessions/${sessionId}/.`;
   // Track whether the per-session subtree was actually copied — even
   // on a "not found" no-op, we still attempt the global captures
   // harvest below (codex cycle 2 finding-6).
-  const perSessionOk = await copyPerSessionCaptures(
+  const perSession = await copyPerSessionCaptures(
     opts.containerName,
     src,
     destDir,
     env,
     sessionId,
   );
+  if (perSession === 'container-missing') {
+    await recordContainerMissing(destDir, opts.containerName, tid, sessionId);
+  }
 
   await harvestGlobalCaptures(opts.containerName, containerCapturesRoot, destDir, env);
 
-  return finalizeHarvest(destDir, perSessionOk);
+  return finalizeHarvest(destDir, perSession === 'copied');
 }

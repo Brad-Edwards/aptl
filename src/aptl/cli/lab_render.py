@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
+from aptl.cli._start_residue import emit_start_residue, stop_recovery_routes
 from aptl.core.host_ports import PortSpec, ResolvedPort, published_port_specs
 from aptl.core.execution_boundary import (
     ExecutionBoundaryObservation,
@@ -56,12 +57,17 @@ _OUTCOME_HEADLINES: dict[StartupOutcome, str] = {
 }
 
 
-def render_start_result(result: LabResult) -> None:
-    """Print a structured summary of a lab-start result."""
+def render_start_result(result: LabResult, project_dir: Path | None = None) -> None:
+    """Print a structured summary of a lab-start result.
+
+    ``project_dir`` is the start's ``--project-dir``. Recovery commands name it
+    when the current directory resolves to another project (#952).
+    """
     typer.echo(_OUTCOME_HEADLINES[result.outcome])
     if result.outcome is StartupOutcome.FAILED and result.error:
         typer.echo(f"  error: {result.error}")
     emit_execution_boundary_summary(result.execution_boundary)
+    _emit_start_notes(result, project_dir)
     if not result.diagnostics:
         return
     typer.echo(f"  diagnostics ({len(result.diagnostics)}):")
@@ -78,6 +84,15 @@ def render_start_result(result: LabResult) -> None:
             )
             if diag.operator_action:
                 typer.echo(f"      action: {diag.operator_action}")
+
+
+def _emit_start_notes(result: LabResult, project_dir: Path | None) -> None:
+    """Print the admission time (#953) and any failed-start residue (#952)."""
+
+    if result.admission_seconds is not None:
+        typer.echo(f"Scenario admission: {result.admission_seconds:.1f}s")
+    if result.residue is not None:
+        emit_start_residue(result.residue, stop_recovery_routes(project_dir))
 
 
 def emit_execution_boundary_summary(

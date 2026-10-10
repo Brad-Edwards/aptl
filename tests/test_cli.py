@@ -256,6 +256,37 @@ class TestLabStartCommand:
         assert "transport=remote-ssh" in result.stdout
         assert "override=docker-host" in result.stdout
 
+    @pytest.mark.parametrize(
+        ("admission_seconds", "expected_line"),
+        [(12.34, "Scenario admission: 12.3s"), (None, None)],
+        ids=["admitted", "never-admitted"],
+    )
+    def test_lab_start_reports_the_admission_duration(
+        self, runner, mocker, admission_seconds, expected_line
+    ):
+        """The start summary shows how long admission took when it ran (#953)."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error="start refused",
+                admission_seconds=admission_seconds,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        admission_lines = [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("Scenario admission")
+        ]
+        assert admission_lines == ([expected_line] if expected_line else [])
+
     def test_lab_info_reobserves_even_when_credentials_are_absent(
         self, runner, tmp_path, mocker
     ):
@@ -675,6 +706,7 @@ class TestLabStartCommand:
             skip_seed=False,
             scenario_path=None,
             progress=ANY,
+            teardown_on_failure=False,
         )
 
     def test_start_accepts_catalog_scenario_id(self, runner, mocker, tmp_path):
@@ -708,6 +740,7 @@ class TestLabStartCommand:
             skip_seed=False,
             scenario_path=selected,
             progress=ANY,
+            teardown_on_failure=False,
         )
 
     def test_start_accepts_explicit_scenario_path(self, runner, mocker, tmp_path):
@@ -748,6 +781,7 @@ class TestLabStartCommand:
             skip_seed=False,
             scenario_path=selected,
             progress=ANY,
+            teardown_on_failure=False,
         )
 
     def test_start_prints_progress_updates(self, runner, mocker):
@@ -819,7 +853,194 @@ class TestLabStartCommand:
             skip_seed=False,
             scenario_path=None,
             progress=ANY,
+            teardown_on_failure=False,
         )
+
+    @pytest.mark.parametrize(
+        ("extra_args", "entry_point"),
+        [
+            (["--teardown-on-failure"], "orchestrate_lab_start"),
+            (["--clean", "--yes", "--teardown-on-failure"], "clean_boot_lab"),
+        ],
+        ids=["start", "clean-start"],
+    )
+    def test_start_forwards_teardown_on_failure(
+        self, runner, mocker, tmp_path, extra_args, entry_point
+    ):
+        """The opt-in reaches the start path that owns the lifecycle lock (#952)."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mocked = mocker.patch(
+            f"aptl.cli.lab.{entry_point}",
+            return_value=LabResult(success=False, error="start failed"),
+        )
+
+        result = runner.invoke(
+            app, ["lab", "start", "--project-dir", str(tmp_path), *extra_args]
+        )
+
+        assert result.exit_code == 1
+        assert mocked.call_args.kwargs["teardown_on_failure"] is True
+
+    @pytest.mark.parametrize(
+        ("residue", "expected", "absent"),
+        [
+            pytest.param(
+                {"container_count": 3, "network_count": 2},
+                [
+                    "The failed start left 3 containers and 2 networks in the project.",
+                    "  To recover, run one of:",
+                    (
+                        "    aptl lab stop     removes the project's containers and "
+                        "networks and keeps its volumes, so lab data survives"
+                    ),
+                    (
+                        "    aptl lab stop -v  also removes the volumes and destroys "
+                        "all lab data"
+                    ),
+                ],
+                ["--teardown-on-failure did not remove them."],
+                id="left-in-project",
+            ),
+            pytest.param(
+                {
+                    "container_count": 3,
+                    "network_count": 2,
+                    "teardown_requested": True,
+                    "torn_down": True,
+                },
+                [
+                    (
+                        "Teardown after the failed start removed 3 containers and "
+                        "2 networks; volumes were kept."
+                    ),
+                    (
+                        "  `aptl lab stop -v` also removes the volumes and destroys "
+                        "all lab data."
+                    ),
+                ],
+                ["  To recover, run one of:"],
+                id="torn-down",
+            ),
+            pytest.param(
+                {"container_count": 1, "network_count": 0, "teardown_requested": True},
+                [
+                    "The failed start left 1 container and 0 networks in the project.",
+                    "  --teardown-on-failure did not remove them.",
+                    "  To recover, run one of:",
+                ],
+                [],
+                id="teardown-incomplete",
+            ),
+            pytest.param(
+                {"container_count": None, "network_count": None},
+                [
+                    (
+                        "The failed start may have left containers or networks "
+                        "in the project; they could not be observed."
+                    ),
+                    "  To recover, run one of:",
+                ],
+                [
+                    (
+                        "  --teardown-on-failure ran, but what remains could not "
+                        "be confirmed."
+                    )
+                ],
+                id="unobserved",
+            ),
+            pytest.param(
+                {
+                    "container_count": None,
+                    "network_count": None,
+                    "teardown_requested": True,
+                },
+                [
+                    (
+                        "The failed start may have left containers or networks "
+                        "in the project; they could not be observed."
+                    ),
+                    (
+                        "  --teardown-on-failure ran, but what remains could not "
+                        "be confirmed."
+                    ),
+                    "  To recover, run one of:",
+                ],
+                ["  --teardown-on-failure did not remove them."],
+                id="teardown-unobserved",
+            ),
+        ],
+    )
+    def test_failed_start_summary_names_residue_and_recovery(
+        self, runner, mocker, residue, expected, absent
+    ):
+        """A failed start says what it left and how to recover (#952)."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartResidue
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error="RAES runtime handoff failed",
+                residue=StartResidue(**residue),
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        lines = result.stdout.splitlines()
+        assert all(line in lines for line in expected), result.stdout
+        assert not any(line in lines for line in absent), result.stdout
+
+    @pytest.mark.parametrize(
+        ("cwd", "names_project"),
+        [("lab dir/sub", False), ("elsewhere", True)],
+        ids=["inside-project", "elsewhere"],
+    )
+    def test_failed_start_recovery_reaches_the_started_project(
+        self, runner, mocker, monkeypatch, tmp_path, cwd, names_project
+    ):
+        """After `start -d DIR` from elsewhere, the routes name DIR (#952)."""
+        import shlex
+
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+        from aptl.core.lab_types import StartResidue
+
+        lab_dir = tmp_path / "lab dir"
+        (lab_dir / "sub").mkdir(parents=True)
+        (lab_dir / "aptl.json").write_text("{}")
+        (tmp_path / "elsewhere").mkdir()
+        monkeypatch.chdir(tmp_path / cwd)
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error="RAES runtime handoff failed",
+                residue=StartResidue(container_count=3, network_count=2),
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start", "--project-dir", str(lab_dir)])
+
+        target = (
+            f" --project-dir {shlex.quote(str(lab_dir.resolve()))}"
+            if names_project
+            else ""
+        )
+        routes = [
+            line[4:].split("  ", 1)[0]
+            for line in result.stdout.splitlines()
+            if line.startswith("    aptl lab stop")
+        ]
+        assert routes == [
+            f"aptl lab stop{target}",
+            f"aptl lab stop -v{target}",
+        ], result.stdout
 
     def test_start_clean_aborts_without_confirmation(self, runner, mocker, tmp_path):
         """--clean is destructive: declining the prompt aborts before any boot."""

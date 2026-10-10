@@ -87,6 +87,57 @@ class StartupDiagnostic:
     operator_action: str = ""
 
 
+# The project-scoped recovery routes for a range left in place, with what each
+# does to lab data (#952). Start failures and the existing-range refusal name
+# the same two commands. They act on the current directory's project, so the
+# CLI failure summary adds ``--project-dir`` when the start named another one.
+STOP_RECOVERY_ROUTES: tuple[tuple[str, str], ...] = (
+    (
+        "aptl lab stop",
+        "removes the project's containers and networks and keeps its volumes, "
+        "so lab data survives",
+    ),
+    ("aptl lab stop -v", "also removes the volumes and destroys all lab data"),
+)
+
+
+def _count(number: int, noun: str) -> str:
+    """Return ``number`` with ``noun``, plural unless the number is one."""
+
+    return f"{number} {noun}" if number == 1 else f"{number} {noun}s"
+
+
+def describe_project_runtime(container_count: int, network_count: int) -> str:
+    """Name project runtime counts for an operator, such as ``3 containers``."""
+
+    return f"{_count(container_count, 'container')} and {_count(network_count, 'network')}"
+
+
+@dataclass(frozen=True)
+class StartResidue:
+    """Project containers and networks a failed lab start left behind (#952).
+
+    The counts are what the backend observed right after the failure, or
+    ``None`` when that observation itself failed. ``teardown_requested``
+    records ``--teardown-on-failure``; ``torn_down`` is True only when the
+    project-scoped stop ran without volume removal and the backend then
+    observed no project containers or networks. When a teardown leaves
+    something behind, the counts are what remains.
+    """
+
+    container_count: int | None
+    network_count: int | None
+    teardown_requested: bool = False
+    torn_down: bool = False
+
+    def describe(self) -> str | None:
+        """Return the observed counts for an operator, or ``None`` if unknown."""
+
+        if self.container_count is None or self.network_count is None:
+            return None
+        return describe_project_runtime(self.container_count, self.network_count)
+
+
 @dataclass
 class LabResult:
     """Result of a lab lifecycle operation.
@@ -122,6 +173,12 @@ class LabResult:
     # The selected daemon observed during this exact startup attempt. A missing
     # observation is rendered explicitly as unknown, including on early failure.
     execution_boundary: ExecutionBoundaryObservation | None = None
+    # Seconds lab start spent admitting (parsing and planning) the scenario,
+    # or None when the attempt never reached admission (#953).
+    admission_seconds: float | None = None
+    # What a failed start left in the project, or None when it left nothing
+    # or failed before it could create anything (#952).
+    residue: StartResidue | None = None
 
     def __post_init__(self) -> None:
         # Make the invariant total: ``outcome`` is the authoritative

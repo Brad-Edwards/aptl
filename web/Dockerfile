@@ -12,6 +12,9 @@ COPY . .
 RUN npm run build
 
 FROM caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028
+# Apply published Alpine fixes the pinned base predates (zlib 1.3.2-r1 for
+# CVE-2026-85091), as operator-access-proxy does.
+RUN apk upgrade --no-cache
 COPY --from=builder /app/build /srv
 COPY Caddyfile /etc/caddy/Caddyfile
 

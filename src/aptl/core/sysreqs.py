@@ -36,6 +36,21 @@ class ToolReqResult:
     install_hint: str = ""
 
 
+def docker_mode_for_containment(host_containment: str | None) -> str:
+    """Map an observed execution boundary to the sysctl owner it implies.
+
+    Only a native Linux engine on this host reads this host's
+    ``vm.max_map_count``; a Docker VM manages its own, and anything else is
+    unknown.
+    """
+
+    if host_containment == "native-docker":
+        return hostenv.DOCKER_LINUX_NATIVE
+    if host_containment == "docker-vm-unverified":
+        return hostenv.DOCKER_VM
+    return hostenv.DOCKER_UNKNOWN
+
+
 def check_max_map_count(
     minimum: int = _DEFAULT_MIN_MAP_COUNT,
     *,

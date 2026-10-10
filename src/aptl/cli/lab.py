@@ -123,6 +123,15 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
         "-y",
         help="Skip the confirmation prompt for --clean.",
     ),
+    teardown_on_failure: bool = typer.Option(
+        False,
+        "--teardown-on-failure",
+        help=(
+            "If the start fails, stop the containers and networks it created "
+            "and keep the volumes. By default a failed start leaves them in "
+            "place for diagnosis."
+        ),
+    ),
     offline_staged: bool = typer.Option(
         False,
         "--offline-staged",
@@ -246,6 +255,7 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
+            teardown_on_failure=teardown_on_failure,
             **appliance_kwargs,
         )
     else:
@@ -254,10 +264,11 @@ def start(  # NOSONAR - Typer exposes one parameter per user-visible CLI option.
             skip_seed=skip_seed,
             scenario_path=selected_scenario,
             progress=_emit_lab_start_progress,
+            teardown_on_failure=teardown_on_failure,
             **appliance_kwargs,
         )
 
-    render_start_result(result)
+    render_start_result(result, project_dir)
     if result.success:
         emit_lab_access_summary(
             project_dir,

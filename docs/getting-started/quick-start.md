@@ -24,6 +24,27 @@ stronger VM boundary around Docker and the lab. Neither containers nor a VM
 are an absolute sandbox. Keep the host kernel and hypervisor current and
 control the surrounding network.
 
+## Check The Host
+
+Run the read-only prerequisite check from the project directory:
+
+```shell
+aptl doctor
+```
+
+It checks the project configuration, the host tools that `aptl lab start`
+runs, and the Docker engine the project selects. For that engine it checks that
+it answers, runs rootful without `userns-remap`, provides cgroup v2 with Docker
+Engine 28.0 or newer, has the Compose and Buildx plugins, and has enough memory
+for the full stack. It warns when Compose is older than 2.24.4, the version the
+`techvault` scenario needs. On a native Linux engine it also checks
+`vm.max_map_count`. For a remote engine, or one whose host it cannot identify,
+it warns instead and prints the setting to apply on the host that runs that
+engine. Each failed check prints its fix. The command changes nothing on the
+host, in the project, or in the Docker engine. It exits with status 0 when no
+check failed and 1 when at least one did, so a script can run it before
+`aptl lab start`.
+
 ## Choose A Scenario
 
 List the validated scenarios supplied by the installed environment pack:

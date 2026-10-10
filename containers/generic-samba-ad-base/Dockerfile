@@ -3,6 +3,7 @@
 # image contains no scenario-specific realm, users, groups, or credentials.
 FROM ubuntu:26.04@sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7
 
+# Also removes the unused /usr/bin/pebble (CVE-2026-78667, -94439, -97031, -97032), as #1248 removed yarn/corepack.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         krb5-user \
@@ -17,7 +18,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y \
         tini \
         winbind \
     && apt-get clean \
-    && find /var/lib/apt/lists -mindepth 1 -delete
+    && find /var/lib/apt/lists -mindepth 1 -delete \
+    && rm -f /usr/bin/pebble
 
 COPY provider-start.sh /usr/local/sbin/aptl-samba-provider-start
 COPY provision-domain.sh /usr/local/sbin/aptl-provision-samba-domain

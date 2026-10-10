@@ -16,6 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from functools import partial
 from pathlib import Path
+from time import monotonic
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Optional, cast
 from uuid import uuid4
@@ -749,6 +750,13 @@ def _clean_boot_lab_owned(
     preflight_failure, selected_backend = _preflight_clean_appliance_boundary(
         project_root, appliance, backend
     )
+    if preflight_failure is None:
+        # LilRAE does not support rootless Docker (#1053), so --clean asks the
+        # daemon its teardown would use before it removes any container or
+        # volume, not only once the start path runs.
+        preflight_failure = _clean_boot_rootless_refusal(
+            project_root, selected_backend
+        )
     if preflight_failure is not None:
         return preflight_failure
     if progress is not None:
@@ -825,6 +833,28 @@ def _preflight_clean_appliance_boundary(
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired, ValueError):
         return LabResult(success=False, error="Verified appliance launch preflight failed."), backend
     return None, selected
+
+
+def _clean_boot_rootless_refusal(
+    project_root: Path, backend: "DeploymentBackend | None"
+) -> LabResult | None:
+    """Refuse a rootless daemon before ``--clean`` removes anything (#1053).
+
+    Asks the daemon the teardown would use: the caller's backend or the
+    verified appliance backend when there is one, otherwise the backend
+    :func:`stop_lab` builds from ``aptl.json``, or from the defaults when there
+    is no ``aptl.json``. An ``aptl.json`` that does not load is left to
+    :func:`stop_lab`, which refuses it before any teardown.
+    """
+
+    if backend is None:
+        config_path = find_config(project_root)
+        try:
+            config = load_config(config_path) if config_path is not None else None
+        except (FileNotFoundError, ValueError):
+            return None
+        backend = _get_backend(project_root, config)
+    return _rootless_daemon_refusal(backend)
 
 
 def lab_status(
@@ -1104,6 +1134,9 @@ class _LabStartContext(object):
     # second time.
     admitted_start: AdmittedScenarioStart | None = None
     admitted_surface: "AdmittedStartSurface | None" = None
+    # Wall-clock seconds the one admission took, reported in the start
+    # summary so a slow (registry-bound) admission is visible (#953).
+    admission_seconds: float | None = None
     # Optional content-identified startup enrichment selected through the
     # installed scenario adapter. Core treats the validated plan generically.
     scenario_startup: ScenarioStartupPlan | None = None
@@ -1514,6 +1547,46 @@ def _step_reject_preexisting_range(ctx: _LabStartContext) -> LabResult | None:
     )
 
 
+def _step_refuse_rootless_daemon(ctx: _LabStartContext) -> LabResult | None:
+    """Refuse a rootless Docker daemon by name, for every scenario (#1053).
+
+    LilRAE does not support rootless Docker. The substrate gate's refusal runs
+    only when a selected node needs writable cgroups, and the Wazuh certificate
+    generator ran before it, so this asks the selected backend's daemon for
+    every scenario, before any SSH key, credential render, volume, certificate,
+    image pull or Compose change. It cannot run earlier: the backend, and so
+    the daemon that must answer, is known only after ``_step_load_config``
+    binds the endpoint. ``.env`` hydration, scenario selection and admission
+    still run first. ``--clean`` asks the same question before its teardown
+    (:func:`_clean_boot_rootless_refusal`).
+    """
+
+    assert ctx.backend is not None
+    return _rootless_daemon_refusal(ctx.backend)
+
+
+def _rootless_daemon_refusal(backend: "DeploymentBackend") -> LabResult | None:
+    """Return the named refusal when ``backend``'s daemon runs rootless (#1053).
+
+    The probe goes through the backend's own runner, so an explicitly selected
+    endpoint is the daemon that answers. A daemon that does not answer is
+    refused as well.
+    """
+
+    from aptl.core.deployment._compose_substrate_gate import require_rootful_daemon
+    from aptl.core.deployment.errors import BackendSeedError
+
+    refusal: str | None = None
+    try:
+        require_rootful_daemon(backend._run)
+    except BackendSeedError as exc:
+        refusal = str(exc)
+    if refusal is None:
+        return None
+    log.error("Lab start refused: %s", refusal)
+    return LabResult(success=False, error=refusal)
+
+
 def _configure_verified_appliance_launch(
     ctx: _LabStartContext,
 ) -> LabResult | None:
@@ -1665,6 +1738,7 @@ def _load_admitted_start_surface(
     admitted = None
     surface = None
     failure = None
+    admission_started = monotonic()
     try:
         admission_kwargs = (
             {
@@ -1698,6 +1772,7 @@ def _load_admitted_start_surface(
                 f"{redact(str(exc))}"
             ),
         )
+    ctx.admission_seconds = monotonic() - admission_started
     if failure is None and admitted is not None:
         failure = admitted.runtime_materialization_failure
     if failure is None:
@@ -2077,7 +2152,10 @@ def _seed_suricata_volumes_local(ctx: _LabStartContext) -> LabResult | None:
     if ctx.offline_staged and pull_warnings:
         result = LabResult(
             success=False,
-            error="Offline staged Suricata image verification failed.",
+            error=(
+                "Offline staged Suricata image verification failed: "
+                f"{'; '.join(pull_warnings)}"
+            ),
         )
     if result is None:
         ownership = ensure_suricata_config_source_ownership(
@@ -2265,9 +2343,12 @@ def _step_pull_images(ctx: _LabStartContext) -> LabResult | None:
         log.warning(warning)
     if warnings:
         if ctx.offline_staged:
+            # Offline warnings name only the exact reference, never stderr.
             return LabResult(
                 success=False,
-                error="Offline staged image verification failed.",
+                error=(
+                    f"Offline staged image verification failed: {'; '.join(warnings)}"
+                ),
             )
         # Pre-pull is a latency optimization — Compose pulls on demand
         # when containers start. Surface as a cosmetic info diagnostic
@@ -3889,6 +3970,7 @@ _LAB_START_STEPS = (
     _step_load_env,
     _step_load_config,
     _step_reject_preexisting_range,
+    _step_refuse_rootless_daemon,
     _step_resolve_host_ports,
     _step_ensure_ssh_keys,
     _step_check_sysreqs,
@@ -3981,6 +4063,7 @@ _LAB_START_PROGRESS_MESSAGES = {
     "_step_load_env": "Preparing environment and credentials.",
     "_step_load_config": "Loading lab configuration.",
     "_step_reject_preexisting_range": "Checking for an existing lab range.",
+    "_step_refuse_rootless_daemon": "Checking the Docker daemon mode.",
     "_step_resolve_host_ports": "Checking host port availability.",
     "_step_ensure_ssh_keys": "Preparing SSH keys.",
     "_step_check_sysreqs": "Checking host requirements.",
@@ -4119,6 +4202,7 @@ def orchestrate_lab_start(
         for supervise in after_start:
             failure = supervise()
             if failure is not None:
+                failure.admission_seconds = result.admission_seconds
                 return failure
     return result
 
@@ -4195,6 +4279,7 @@ def _orchestrate_lab_start_owned(
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
                 execution_boundary=ctx.execution_boundary,
+                admission_seconds=ctx.admission_seconds,
             )
         ctx.diagnostics.extend(stage.diagnostics)
         if stage.error is not None:
@@ -4208,6 +4293,7 @@ def _orchestrate_lab_start_owned(
                 outcome=StartupOutcome.FAILED,
                 diagnostics=list(ctx.diagnostics),
                 execution_boundary=ctx.execution_boundary,
+                admission_seconds=ctx.admission_seconds,
             )
 
     if after_start is not None:
@@ -4218,6 +4304,7 @@ def _orchestrate_lab_start_owned(
     else:
         readiness_failure = _publish_appliance_guest_readiness(ctx)
     if readiness_failure is not None:
+        readiness_failure.admission_seconds = ctx.admission_seconds
         return readiness_failure
     outcome = derive_startup_outcome(ctx.diagnostics, fatal=False)
     if outcome is StartupOutcome.READY:
@@ -4233,6 +4320,7 @@ def _orchestrate_lab_start_owned(
         diagnostics=list(ctx.diagnostics),
         resolved_ports=list(ctx.resolved_ports),
         execution_boundary=ctx.execution_boundary,
+        admission_seconds=ctx.admission_seconds,
     )
 
 

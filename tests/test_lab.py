@@ -74,6 +74,13 @@ def _admitted_surface(
     )
 
 
+def _mcp_build_fails(cmd, **_kwargs):
+    """Fail only the MCP build script; the Docker daemon still answers."""
+    if cmd[0] == "docker":
+        return MagicMock(returncode=0, stdout="", stderr="")
+    return MagicMock(returncode=1, stdout="", stderr="npm error")
+
+
 def _admitted_start_fixture(bundle_root: Path):
     """Model a non-pack admission without invoking scenario-specific adapters."""
     from aptl.core.scenario_bundle import project_tree_bundle
@@ -95,6 +102,18 @@ def _raes_start_after_backend_retry(
     return _raes_outcome(
         success=True,
         selected_profiles=("soc", "wazuh", "victim", "kali"),
+    )
+
+
+_DAEMON_MODE_PROBE = ["docker", "info", "--format", "{{json .SecurityOptions}}"]
+_ROOTFUL_OPTIONS = '["name=seccomp,profile=builtin"]'
+_ROOTLESS_OPTIONS = '["name=seccomp,profile=builtin","name=rootless"]'
+
+
+def _daemon_reporting(security_options: str) -> MagicMock:
+    """Model a Docker runner whose daemon reports these security options."""
+    return MagicMock(
+        return_value=MagicMock(returncode=0, stdout=security_options, stderr="")
     )
 
 
@@ -532,6 +551,20 @@ class TestCleanBootLab:
     contaminated environment must never be reused as ``clean``.
     """
 
+    @pytest.fixture(autouse=True)
+    def rootful_daemon(self, monkeypatch):
+        """Answer the daemon-mode probe ``--clean`` runs first (#1053) as rootful.
+
+        These tests are about the stop and start sequence, so no real
+        ``docker info`` may run. Tests that check which daemon was asked
+        request the stub by name.
+        """
+        import subprocess
+
+        runner = _daemon_reporting(_ROOTFUL_OPTIONS)
+        monkeypatch.setattr(subprocess, "run", runner)
+        return runner
+
     def test_clean_boot_stops_with_volumes_then_starts(self, monkeypatch, tmp_path):
         """Clean boot tears down (volumes removed) before booting, in order."""
         from aptl.core import lab
@@ -586,6 +619,70 @@ class TestCleanBootLab:
         assert "appliance" in result.error.lower()
         assert stopped == []
         assert started == []
+
+    @pytest.mark.parametrize("from_caller", [False, True], ids=["project", "caller"])
+    def test_rootless_daemon_is_refused_before_the_teardown(
+        self, monkeypatch, tmp_path, rootful_daemon, from_caller
+    ):
+        """`--clean` on a rootless daemon fails by name and removes nothing (#1053).
+
+        Without a caller backend the probe asks the daemon ``stop_lab`` would
+        build from ``aptl.json``. With one, it asks that backend and no other.
+        """
+        import subprocess
+
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+        from aptl.core.lab_types import LabResult
+
+        rootless = _daemon_reporting(_ROOTLESS_OPTIONS)
+        backend = MagicMock(_run=rootless) if from_caller else None
+        if backend is None:
+            (tmp_path / "aptl.json").write_text(
+                '{"deployment": {"project_name": "custom-project"}}', encoding="utf-8"
+            )
+            monkeypatch.setattr(subprocess, "run", rootless)
+        calls = []
+        monkeypatch.setattr(
+            lab,
+            "stop_lab",
+            lambda **kwargs: calls.append("stop") or LabResult(success=True),
+        )
+        monkeypatch.setattr(
+            lab,
+            "orchestrate_lab_start",
+            lambda *args, **kwargs: calls.append("start") or LabResult(success=True),
+        )
+
+        result = clean_boot_lab(tmp_path, backend=backend)
+
+        assert calls == []
+        assert result.success is False
+        assert "rootless mode" in result.error
+        assert [c.args[0] for c in rootless.call_args_list] == [_DAEMON_MODE_PROBE]
+        rootful_daemon.assert_not_called()
+
+    def test_unloadable_config_is_left_to_the_stop_refusal(
+        self, monkeypatch, tmp_path, rootful_daemon
+    ):
+        """An ``aptl.json`` that does not load reaches ``stop_lab``'s refusal.
+
+        The probe cannot tell which daemon such a project names, so it asks
+        none, and ``stop_lab`` refuses the configuration before any teardown.
+        """
+        from aptl.core import lab
+        from aptl.core.lab import clean_boot_lab
+
+        (tmp_path / "aptl.json").write_text("{not-json", encoding="utf-8")
+        monkeypatch.setattr(
+            lab, "orchestrate_lab_start", lambda *a, **k: pytest.fail("unreachable")
+        )
+
+        result = clean_boot_lab(tmp_path)
+
+        assert result.success is False
+        assert "[lifecycle-invalid-configuration]" in result.error
+        rootful_daemon.assert_not_called()
 
     def test_clean_boot_stop_failure_is_fatal_and_skips_start(
         self, monkeypatch, tmp_path
@@ -723,7 +820,7 @@ class TestCleanBootLab:
         from aptl.core.lab import clean_boot_lab
         from aptl.core.lab_types import LabResult, StartupOutcome
 
-        sentinel_backend = MagicMock()
+        sentinel_backend = MagicMock(_run=_daemon_reporting(_ROOTFUL_OPTIONS))
         captured = {}
 
         def fake_stop(**kwargs):
@@ -2068,9 +2165,7 @@ class TestOrchestrateLabStart:
         from aptl.core.lab import orchestrate_lab_start
 
         mocks = self._patch_all_steps(mocker, tmp_path)
-        mocks["mcp_subprocess"].return_value = MagicMock(
-            returncode=1, stdout="", stderr="npm error"
-        )
+        mocks["mcp_subprocess"].side_effect = _mcp_build_fails
 
         result = orchestrate_lab_start(tmp_path)
 
@@ -2177,6 +2272,87 @@ class TestOrchestrateLabStart:
         mocks["certs"].assert_not_called()
         mocks["start"].assert_not_called()
 
+    @pytest.mark.parametrize("env_pack", [False, True], ids=["project-tree", "env-pack"])
+    def test_rootless_daemon_is_refused_before_any_mutation(
+        self, mocker, tmp_path, env_pack
+    ):
+        """A rootless daemon fails start by name for every scenario (#1053).
+
+        The env-pack admission selects no certificate stage, so a refusal tied
+        to the Wazuh path would never run there.
+        """
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        pack_root = mocks["admitted_surface"].bundle_root
+        mocks["admit"].return_value = (
+            _admitted_start_fixture(pack_root),
+            _admitted_surface(pack_root, env_pack=env_pack, selected_profiles=("wazuh",)),
+        )
+
+        def rootless_daemon(cmd, **_kwargs):
+            options = '["name=seccomp,profile=builtin","name=rootless"]'
+            stdout = options if "{{json .SecurityOptions}}" in cmd else ""
+            return MagicMock(returncode=0, stdout=stdout, stderr="")
+
+        mocks["mcp_subprocess"].side_effect = rootless_daemon
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is False
+        assert "rootless mode" in (result.error or "")
+        for mutation in ("ssh", "dashboard_creds", "suricata_seed_volumes", "certs"):
+            mocks[mutation].assert_not_called()
+        mocks["start"].assert_not_called()
+        issued = [call.args[0] for call in mocks["mcp_subprocess"].call_args_list]
+        assert ["docker", "info", "--format", "{{json .SecurityOptions}}"] in issued
+        assert all(cmd[:2] in (["docker", "info"], ["docker", "context"]) for cmd in issued)
+
+    @pytest.mark.parametrize("residue", [False, True], ids=["started", "refused"])
+    def test_start_result_carries_the_admission_duration(
+        self, mocker, tmp_path, residue
+    ):
+        """The summary's admission time survives success and later refusal (#953)."""
+        from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
+        from aptl.core.lab import orchestrate_lab_start
+
+        mocks = self._patch_all_steps(mocker, tmp_path)
+        mocks["project_presence"].return_value = ProjectRuntimePresence(
+            container_count=1 if residue else 0
+        )
+        mocker.patch("aptl.core.lab.monotonic", side_effect=[50.0, 54.25])
+
+        result = orchestrate_lab_start(tmp_path)
+
+        assert result.success is not residue
+        assert result.admission_seconds == pytest.approx(4.25)
+
+    @pytest.mark.parametrize(
+        "start",
+        ["orchestrate_lab_start", "_orchestrate_lab_start_owned"],
+        ids=["after-start", "inline"],
+    )
+    def test_readiness_failure_carries_the_admission_duration(
+        self, mocker, tmp_path, start
+    ):
+        """A failure after every start step still reports admission time (#953)."""
+        from aptl.core import lab
+        from aptl.core.lab_types import LabResult
+
+        self._patch_all_steps(mocker, tmp_path)
+        mocker.patch("aptl.core.lab.monotonic", side_effect=[50.0, 54.25])
+        mocker.patch(
+            "aptl.core.lab._publish_appliance_guest_readiness",
+            return_value=LabResult(
+                success=False, error="Appliance guest readiness publication failed."
+            ),
+        )
+
+        result = getattr(lab, start)(tmp_path)
+
+        assert result.error == "Appliance guest readiness publication failed."
+        assert result.admission_seconds == pytest.approx(4.25)
+
     def test_handles_empty_profiles(self, mocker, tmp_path):
         """Should work when all containers are disabled (C6)."""
         from aptl.core.lab import orchestrate_lab_start
@@ -2219,7 +2395,7 @@ class TestOrchestrateLabStart:
         assert result.success is False
 
     def test_pre_pull_runs_before_compose_up(self, mocker, tmp_path):
-        """Should call docker pull for images before compose up."""
+        """Images the daemon lacks are pulled before compose up."""
         from aptl.core.lab import (
             _LAB_START_STEPS,
             _step_pull_images,
@@ -2228,6 +2404,12 @@ class TestOrchestrateLabStart:
         )
 
         mocks = self._patch_all_steps(mocker, tmp_path)
+
+        def daemon_without_images(cmd, **_kwargs):
+            absent = cmd[:3] == ["docker", "image", "inspect"]
+            return MagicMock(returncode=1 if absent else 0, stdout="", stderr="")
+
+        mocks["mcp_subprocess"].side_effect = daemon_without_images
 
         step_names = [step.__name__ for step in _LAB_START_STEPS]
         assert step_names.index(_step_pull_images.__name__) < step_names.index(
@@ -2306,6 +2488,29 @@ class TestAdmittedStartSurface:
         assert _load_admitted_start_surface(ctx) is None
 
         assert admit.call_args.kwargs["scenario_path"] == selected
+
+    @pytest.mark.parametrize("admitted", [True, False], ids=["admitted", "rejected"])
+    def test_admission_duration_is_recorded_for_the_start_summary(
+        self, mocker, tmp_path, admitted
+    ):
+        """How long the one admission took is kept, whatever its verdict (#953)."""
+        from aptl.core.lab import _load_admitted_start_surface
+
+        ctx = self._ctx(tmp_path)
+        mocker.patch(
+            "aptl.core.lab.admit_start_surface",
+            return_value=(
+                _admitted_start_fixture(tmp_path),
+                _admitted_surface(tmp_path, env_pack=False),
+            ),
+            side_effect=None if admitted else ValueError("fixture rejection"),
+        )
+        mocker.patch("aptl.core.lab.monotonic", side_effect=[100.0, 112.5])
+
+        result = _load_admitted_start_surface(ctx)
+
+        assert (result is None) is admitted
+        assert ctx.admission_seconds == pytest.approx(12.5)
 
     def test_admitted_facts_are_cached_for_the_later_steps(self, mocker, tmp_path):
         """Ownership, the admission itself, and the surface all land on ctx."""
@@ -3008,6 +3213,23 @@ class TestSeedSuricataVolumesStep:
         )
         assert pull_call < seed_call
 
+    def test_offline_missing_seeder_image_is_named_before_any_seed(self, tmp_path):
+        from aptl.core.lab import SURICATA_IMAGE, _step_seed_suricata_volumes
+
+        _write_suricata_seed_sources(tmp_path)
+        backend = MagicMock()
+        backend.pull_images.return_value = [
+            f"Required staged image is missing: {SURICATA_IMAGE}"
+        ]
+        ctx = self._ctx(tmp_path, backend)
+        ctx.offline_staged = True
+
+        result = _step_seed_suricata_volumes(ctx)
+
+        assert result is not None
+        assert SURICATA_IMAGE in result.error
+        backend.seed_named_volumes.assert_not_called()
+
     def test_seed_error_aborts_lab_start_step(self, tmp_path, caplog):
         from aptl.core.deployment.errors import BackendSeedError
         from aptl.core.lab import _step_seed_suricata_volumes
@@ -3339,6 +3561,27 @@ class TestStartupClassificationWiring:
         assert "connection reset" not in diag.message
         assert "rate limit" not in diag.message
         assert "2" in diag.message  # number of failed images
+
+    def test_offline_pull_images_failure_names_each_missing_image(self, tmp_path):
+        """Offline-staged start fails by naming the exact images to stage (#953)."""
+        from aptl.core.lab import WAZUH_IMAGE_VERSION, _step_pull_images
+
+        ctx = self._ctx(tmp_path)
+        ctx.offline_staged = True
+        missing = [
+            f"wazuh/wazuh-manager:{WAZUH_IMAGE_VERSION}",
+            f"wazuh/wazuh-indexer:{WAZUH_IMAGE_VERSION}",
+        ]
+        ctx.backend.pull_images.return_value = [
+            f"Required staged image is missing: {image}" for image in missing
+        ]
+
+        result = _step_pull_images(ctx)
+
+        assert result is not None
+        assert result.success is False
+        assert all(image in result.error for image in missing)
+        assert ctx.diagnostics == []
 
     # -- wait_for_services (backend-owned Wazuh attestation) -------------
 
@@ -4184,9 +4427,7 @@ class TestOrchestrateLabStartOutcome:
         from aptl.core.lab_types import DiagnosticImpact, StartupOutcome
 
         mocks = self._patch_happy(mocker, tmp_path)
-        mocks["mcp_subprocess"].return_value = MagicMock(
-            returncode=1, stdout="", stderr="npm error"
-        )
+        mocks["mcp_subprocess"].side_effect = _mcp_build_fails
 
         result = orchestrate_lab_start(tmp_path)
 

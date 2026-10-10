@@ -171,14 +171,19 @@ class DeploymentBackend(HostInventoryBackend, ContainerOpsBackend, Protocol):
         ...
 
     def pull_images(self, images: list[str]) -> list[str]:
-        """Pre-pull container images.
+        """Pull each image the selected daemon does not already hold.
+
+        Each image is inspected on the selected daemon first. An image already
+        present is used as is, as Compose itself would use it, so a warm start
+        needs no registry (#953). Only an absent image is pulled, and
+        offline-staged mode never pulls.
 
         Args:
-            images: List of image references to pull.
+            images: List of image references to make available.
 
         Returns:
-            List of warning messages for images that failed to pull
-            (non-fatal).
+            List of warning messages for images that are missing offline or
+            failed to pull (non-fatal online).
         """
         ...
 

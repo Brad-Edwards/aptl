@@ -122,6 +122,9 @@ class LabResult:
     # The selected daemon observed during this exact startup attempt. A missing
     # observation is rendered explicitly as unknown, including on early failure.
     execution_boundary: ExecutionBoundaryObservation | None = None
+    # Seconds lab start spent admitting (parsing and planning) the scenario,
+    # or None when the attempt never reached admission (#953).
+    admission_seconds: float | None = None
 
     def __post_init__(self) -> None:
         # Make the invariant total: ``outcome`` is the authoritative

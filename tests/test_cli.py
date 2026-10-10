@@ -256,6 +256,37 @@ class TestLabStartCommand:
         assert "transport=remote-ssh" in result.stdout
         assert "override=docker-host" in result.stdout
 
+    @pytest.mark.parametrize(
+        ("admission_seconds", "expected_line"),
+        [(12.34, "Scenario admission: 12.3s"), (None, None)],
+        ids=["admitted", "never-admitted"],
+    )
+    def test_lab_start_reports_the_admission_duration(
+        self, runner, mocker, admission_seconds, expected_line
+    ):
+        """The start summary shows how long admission took when it ran (#953)."""
+        from aptl.cli.main import app
+        from aptl.core.lab import LabResult
+
+        mocker.patch(
+            "aptl.cli.lab.orchestrate_lab_start",
+            return_value=LabResult(
+                success=False,
+                error="start refused",
+                admission_seconds=admission_seconds,
+            ),
+        )
+
+        result = runner.invoke(app, ["lab", "start"])
+
+        assert result.exit_code == 1
+        admission_lines = [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith("Scenario admission")
+        ]
+        assert admission_lines == ([expected_line] if expected_line else [])
+
     def test_lab_info_reobserves_even_when_credentials_are_absent(
         self, runner, tmp_path, mocker
     ):

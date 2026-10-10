@@ -62,6 +62,8 @@ def render_start_result(result: LabResult) -> None:
     if result.outcome is StartupOutcome.FAILED and result.error:
         typer.echo(f"  error: {result.error}")
     emit_execution_boundary_summary(result.execution_boundary)
+    if result.admission_seconds is not None:
+        typer.echo(f"Scenario admission: {result.admission_seconds:.1f}s")
     if not result.diagnostics:
         return
     typer.echo(f"  diagnostics ({len(result.diagnostics)}):")

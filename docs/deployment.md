@@ -74,8 +74,9 @@ both node realization routes (see
 [Node Realization Routes](components/node-realization.md)): a base-container
 node, which declares runtime desired state and has no node image of its own, so
 APTL starts it from a base image, and an image-backed node, which runs as a
-service of the Compose model that APTL generates for the scenario. On either
-route, APTL delivers each variable from a single explicit source:
+service of the Compose model that APTL generates for the scenario. APTL
+generates that model for every environment pack. On either route, APTL
+delivers each variable from a single explicit source:
 
 - A value the scenario authors is delivered exactly as written.
 - A generated-artifact output reaches only the node that declares it with
@@ -117,8 +118,7 @@ such a value stops `aptl lab start` at the same point as a missing source. The
 value is never written as a `${NAME}` reference. Compose resolves those
 references from one environment that every service and every Compose file of
 the project share, so a reference would let a value granted to one node reach
-another service, or APTL's own Grafana. An in-tree scenario that ships its own
-`docker-compose.yml` keeps its own references, resolved from `.env`.
+another service, or APTL's own Grafana.
 
 In the Compose model that APTL generates, no text that the scenario or its
 pack authors names a variable for Compose to fill. APTL writes each `$` in such
@@ -128,6 +128,12 @@ a pack directory, an image reference and a host address. A
 `${INDEXER_PASSWORD}` in a node's command or in a content path therefore
 reaches the container as written instead of as the `.env` value, and a
 container-shell `"$@"` reaches the shell unchanged.
+
+Only a scenario run from the project tree, the development path, can have its
+own `docker-compose.yml`: the one in the project directory. APTL uses that file
+unchanged as the base Compose model, so its own references resolve from `.env`,
+and the rules above cover only the scenario's base-container nodes. APTL
+refuses an environment pack that ships a `docker-compose.yml` at its root.
 
 A grant names the admitted pack's identifier, the consuming node, the variable
 that node declares, and the source. The source is either an exact variable of

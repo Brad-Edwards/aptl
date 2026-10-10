@@ -875,32 +875,60 @@ def test_compose_never_fills_a_variable_that_placed_content_names(
     assert error is None
 
 
-def test_the_capture_model_binds_pack_key_paths_as_literals(tmp_path):
-    """The Kali capture sidecar binds the pack's key outputs at their paths.
+def _capture_model(root: Path) -> tuple[Path, DeploymentRealizationSpec]:
+    """Write the Kali capture model for key outputs under a `$` directory.
 
+    The pack declares its SSH key outputs under ``kali/${INDEXER_PASSWORD}``.
     RAES admits `$` in a generated output path, and those paths reach the
-    capture model's bind sources, so the model is a Compose literal too.
+    capture model's bind sources.
     """
 
     repository = Path(__file__).resolve().parents[1]
-    shutil.copyfile(repository / CAPTURE_COMPOSE_FILE, tmp_path / CAPTURE_COMPOSE_FILE)
-    realization = _capture_spec(tmp_path, keys="kali/${INDEXER_PASSWORD}")
+    shutil.copyfile(repository / CAPTURE_COMPOSE_FILE, root / CAPTURE_COMPOSE_FILE)
+    realization = _capture_spec(root, keys="kali/${INDEXER_PASSWORD}")
+    return capture_compose_file(root, realization, root), realization
 
-    text = capture_compose_file(tmp_path, realization, tmp_path).read_text(
-        encoding="utf-8"
+
+def test_the_capture_model_writes_pack_key_paths_as_literals(tmp_path):
+    """The capture model is a Compose literal too: no live `$` in its text."""
+
+    path, _realization = _capture_model(tmp_path)
+    text = path.read_text(encoding="utf-8")
+
+    assert _interpolates_nothing(text)
+    assert "$${INDEXER_PASSWORD}" in text
+
+
+def test_compose_binds_capture_keys_at_their_declared_paths(tmp_path, monkeypatch):
+    """Canary through Compose: each key binds at the path the pack declares.
+
+    Before the capture model was escaped, Compose filled the
+    ``${INDEXER_PASSWORD}`` in those paths from `.env`, so the sidecar's key
+    binds named the Wazuh credential, with no grant.
+    """
+
+    _require_compose_cli()
+    planted = _plant_compose_canaries(tmp_path, monkeypatch)
+    path, realization = _capture_model(tmp_path)
+    backend = DockerComposeBackend(tmp_path)
+    command = backend._build_command(
+        "config", ["kali"], compose_files=(path,), scenario_root=tmp_path
     )
 
+    result = backend._run([*command, "--format", "json"])
+
+    assert result.returncode == 0, result.stderr
+    for value in planted:
+        assert value not in result.stdout
+    services = compose_readback(json.loads(result.stdout))["services"]
+    binds = {
+        mount["target"]: mount["source"]
+        for mount in services[KALI_CAPTURE_SERVICE]["volumes"]
+        if mount["type"] == "bind"
+    }
     sources, _public = capture_credential_paths(
         realization, tmp_path, require_files=True
     )
-    service = compose_readback(yaml.safe_load(text))["services"][KALI_CAPTURE_SERVICE]
-    binds = {
-        mount["target"]: mount["source"]
-        for mount in service["volumes"]
-        if mount["type"] == "bind"
-    }
-    assert _interpolates_nothing(text)
-    assert "$${INDEXER_PASSWORD}" in text
     assert binds == {target: str(source) for target, source in sources.items()}
 
 

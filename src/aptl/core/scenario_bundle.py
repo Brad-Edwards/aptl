@@ -163,7 +163,8 @@ def env_pack_bundle(
 
     Raises:
         EnvPackError: if the pack is missing, has no ``sdl/<identity>.sdl.yaml``,
-            or fails either env-packs validation gate.
+            fails either env-packs validation gate, or ships a root
+            ``docker-compose.yml``.
     """
 
     try:
@@ -184,8 +185,8 @@ def _stage_and_validate(
     """Stage an installed env-pack into an isolated tree and validate it.
 
     Returns the bundle rooted at the staged copy. Raises ``EnvPackError`` when the
-    source is absent, the pack fails env-packs' own gates, or the staged pack
-    declares no SDL document.
+    source is absent, the pack fails env-packs' own gates, the staged pack ships
+    a root Compose file, or it declares no SDL document.
     """
 
     if not source_pack.is_dir():
@@ -216,6 +217,7 @@ def _stage_and_validate(
     try:
         copy_pack(source_pack, staged)
         pack_identity = _validate_staged_pack(staged, identity)
+        _refuse_pack_compose_model(staged, identity)
     except (OSError, ValueError, PathContainmentError) as exc:
         shutil.rmtree(staged.parent)
         raise EnvPackError(
@@ -278,6 +280,30 @@ def _validate_staged_pack(staged: Path, identity: str) -> PackIdentity:
         raise EnvPackError(
             f"env-pack {identity!r} returned no validated content identity"
         ) from exc
+
+
+def _refuse_pack_compose_model(staged: Path, identity: str) -> None:
+    """Refuse a staged pack that ships its own Compose model at its root.
+
+    A pack's Compose model is generated from its realization, which binds each
+    declared variable and writes pack text as a Compose literal (issue #965).
+    The Compose consumers take a root ``docker-compose.yml`` as a project-tree
+    scenario's own model and use it as written, so a pack file there would
+    skip both. env-packs' pack layout has no such member, and its ownership
+    boundary says a pack never selects Compose fragments, so the pack is
+    refused rather than realized.
+    """
+
+    from aptl.core.deployment._compose_node_generation import (
+        STATIC_COMPOSE_FILENAME,
+    )
+
+    if os.path.lexists(staged / STATIC_COMPOSE_FILENAME):
+        raise EnvPackError(
+            f"env-pack {identity!r} ships {STATIC_COMPOSE_FILENAME} at its root; "
+            "an environment pack must not ship a root Compose file, because its "
+            "Compose model is generated from the realization"
+        )
 
 
 __all__ = [

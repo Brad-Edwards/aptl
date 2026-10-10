@@ -245,8 +245,10 @@ class ComposeEnvironmentBindingMixin:
         The bindings it records are what each node and service later receives,
         so a grant or adapter value that is missing now never becomes a
         silently omitted variable after containers have changed. Compose
-        services are bound only when APTL generates their model; an in-tree
-        ``docker-compose.yml`` carries its own references.
+        services are bound only when APTL generates their model; a project-tree
+        scenario's own ``docker-compose.yml`` carries its own references. The
+        file's presence alone can decide this because ``env_pack_bundle()``
+        refuses a pack that ships one at its root.
         """
 
         from aptl.core.deployment._compose_base_container_realization import (

@@ -103,6 +103,40 @@ aptl container shell <container-name>
 Use a name returned by `aptl container list`. A container in Docker's `running`
 state does not by itself prove that the scenario is ready.
 
+## Host Docker Socket Access
+
+A container that holds the host's Docker socket controls the Docker daemon,
+which is equivalent to root on the Docker host. `aptl lab start` mounts the
+socket only into a node that the admitted scenario declares as a Docker
+control authority:
+
+- In the acquired `techvault` pack, that node is `shuffle-orborus`, Shuffle's
+  worker manager. The pack declares `/var/run/docker.sock` as its read-write
+  control interface because Shuffle runs workflows in worker and app
+  containers. No other TechVault node gets the socket. Before startup, LilRAE
+  prepares the exact worker and app images that the pack's spawn templates
+  name, and the rendered service sets `SHUFFLE_AUTO_IMAGE_DOWNLOAD=false`.
+- Whenever a scenario starts Compose services, `aptl lab start` validates their
+  effective Compose model before startup. It refuses the model when any other
+  service binds the socket, or when the admitted service lacks exactly one
+  read-write `/var/run/docker.sock` bind or sets `DOCKER_HOST` or
+  `DOCKER_CONTEXT`.
+- LilRAE's own Kali capture sidecar and operator-access relays get no socket.
+  Containers that Orborus creates through the daemon are outside these checks,
+  because anything that holds the socket can create further containers.
+
+The root `docker-compose.yml`, which explicit project-tree scenarios start as
+written, also declares the socket for `shuffle-backend`, `shuffle-orborus` and
+`cortex` in the `soc` profile, and for `aptl-web-api` in the `web` profile. No
+in-tree scenario selects the `soc` profile, and the check above refuses those
+binds unless the scenario admits them. The web API container uses the socket
+for the browser's lifecycle controls; it runs as the project owner and joins
+only the socket's group (see [Web](reference/web.md)).
+
+The [issue #949](architecture/issue-949-orborus-control-authority-preflight.md)
+and [issue #974](architecture/issue-974-shuffle-worker-docker-images-preflight.md)
+preflights record the admission rules.
+
 ## Manage The Lifecycle
 
 ```shell

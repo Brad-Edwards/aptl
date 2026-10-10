@@ -1,5 +1,15 @@
 # Victim Container
 
+> Historical record: the configuration below describes the in-tree
+> `containers/victim/` image that #812 removed on 2026-07-24. TechVault's
+> `victim` node now comes from the pinned TechVault pack. LilRAE starts
+> it on its Rocky Linux 9 systemd base with the Wazuh agent,
+> `aptl/generic-systemd-wazuh-agent-base`, at 172.20.2.20 on `internal-net`.
+> The pack declares the `labadmin` user, `sshd`, `rsyslog` and a Wazuh agent
+> that forwards `/var/log/secure` and `/var/log/messages` to the manager. The
+> node publishes no host port, so the `-p 2022` command below does not reach
+> it. From the host, use `aptl container shell aptl-victim`.
+
 The victim container serves as a target system for red team activities and security testing. It provides a Rocky Linux 9 environment with SSH access, Wazuh agent integration, and Falco runtime security monitoring.
 
 ## Container Configuration

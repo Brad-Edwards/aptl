@@ -62,7 +62,6 @@ def test_forbidden_or_unlisted_sources_are_rejected(source_name):
         "README.md",
         "hatch_build.py",
         "containers/db/init/01-schema.sql",
-        "containers/kali/scripts/aptl-wrap-shell.sh",
     ],
 )
 def test_legitimate_sources_are_not_forbidden(source_name):

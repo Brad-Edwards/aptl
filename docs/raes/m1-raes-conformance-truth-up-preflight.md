@@ -6,8 +6,10 @@
     (`docs/raes/parity-inventory.yaml`), the parity-manifest gate check, the
     `aptl raes-inventory` command, or the per-asset mapping ledgers, it no
     longer describes the repository: all of them were removed in #690. The
-    asset-inventory capture capability now lives in RAES; APTL keeps
-    `scenarios/techvault-operational.sdl.yaml` as its only driving contract.
+    asset-inventory capture capability now lives in RAES.
+    `scenarios/techvault-operational.sdl.yaml`, which then became APTL's only
+    driving contract, was removed in turn by #908 (issue #875). TechVault now
+    comes from the pinned TechVault pack.
     See the Capture Inventory and Parity-Inventory Removal Addendum in
     [ADR-046](../adrs/adr-046-dynamic-raes-scenario-realization.md).
 

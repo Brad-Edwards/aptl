@@ -40,7 +40,6 @@ Current tracing records tool invocations but not the reasoning behind them. Unde
 - IMPLEMENTS → CODE_FILE `mcp/mcp-red/src/logger.ts` (localOcsfJsonlSink + defaultRedTeamSinks (SIEM dispatch removed))
 - IMPLEMENTS → CODE_FILE `mcp/mcp-red/src/index.ts` (extractSessionId propagates exec sessionId from result envelope)
 - IMPLEMENTS → CONFIG `containers/kali/audit/aptl.rules` (APTL auditd ruleset (execve + connect + file ops on /home/kali /tmp /root /etc))
-- IMPLEMENTS → CODE_FILE `containers/kali/scripts/aptl-wrap-shell.sh` (ForceCommand wrapper: per-session script --log-io --return + tcpdump with EXIT trap cleanup)
 - IMPLEMENTS → CONFIG `docker-compose.yml` (kali_captures named volume + CAP_SYS_PACCT/AUDIT_CONTROL/AUDIT_WRITE + removed SIEM_IP and Wazuh manager mounts)
 - TESTS → TEST `tests/test_redaction.py` (TestExperimentNoRedactToggle scoped-accessor invariant)
 - TESTS → TEST `tests/test_runstore.py` (TestSessionScopedHelpers + TestResolveActiveRunDir)

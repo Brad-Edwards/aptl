@@ -8,6 +8,29 @@ from unittest.mock import MagicMock
 import pytest
 
 
+@pytest.mark.parametrize(
+    ("containment", "mode"),
+    [
+        ("native-docker", "linux-native"),
+        ("docker-vm-unverified", "docker-vm"),
+        ("remote-unverified", "unknown"),
+        ("seat-guest-unverified", "unknown"),
+        (None, "unknown"),
+    ],
+)
+def test_only_a_native_engine_reads_this_hosts_sysctl(containment, mode):
+    """Lab start and `aptl doctor` share this mapping (#1218)."""
+    from aptl.core import hostenv
+    from aptl.core.sysreqs import docker_mode_for_containment
+
+    expected = {
+        "linux-native": hostenv.DOCKER_LINUX_NATIVE,
+        "docker-vm": hostenv.DOCKER_VM,
+        "unknown": hostenv.DOCKER_UNKNOWN,
+    }[mode]
+    assert docker_mode_for_containment(containment) == expected
+
+
 class TestCheckMaxMapCount:
     """Tests for vm.max_map_count checking."""
 

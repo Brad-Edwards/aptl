@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from typing import Protocol
 
+from aptl.core.deployment._compose_resource_ownership import OwnershipConflictError
 from aptl.core.deployment.backend_host_inventory import ProjectRuntimePresence
 from aptl.core.deployment.errors import BackendTimeoutError
 
@@ -15,6 +16,11 @@ class _InventoryBackend(Protocol):
     """Backend surface required by checked runtime inventory."""
 
     _project_name: str
+
+    def _load_resource_ownership(self) -> object | None:
+        """Bind an existing workspace scope without publishing new state."""
+
+        ...
 
     def _run(self, cmd: list[str], *, timeout: int) -> subprocess.CompletedProcess:
         """Run one backend-scoped command."""
@@ -32,8 +38,19 @@ class ComposeRuntimeInventoryMixin(object):
     """Observe project-owned containers and networks without conflating errors."""
 
     def observe_project_runtime(self) -> ProjectRuntimePresence:
-        """Return checked runtime presence across both admitted container labels."""
+        """Return checked runtime presence across both admitted container labels.
 
+        The workspace scope is loaded first, because a start labels everything
+        with the workspace-scoped project name. A newly built backend still holds
+        the logical name until then, and would observe a different project.
+        """
+
+        try:
+            self._load_resource_ownership()
+        except OwnershipConflictError:
+            return ProjectRuntimePresence(
+                error="workspace ownership state is unavailable"
+            )
         container_ids: set[str] = set()
         network_count = 0
         error = ""

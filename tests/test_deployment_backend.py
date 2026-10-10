@@ -105,6 +105,60 @@ def _apply_network_command(payload: str, command: list[str]) -> str:
     return json.dumps(data)
 
 
+_PINNED_DIGEST = "sha256:" + "a" * 64
+_PINNED = f"postgres@{_PINNED_DIGEST}"
+_LOCAL_IMAGE_ID = "sha256:" + "e" * 64
+# `docker image inspect --format EXACT_IMAGE_INSPECT_FORMAT` output for a local
+# copy that proves the pin, for one that resolves only under an alias, and for
+# one that proves the pin but was pulled for another platform than the daemon's
+# (`docker version --format {{.Server.Os}}/{{.Server.Arch}}`).
+_PROVEN_INSPECT = f'["{_PINNED}"]\t{_LOCAL_IMAGE_ID}\tlinux/amd64\n'
+_ALIAS_INSPECT = (
+    f'["mirror.example/postgres@{_PINNED_DIGEST}"]\t{_LOCAL_IMAGE_ID}\tlinux/amd64\n'
+)
+_FOREIGN_PLATFORM_INSPECT = f'["{_PINNED}"]\t{_LOCAL_IMAGE_ID}\tlinux/arm64/v8\n'
+_DAEMON_PLATFORM = "linux/amd64\n"
+
+
+def _fake_image_daemon(inspect: MagicMock, version: MagicMock | None = None):
+    """A daemon that answers its platform query and one image inspection."""
+
+    version = version or MagicMock(returncode=0, stdout=_DAEMON_PLATFORM, stderr="")
+
+    def fake_run(cmd, **kwargs):
+        del kwargs
+        if cmd[:2] == ["docker", "version"]:
+            return version
+        if cmd[:3] == ["docker", "image", "inspect"]:
+            return inspect
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    return fake_run
+
+
+def _pinned_image_spec(
+    image_ref: str = _PINNED, policy_rule: str = "allowed-digest"
+) -> DeploymentRealizationSpec:
+    """One pull-mode node image, as RAES realization resolves an allowed source."""
+
+    return DeploymentRealizationSpec(
+        profiles=(),
+        nodes=(),
+        networks=(),
+        images=(
+            DeploymentImageRealization(
+                address="provision.node.db",
+                service_name="db",
+                source_name="postgres",
+                source_version=image_ref,
+                image_ref=image_ref,
+                mode="pull",
+                policy_rule=policy_rule,
+            ),
+        ),
+    )
+
+
 class TestSelectShell:
     """Pure-logic tests for the bash/sh selection table.
 
@@ -1391,6 +1445,8 @@ services:
             del kwargs
             if cmd[:3] == ["docker", "network", "ls"]:
                 return MagicMock(returncode=0, stdout="test_aptl-internal\n", stderr="")
+            if cmd[:2] == ["docker", "version"]:
+                return MagicMock(returncode=0, stdout=_DAEMON_PLATFORM, stderr="")
             return MagicMock(returncode=0, stdout="", stderr="")
 
         with (
@@ -1953,16 +2009,54 @@ services:
         assert success is False
         assert "docker compose kill failed" in error
 
-    def test_pull_images_success(self, tmp_path):
+    def test_pull_images_pulls_an_image_the_daemon_lacks(self, tmp_path):
         backend = self._make_backend(tmp_path)
+        image = "wazuh/wazuh-manager:4.12.0"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                MagicMock(returncode=1, stdout="", stderr="No such image"),
+                MagicMock(returncode=0, stdout="", stderr=""),
+            ]
+            warnings = backend.pull_images([image])
+
+        assert warnings == []
+        assert [call.args[0] for call in mock_run.call_args_list] == [
+            ["docker", "image", "inspect", image],
+            ["docker", "pull", image],
+        ]
+
+    @pytest.mark.parametrize("offline_staged", [False, True], ids=["online", "offline"])
+    def test_pull_images_uses_a_local_image_without_the_registry(
+        self, tmp_path, offline_staged
+    ):
+        """A warm start needs no registry request for an image already held (#953)."""
+        backend = self._make_backend(tmp_path)
+        backend._offline_staged = offline_staged
+        image = "wazuh/wazuh-manager:4.12.0"
 
         with patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-            warnings = backend.pull_images(["wazuh/wazuh-manager:4.12.0"])
+            warnings = backend.pull_images([image])
 
         assert warnings == []
-        cmd = mock_run.call_args[0][0]
-        assert cmd == ["docker", "pull", "wazuh/wazuh-manager:4.12.0"]
+        assert [call.args[0] for call in mock_run.call_args_list] == [
+            ["docker", "image", "inspect", image]
+        ]
+
+    def test_offline_pull_images_names_a_missing_image_and_never_pulls(self, tmp_path):
+        backend = self._make_backend(tmp_path)
+        backend._offline_staged = True
+        image = "wazuh/wazuh-manager:4.12.0"
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=1, stdout="", stderr="Error: No such image: secret-free"
+            )
+            warnings = backend.pull_images([image])
+
+        assert warnings == [f"Required staged image is missing: {image}"]
+        assert all(call.args[0][1] != "pull" for call in mock_run.call_args_list)
 
     def test_pull_images_returns_warnings(self, tmp_path):
         backend = self._make_backend(tmp_path)
@@ -1984,6 +2078,136 @@ services:
             warnings = backend.pull_images(["some:image"])
 
         assert len(warnings) == 1
+
+    @pytest.mark.parametrize(
+        ("offline_staged", "local_copy", "expected_error", "pulled"),
+        [
+            pytest.param(False, "proven", None, False, id="online-cached"),
+            pytest.param(False, "missing", None, True, id="online-missing"),
+            pytest.param(False, "mismatched", None, True, id="online-mismatched"),
+            pytest.param(
+                False, "other-platform", None, True, id="online-other-platform"
+            ),
+            pytest.param(True, "proven", None, False, id="offline-cached"),
+            pytest.param(
+                True,
+                "missing",
+                f"Staged image missing for RAES node provision.node.db: {_PINNED}",
+                False,
+                id="offline-missing",
+            ),
+            pytest.param(
+                True,
+                "mismatched",
+                (
+                    "Staged image digest-mismatched for RAES node provision.node.db: "
+                    f"{_PINNED}"
+                ),
+                False,
+                id="offline-mismatched",
+            ),
+            pytest.param(
+                True,
+                "other-platform",
+                (
+                    "Staged image platform-mismatched for RAES node "
+                    f"provision.node.db: {_PINNED}"
+                ),
+                False,
+                id="offline-other-platform",
+            ),
+        ],
+    )
+    def test_exact_realization_image_is_verified_locally_before_any_pull(
+        self, tmp_path, offline_staged, local_copy, expected_error, pulled
+    ):
+        """A digest-pinned image the daemon proves needs no registry lookup (#953).
+
+        A local copy whose repo digests do not prove the pinned digest, or one
+        pulled for another platform than the daemon's, is not the authored
+        image: online it is pulled, offline it is refused by name.
+        """
+        backend = self._make_backend(tmp_path)
+        backend._offline_staged = offline_staged
+        inspect = {
+            "proven": MagicMock(returncode=0, stdout=_PROVEN_INSPECT, stderr=""),
+            "missing": MagicMock(returncode=1, stdout="", stderr="No such image"),
+            "mismatched": MagicMock(returncode=0, stdout=_ALIAS_INSPECT, stderr=""),
+            "other-platform": MagicMock(
+                returncode=0, stdout=_FOREIGN_PLATFORM_INSPECT, stderr=""
+            ),
+        }[local_copy]
+
+        with patch("subprocess.run", side_effect=_fake_image_daemon(inspect)) as run:
+            failure, compose_files = backend._prepare_realization_images(
+                _pinned_image_spec(), tmp_path
+            )
+
+        commands = [call.args[0] for call in run.call_args_list]
+        image_commands = [cmd for cmd in commands if cmd[:2] != ["docker", "version"]]
+        assert image_commands[0][:3] == ["docker", "image", "inspect"]
+        assert image_commands[0][-1] == _PINNED
+        assert (["docker", "pull", _PINNED] in commands) is pulled
+        assert (failure.error if failure else None) == expected_error
+        assert (compose_files is None) is (expected_error is not None)
+
+    @pytest.mark.parametrize("offline_staged", [False, True], ids=["online", "offline"])
+    def test_exact_realization_image_is_unproven_without_the_daemon_platform(
+        self, tmp_path, offline_staged
+    ):
+        """A cached pin is not used, nor pulled, when the platform is unknown."""
+        backend = self._make_backend(tmp_path)
+        backend._offline_staged = offline_staged
+        daemon = _fake_image_daemon(
+            MagicMock(returncode=0, stdout=_PROVEN_INSPECT, stderr=""),
+            MagicMock(returncode=1, stdout="", stderr="Cannot connect"),
+        )
+
+        with patch("subprocess.run", side_effect=daemon) as run:
+            failure, compose_files = backend._prepare_realization_images(
+                _pinned_image_spec(), tmp_path
+            )
+
+        assert (failure.error if failure else None) == "Docker platform query failed."
+        assert compose_files is None
+        assert [call.args[0][:2] for call in run.call_args_list] == [
+            ["docker", "version"]
+        ]
+
+    def test_a_tag_is_not_identity_evidence_and_is_still_pulled(self, tmp_path):
+        """Only a digest pin can be proven locally; a mutable tag is refreshed."""
+        backend = self._make_backend(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            failure, _files = backend._prepare_realization_images(
+                _pinned_image_spec("postgres:16.4", "allowed-source"), tmp_path
+            )
+
+        assert failure is None
+        commands = [call.args[0] for call in mock_run.call_args_list]
+        assert commands[0] == ["docker", "pull", "postgres:16.4"]
+
+    def test_offline_full_docker_hub_pin_is_proven_by_the_short_repo_digest(
+        self, tmp_path
+    ):
+        """Docker reports `postgres@…` for a `docker.io/library/postgres@…` pin."""
+        backend = self._make_backend(tmp_path)
+        backend._offline_staged = True
+        qualified = f"docker.io/library/{_PINNED}"
+        daemon = _fake_image_daemon(
+            MagicMock(returncode=0, stdout=_PROVEN_INSPECT, stderr="")
+        )
+
+        with patch("subprocess.run", side_effect=daemon) as run:
+            failure, _files = backend._prepare_realization_images(
+                _pinned_image_spec(qualified), tmp_path
+            )
+
+        assert failure is None
+        commands = [call.args[0] for call in run.call_args_list]
+        image_commands = [cmd for cmd in commands if cmd[:2] != ["docker", "version"]]
+        assert [command[-1] for command in image_commands] == [qualified]
 
     def test_project_dir_property(self, tmp_path):
         backend = self._make_backend(tmp_path)

@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 import json
 import re
+from typing import Any
 
 EXACT_IMAGE_INSPECT_FORMAT = (
     "{{json .RepoDigests}}\t{{.Id}}\t{{.Os}}/{{.Architecture}}"
     '{{with index . "Variant"}}/{{.}}{{end}}'
 )
+# What the selected daemon holds under one reference, read without a registry.
+LOCAL_IMAGE_PRESENT = "present"
+LOCAL_IMAGE_MISSING = "missing"
+LOCAL_IMAGE_MISMATCHED = "digest-mismatched"
+LOCAL_IMAGE_PLATFORM_MISMATCHED = "platform-mismatched"
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+# Docker Hub names Docker drops when it reports a repo digest.
+_DOCKER_HUB_REGISTRIES = frozenset({"docker.io", "index.docker.io"})
+_DOCKER_HUB_OFFICIAL_NAMESPACE = "library"
 
 
 @dataclass(frozen=True)
@@ -86,12 +96,61 @@ def exact_inspected_image_identity(
     identity = None
     if (
         isinstance(repo_digests, list)
-        and canonical_digest in repo_digests
+        and canonical_digest in _canonical_repo_digests(repo_digests)
         and bool(_IMAGE_ID.fullmatch(image_id))
         and platform is not None
     ):
         identity = ExactDockerImageIdentity(image_id=image_id, platform=platform)
     return identity
+
+
+def is_exact_image_reference(image_ref: str) -> bool:
+    """Whether a reference pins one immutable image by its sha256 digest.
+
+    A tag alone is mutable, so it never proves which image a name resolves to.
+    """
+
+    return _canonical_repo_digest(image_ref) is not None
+
+
+def local_image_state(
+    run: Callable[..., Any],
+    image_ref: str,
+    *,
+    timeout: int,
+    platform: DockerPlatform | None = None,
+) -> str:
+    """Read what the selected daemon holds under one reference (#953).
+
+    An exact (digest-pinned) reference counts as present only when the
+    daemon's own repo digests prove the pinned digest; resolving the name is
+    not enough. Given ``platform``, the daemon's own, the proven image must
+    also run natively on it, as a spawned child must. Any other reference, such
+    as a component built during backend preparation, only has to be present.
+    ``run`` is the backend's list-form runner and this issues one local
+    inspection, never a registry request.
+    """
+
+    exact = is_exact_image_reference(image_ref)
+    output_format = ["--format", EXACT_IMAGE_INSPECT_FORMAT] if exact else []
+    result = run(
+        ["docker", "image", "inspect", *output_format, image_ref], timeout=timeout
+    )
+    identity = None
+    if exact and result.returncode == 0:
+        identity = exact_inspected_image_identity(result.stdout, image_ref)
+    state = LOCAL_IMAGE_PRESENT
+    if result.returncode != 0:
+        state = LOCAL_IMAGE_MISSING
+    elif exact and identity is None:
+        state = LOCAL_IMAGE_MISMATCHED
+    elif (
+        identity is not None
+        and platform is not None
+        and not platform_is_compatible(platform, identity.platform)
+    ):
+        state = LOCAL_IMAGE_PLATFORM_MISMATCHED
+    return state
 
 
 def authored_tag_reference(image_ref: str) -> str | None:
@@ -121,4 +180,32 @@ def _canonical_repo_digest(image_ref: str) -> str | None:
         return None
     # Docker records RepoDigests as repository@digest even when the requested
     # immutable reference also carries a human-readable tag before the @.
-    return f"{namespace}{slash}{image_name.split(':', 1)[0]}@{digest}"
+    repository = f"{namespace}{slash}{image_name.split(':', 1)[0]}"
+    return f"{_familiar_repository(repository)}@{digest}"
+
+
+def _canonical_repo_digests(repo_digests: list[object]) -> set[str]:
+    """Normalize the repo digests one inspection reported, the same way."""
+
+    canonical = (
+        _canonical_repo_digest(item) for item in repo_digests if isinstance(item, str)
+    )
+    return {digest for digest in canonical if digest is not None}
+
+
+def _familiar_repository(repository: str) -> str:
+    """Shorten a Docker Hub repository to the form Docker reports it in.
+
+    Docker reports repo digests without the ``docker.io`` registry (or its
+    legacy ``index.docker.io`` name) and, for official images, without the
+    ``library/`` namespace: ``docker.io/library/postgres`` is ``postgres``.
+    Shortening both sides lets the fully written and the short reference
+    prove the same pin. Every other registry is kept as written.
+    """
+
+    registry, slash, path = repository.partition("/")
+    familiar = path if slash and registry in _DOCKER_HUB_REGISTRIES else repository
+    namespace, slash, name = familiar.partition("/")
+    if slash and namespace == _DOCKER_HUB_OFFICIAL_NAMESPACE and "/" not in name:
+        return name
+    return familiar

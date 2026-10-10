@@ -38,8 +38,8 @@ def _local_docker_socket_identity(path: str) -> tuple[int, int] | None:
 def _resolve_local_docker_endpoint() -> tuple[str, str] | None:
     """Resolve the local Docker ``(socket_path, unix_host)`` from the environment.
 
-    Honors a ``unix://`` ``DOCKER_HOST`` so a rootless daemon at
-    ``unix:///run/user/<uid>/docker.sock`` is driven as the operator authored it,
+    Honors a ``unix://`` ``DOCKER_HOST`` so a daemon at a non-default socket
+    such as ``unix:///srv/docker/docker.sock`` is driven as the operator authored it,
     falls back to the system ``/var/run/docker.sock`` when ``DOCKER_HOST`` is
     unset (default behavior unchanged), and returns ``None`` for a
     non-``unix://`` ``DOCKER_HOST`` (``tcp://``, ``ssh://``, ...) that cannot

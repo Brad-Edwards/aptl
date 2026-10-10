@@ -8,6 +8,7 @@ import aptl
 from aptl.cli import (
     config,
     container,
+    doctor,
     experiment,
     kill,
     lab,
@@ -32,6 +33,7 @@ app.add_typer(kill.app, name="kill")
 app.add_typer(experiment.app, name="experiment")
 app.add_typer(seat.app, name="seat")
 app.add_typer(mcp_access.app, name="mcp-access")
+app.command("doctor")(doctor.doctor)
 
 
 def _version_callback(value: bool) -> None:

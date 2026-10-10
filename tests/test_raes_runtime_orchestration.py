@@ -1051,11 +1051,11 @@ def test_local_backend_defaults_to_system_socket_without_docker_host(
     assert backend.revalidate_local_docker_socket().success is True
 
 
-def test_local_backend_honors_unix_docker_host_for_rootless(
+def test_local_backend_honors_non_default_unix_docker_host(
     tmp_path, monkeypatch
 ) -> None:
     backend = DockerComposeBackend(tmp_path)
-    rootless_host = "unix:///run/user/1234/docker.sock"
+    custom_host = "unix:///srv/docker/docker.sock"
     socket_stat = SimpleNamespace(st_mode=stat.S_IFSOCK, st_dev=7, st_ino=11)
     seen: dict[str, str] = {}
 
@@ -1065,8 +1065,8 @@ def test_local_backend_honors_unix_docker_host_for_rootless(
 
     monkeypatch.setattr(os, "lstat", _lstat)
     monkeypatch.setattr(os, "access", lambda _path, _mode: True)
-    monkeypatch.setenv("DOCKER_HOST", rootless_host)
-    monkeypatch.setenv("DOCKER_CONTEXT", "rootless")
+    monkeypatch.setenv("DOCKER_HOST", custom_host)
+    monkeypatch.setenv("DOCKER_CONTEXT", "custom")
     run = MagicMock(
         return_value=subprocess.CompletedProcess([], 0, stdout="daemon-r\n", stderr="")
     )
@@ -1075,10 +1075,10 @@ def test_local_backend_honors_unix_docker_host_for_rootless(
     result = backend.bind_local_docker_socket()
 
     assert result.success is True
-    # The rootless socket path is what gets stat'd and driven, not the default.
-    assert seen["lstat"] == "/run/user/1234/docker.sock"
+    # The non-default socket path is what gets stat'd and driven, not the default.
+    assert seen["lstat"] == "/srv/docker/docker.sock"
     kwargs = run.call_args.kwargs
-    assert kwargs["env"]["DOCKER_HOST"] == rootless_host
+    assert kwargs["env"]["DOCKER_HOST"] == custom_host
     assert "DOCKER_CONTEXT" not in kwargs["env"]
     assert backend.revalidate_local_docker_socket().success is True
 
@@ -1245,11 +1245,36 @@ def test_offline_child_image_platform_mismatch_is_stable_and_bounded(tmp_path) -
     assert result is not None
     assert result.success is False
     assert result.error == (
-        "Spawn image platform incompatible for provision.node.orborus/worker."
+        "Spawn image platform incompatible for provision.node.orborus/worker: "
+        f"{_CHILD_REF}"
     )
 
 
-def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "local_copy",
+    [
+        pytest.param(
+            subprocess.CompletedProcess(
+                [], 1, stdout="", stderr=f"Error: No such image: {_CHILD_REF}\n"
+            ),
+            id="missing",
+        ),
+        pytest.param(
+            subprocess.CompletedProcess(
+                [],
+                0,
+                stdout=(
+                    f'["ghcr.io/example/alias@{_DIGEST}"]\t{_IMAGE_ID}\tlinux/amd64\n'
+                ),
+                stderr="",
+            ),
+            id="unproven-alias",
+        ),
+    ],
+)
+def test_online_child_image_not_proven_locally_is_pulled_and_verified(
+    tmp_path, local_copy
+) -> None:
     backend = DockerComposeBackend(tmp_path)
     backend.revalidate_local_docker_socket = MagicMock(
         return_value=LabResult(success=True)
@@ -1257,6 +1282,7 @@ def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) 
     backend._run = MagicMock(
         side_effect=[
             subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            local_copy,
             subprocess.CompletedProcess([], 0, stdout="", stderr=""),
             subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
         ]
@@ -1264,14 +1290,33 @@ def test_online_child_image_is_pulled_and_verified_by_exact_reference(tmp_path) 
 
     assert backend._prepare_spawn_images(_spec()) is None
     commands = [call.args[0] for call in backend._run.call_args_list]
-    assert commands[1] == ["docker", "pull", _CHILD_REF]
-    assert commands[2][-1] == _CHILD_REF
+    assert commands[2] == ["docker", "pull", _CHILD_REF]
+    assert commands[3][-1] == _CHILD_REF
     # Docker omits Variant for images without an architecture variant. A
     # direct .Variant lookup makes the entire inspect command fail on amd64.
-    assert '{{with index . "Variant"}}/{{.}}{{end}}' in commands[2][4]
-    assert commands[2][4] == EXACT_IMAGE_INSPECT_FORMAT
-    assert backend._run.call_args_list[1].kwargs["timeout"] == 600
-    assert backend._run.call_args_list[2].kwargs["timeout"] == 600
+    assert '{{with index . "Variant"}}/{{.}}{{end}}' in commands[3][4]
+    assert commands[3][4] == EXACT_IMAGE_INSPECT_FORMAT
+    assert all(call.kwargs["timeout"] == 600 for call in backend._run.call_args_list[1:])
+
+
+def test_online_child_image_proven_locally_is_used_without_a_pull(tmp_path) -> None:
+    """A warm start reuses the exact child image the daemon proves (#953)."""
+    backend = DockerComposeBackend(tmp_path)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    backend._run = MagicMock(
+        side_effect=[
+            subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            subprocess.CompletedProcess([], 0, stdout=_CHILD_INSPECT, stderr=""),
+        ]
+    )
+
+    assert backend._prepare_spawn_images(_spec()) is None
+    commands = [call.args[0] for call in backend._run.call_args_list]
+    assert commands[1][:3] == ["docker", "image", "inspect"]
+    assert all("pull" not in command for command in commands)
+    assert all("manifest" not in command for command in commands)
 
 
 def test_arm64_variant_image_matches_daemon_native_variant(tmp_path) -> None:
@@ -1318,8 +1363,51 @@ def test_child_image_cache_alias_is_not_exact_identity_evidence(tmp_path) -> Non
     assert result is not None
     assert result.success is False
     assert result.error == (
-        "Spawn image identity unavailable for provision.node.orborus/worker."
+        "Spawn image identity unavailable for provision.node.orborus/worker: "
+        f"{_CHILD_REF}"
     )
+
+
+@pytest.mark.parametrize(
+    ("offline_staged", "condition", "pulls"),
+    [
+        pytest.param(True, "missing", [], id="offline-missing"),
+        pytest.param(
+            False,
+            "pull failed",
+            [["docker", "pull", _CHILD_REF]],
+            id="online-unpullable",
+        ),
+    ],
+)
+def test_child_image_failure_names_the_exact_reference(
+    tmp_path, offline_staged, condition, pulls
+) -> None:
+    """A start that cannot prove a child image names the image to stage (#953)."""
+    backend = DockerComposeBackend(tmp_path, offline_staged=offline_staged)
+    backend.revalidate_local_docker_socket = MagicMock(
+        return_value=LabResult(success=True)
+    )
+    absent = subprocess.CompletedProcess(
+        [], 1, stdout="", stderr=f"Error: No such image: {_CHILD_REF}\n"
+    )
+    unreachable = subprocess.CompletedProcess([], 1, stdout="", stderr="dial tcp\n")
+    backend._run = MagicMock(
+        side_effect=[
+            subprocess.CompletedProcess([], 0, stdout="linux/amd64\n", stderr=""),
+            absent,
+            unreachable,
+        ]
+    )
+
+    result = backend._prepare_spawn_images(_spec())
+
+    assert result is not None
+    assert result.error == (
+        f"Spawn image {condition} for provision.node.orborus/worker: {_CHILD_REF}"
+    )
+    commands = [call.args[0] for call in backend._run.call_args_list]
+    assert [command for command in commands if "pull" in command] == pulls
 
 
 def test_post_start_authority_is_observed_on_same_daemon(tmp_path) -> None:

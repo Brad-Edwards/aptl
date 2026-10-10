@@ -2,9 +2,10 @@
  * Per-session capture harvest from the Kali capture sidecar.
  *
  * OBS-003 / ADR-033 / ADR-041 design: the `aptl-kali-capture` sidecar (not the
- * Kali workload) writes per-session captures (PTY typescript, pcap,
- * audit/proc-acct snapshots) into a docker named volume at
- * `/var/log/aptl/captures/<run_id>/<session_id>/`. The Kali workload does not
+ * Kali workload) records each session through its SSH/PTY broker
+ * (`containers/kali-capture/broker.py`) into a docker named volume, as
+ * `frames.jsonl` and `metadata.json` under
+ * `/var/log/aptl/captures/<run_id>/sessions/<session_id>/`. The Kali workload does not
  * mount the volume at all, so a sudo-capable agent cannot read or tamper with
  * evidence (ADR-041). The volume is invisible to the host filesystem to
  * prevent cross-scenario tampering (codex pre-push cycle 1 finding-10).
@@ -30,7 +31,7 @@ export interface HarvestOptions {
    * sidecar (e.g. `aptl-kali-capture`), which owns the captures volume. */
   containerName: string;
   /** Path inside the container that holds per-run capture subdirs.
-   * Defaults to `/var/log/aptl/captures` to match the wrapper. */
+   * Defaults to `/var/log/aptl/captures` to match the capture broker. */
   containerCapturesRoot?: string;
   /** APTL state directory on the host (defaults to `APTL_STATE_DIR`
    * env var or `.aptl`). */
@@ -294,7 +295,7 @@ export async function harvestSession(opts: HarvestOptions, sessionId: string): P
   // into dest. The trailing `/.` is important — without it docker cp
   // copies the source directory itself into dest, producing
   // dest/<session_id>/... which would nest one level too deep.
-  const src = `${containerCapturesRoot}/${tid}/${sessionId}/.`;
+  const src = `${containerCapturesRoot}/${tid}/sessions/${sessionId}/.`;
   // Track whether the per-session subtree was actually copied — even
   // on a "not found" no-op, we still attempt the global captures
   // harvest below (codex cycle 2 finding-6).

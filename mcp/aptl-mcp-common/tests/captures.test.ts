@@ -40,8 +40,6 @@ interface SpawnControl {
   capturedArgs: string[][];
   capturedCmds: string[];
   callCount: number;
-  /** When set, replay recorded results keyed by the `<container>:<src>` arg. */
-  recorded?: Record<string, DockerResult>;
   /** When set, `docker cp` reads from `root` as the filesystem of `name`. */
   container?: { name: string; root: string };
 }
@@ -53,13 +51,10 @@ const spawnControl: SpawnControl = {
   callCount: 0,
 };
 
-/** Replay one recorded result; an unrecorded argv fails loudly (rc 125). */
+/** Answer one `docker cp` from the stand-in container, else with the set reply. */
 function replay(args: string[]): DockerResult {
   if (spawnControl.container) return copyFromContainer(spawnControl.container, args);
-  if (!spawnControl.recorded) {
-    return { code: spawnControl.exitCode, stderr: spawnControl.stderrText };
-  }
-  return spawnControl.recorded[args[1]] ?? { code: 125, stderr: `unrecorded: ${args[1]}` };
+  return { code: spawnControl.exitCode, stderr: spawnControl.stderrText };
 }
 
 /** `docker cp <name>:<dir>/. <dest>` against a directory standing in for the container. */
@@ -82,6 +77,8 @@ function copyFromContainer(container: { name: string; root: string }, args: stri
 // below. With no such container, the daemon answered every path with the same
 // `No such container` line.
 const SCOPED = 'aptl-w123456789abc-kali-capture';
+/** Another workspace's sidecar, never the one a harvest names. */
+const OTHER_WORKSPACE = 'aptl-wcba987654321-kali-capture';
 const FIXED = 'aptl-kali-capture';
 const ROOT = '/var/log/aptl/captures';
 const RUN = 'a'.repeat(32);
@@ -93,17 +90,6 @@ const noSuchContainer = (name: string): DockerResult => ({
   code: 1,
   stderr: `Error response from daemon: No such container: ${name}\n`,
 });
-const absent = (name: string): Record<string, DockerResult> =>
-  Object.fromEntries(
-    [`${RUN}/sessions/sess-1/.`, '_audit/.', '_proc-acct/.'].map((path) => [
-      `${name}:${ROOT}/${path}`,
-      noSuchContainer(name),
-    ]),
-  );
-const RECORDED_DOCKER_CP = {
-  scopedAbsent: absent(SCOPED),
-  fixedAbsent: absent(FIXED),
-};
 
 // One session as containers/kali-capture/broker.py records it: the frames and
 // metadata under `<root>/<run>/sessions/<session>/`, and the run's ledger of
@@ -162,7 +148,6 @@ beforeEach(() => {
   spawnControl.capturedArgs = [];
   spawnControl.capturedCmds = [];
   spawnControl.callCount = 0;
-  spawnControl.recorded = undefined;
   spawnControl.container = undefined;
 });
 afterEach(() => {
@@ -435,10 +420,11 @@ describe('#1242: workspace-scoped capture container (recorded docker cp)', () =>
   });
 
   it.each([
-    ['workspace-scoped', SCOPED, RECORDED_DOCKER_CP.scopedAbsent],
-    ['fixed legacy', FIXED, RECORDED_DOCKER_CP.fixedAbsent],
-  ])('records a named failure in run evidence when the %s container is missing', async (_kind, name, recorded) => {
-    spawnControl.recorded = recorded;
+    ['workspace-scoped', SCOPED, OTHER_WORKSPACE],
+    ['fixed legacy', FIXED, SCOPED],
+  ])('records a named failure in run evidence when the %s container is missing', async (_kind, name, present) => {
+    // The broker recorded the session, but in a sidecar with another name.
+    brokerContainer(present, 'sess-1');
 
     expect(await harvest(name)).toBe(false);
     expect(JSON.parse(readFileSync(failureRecord('sess-1'), 'utf-8'))).toEqual({
@@ -461,7 +447,7 @@ describe('#1242: workspace-scoped capture container (recorded docker cp)', () =>
   });
 
   it('never writes through a link already at the failure record path', async () => {
-    spawnControl.recorded = RECORDED_DOCKER_CP.scopedAbsent;
+    brokerContainer(OTHER_WORKSPACE, 'sess-1');
     const outside = join(tmp, 'outside.txt');
     writeFileSync(outside, 'untouched');
     mkdirSync(sessionDir('sess-1'), { recursive: true });

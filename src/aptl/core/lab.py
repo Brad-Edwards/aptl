@@ -160,6 +160,14 @@ class StartSelection:
 _STALE_NETWORK_RECOVERY_HINT = (
     "Run `aptl lab stop` and retry, or `aptl lab stop -v` if you need a clean lab."
 )
+# The deployment backend names the refused index and its container (#990).
+_UNOWNED_SEARCH_INDEX_RECOVERY_HINT = (
+    "Back up the index first; `aptl lab stop` keeps every lab volume. Only if "
+    "its data is disposable, run `aptl lab stop --volumes`, a destructive reset "
+    "that permanently deletes every lab volume. Recovery steps: "
+    "https://openrae.github.io/lilrae/troubleshooting/"
+    "#aptl-lab-start-reports-an-unowned-search-index"
+)
 _WAZUH_MANAGER_SERVICE = "wazuh.manager"
 _WAZUH_MANAGER_CONTAINER = "aptl-wazuh-manager"
 _WAZUH_INDEXER_SERVICE = "wazuh.indexer"
@@ -182,12 +190,23 @@ def _looks_like_stale_realization_network_error(error: str) -> bool:
     )
 
 
+def _looks_like_unowned_search_index_error(error: str) -> bool:
+    """Return True when service materialization refused an unowned index."""
+
+    return (
+        "service materialization failed for " in error
+        and "(reason=unowned-collision)" in error
+    )
+
+
 def _lab_start_failure_error(error: str) -> str:
     """Build the CLI-visible lab-start failure message with recovery hints."""
 
     message = f"Lab start failed: {error}"
     if _looks_like_stale_realization_network_error(error):
         return f"{message}\n{_STALE_NETWORK_RECOVERY_HINT}"
+    if _looks_like_unowned_search_index_error(error):
+        return f"{message}\n{_UNOWNED_SEARCH_INDEX_RECOVERY_HINT}"
     return message
 
 

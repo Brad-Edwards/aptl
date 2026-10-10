@@ -272,6 +272,82 @@ APTL cleanup is deliberately bounded by the validated project labels.
 
 Tracked in [#722](https://github.com/Brad-Edwards/aptl/issues/722).
 
+### `aptl lab start` reports an unowned search index
+
+A scenario can declare a search-index schema as initial service state. APTL
+creates that index in the target search service and marks it with the scenario
+content that owns it. When the service already holds an index of the same name
+without that content's marker, for example in a data volume kept from an
+earlier lab, APTL can't prove that the index holds disposable data. It never
+adopts, deletes, or overwrites such an index. Startup stops before the workload
+starts, and the error names the index and its container.
+
+The Cortex job-index schema is the only schema that APTL maps to a native index
+name (`cortex_6`). For example, with the search service in container
+`aptl-thehive-es`, the error reads:
+
+```
+Lab start failed.
+  error: Lab start failed: RAES runtime handoff failed:
+  aptl.provisioner.backend-start-failed at runtime.apply.provisioning: service
+  materialization failed for provision.content.cortex-job-index-schema
+  (reason=unowned-collision): search index cortex_6 in container
+  aptl-thehive-es lacks this content's ownership marker, ...
+```
+
+Recover in this order, with the index and container names from your error:
+
+1.  Inspect the index without changing it. A failed start leaves its
+    containers running, so open a shell in the container that the error names:
+
+    ```shell
+    aptl container shell <container>
+    ```
+
+    Then query the index read-only from that shell:
+
+    ```shell
+    curl -s 'http://localhost:9200/<index>/_count'
+    curl -s 'http://localhost:9200/<index>/_mapping'
+    ```
+
+2.  Back up any data that you need before you reset anything. The index lives
+    in a Docker volume that the container mounts. Docker names that container
+    with an added workspace marker, for example `aptl-w<id>-thehive-es` for
+    `aptl-thehive-es`, and `aptl container list` shows that name. While the
+    container still exists, list the volumes that it mounts and where:
+
+    ```shell
+    docker inspect <container-name> --format '{{range .Mounts}}{{println .Name .Destination}}{{end}}'
+    ```
+
+    The index is in the `<volume>` mounted at the service's data directory.
+    For `aptl-thehive-es`, that line reads
+    `aptl-w<id>_thehive_es_data /usr/share/elasticsearch/data`. `aptl lab stop`
+    without `-v` removes the lab's containers and keeps every volume. Stop the
+    lab, then archive that volume into the current directory from a throwaway
+    container that mounts it read-only:
+
+    ```shell
+    aptl lab stop
+    docker run --rm -v <volume>:/data:ro -v "$PWD":/backup ubuntu tar -cf /backup/<volume>.tar -C /data .
+    ```
+
+    Copy the volume name exactly, because Docker creates an empty volume for a
+    name that it doesn't know. If the lab runs on a remote Docker host, run the
+    `docker` commands on that host.
+
+3.  Reset only when the data is disposable:
+
+    ```shell
+    aptl lab stop --volumes
+    ```
+
+    This is a destructive reset. It permanently deletes all of this project's
+    lab volumes, not only the conflicting index, and only your backup can
+    restore that data. The command asks for confirmation first. Then start the
+    lab again with the same `--scenario` or `--scenario-path` option.
+
 ### macOS: Docker Desktop uninstall leftovers
 
 If you uninstalled Docker Desktop and switched to Colima (or brew-installed

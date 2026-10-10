@@ -4939,6 +4939,38 @@ class TestLabOrchestrationContracts:
         assert "Run `aptl lab stop` and retry" in result.error
         assert "`aptl lab stop -v`" in result.error
 
+    def test_start_containers_hints_for_an_unowned_search_index(
+        self, mocker, tmp_path
+    ):
+        """A failed apply returns a RAES outcome; the recovery hint follows it."""
+        from aptl.core.lab import _step_start_containers
+
+        unowned_error = (
+            "RAES runtime handoff failed: aptl.provisioner.backend-start-failed "
+            "at runtime.apply.provisioning: service materialization failed for "
+            "provision.content.cortex-job-index-schema (reason=unowned-collision): "
+            "search index cortex_6 in container aptl-thehive-es lacks this "
+            "content's ownership marker, so APTL cannot prove it owns the "
+            "index, and it did not adopt, delete or overwrite it."
+        )
+        ctx = self._ctx(tmp_path)
+        ctx.config = self._full_config()
+        ctx.backend = MagicMock()
+        mocker.patch(
+            "aptl.core.lab.start_raes_scenario",
+            return_value=_raes_outcome(success=False, error=unowned_error),
+        )
+
+        result = _step_start_containers(ctx)
+
+        assert result is not None
+        assert result.success is False
+        headline, _, hint = result.error.partition("\n")
+        assert headline == f"Lab start failed: {unowned_error}"
+        assert hint.endswith(
+            "/troubleshooting/#aptl-lab-start-reports-an-unowned-search-index"
+        )
+
     # -- ssh_key_is_ready --------------------------------------------
 
     def test_test_ssh_without_ssh_key_raises_violation(self, tmp_path):

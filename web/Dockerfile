@@ -12,6 +12,10 @@ COPY . .
 RUN npm run build
 
 FROM caddy:2-alpine@sha256:881bbc60f9986d5ab8e7cfd6cf7e4ef3c9c0439fef2429d035d065577882f028
+# Apply every pending Alpine update, as operator-access-proxy does. The pinned
+# base predates them; currently they are libcrypto3, libssl3 and zlib, whose
+# 1.3.2-r1 fixes CVE-2026-85091.
+RUN apk upgrade --no-cache
 COPY --from=builder /app/build /srv
 COPY Caddyfile /etc/caddy/Caddyfile
 

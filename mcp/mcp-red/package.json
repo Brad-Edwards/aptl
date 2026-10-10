@@ -26,7 +26,7 @@
         "format:check": "prettier --check src/**/*.ts"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.17.2",
+        "@modelcontextprotocol/sdk": "^1.31.0",
         "aptl-mcp-common": "file:../aptl-mcp-common",
         "zod": "^3.25.49"
     },

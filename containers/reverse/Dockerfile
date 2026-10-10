@@ -7,6 +7,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # ---- Shared base layer (from containers/base/Dockerfile.ubuntu) ----
 
+# Also removes the unused /usr/bin/pebble (CVE-2026-78667, -94439, -97031, -97032), as #1248 removed yarn/corepack.
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
     rsyslog \
@@ -30,7 +31,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get upgrade -y && \
     wget \
     ca-certificates \
     && rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && rm -f /usr/bin/pebble
 
 RUN (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done); \
     rm -f /lib/systemd/system/multi-user.target.wants/*;\

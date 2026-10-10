@@ -22,7 +22,7 @@
         "test:watch": "vitest"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.17.2",
+        "@modelcontextprotocol/sdk": "^1.31.0",
         "aptl-mcp-common": "file:../aptl-mcp-common"
     },
     "devDependencies": {

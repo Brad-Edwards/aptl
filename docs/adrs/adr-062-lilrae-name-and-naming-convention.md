@@ -65,7 +65,7 @@ The rename does not change any executable or persisted identity, including:
 - schema identifiers, run records, archives, signatures, and evidence;
 - CLI help text, web interface titles, API descriptions, and MCP server
   descriptions;
-- quality-gate project keys and the Ground Control project identity.
+- quality-gate project keys and the `.ground-control.yaml` project identity.
 
 A future change to any of these needs its own compatibility and migration
 decision. No alias package, compatibility shim, second import root, duplicate
@@ -85,7 +85,7 @@ existing configuration models under their current names. A new identifier
 that participates in an existing contract follows that contract rather than
 introducing a parallel `lilrae` spelling.
 
-The repository's Ground Control planning rules in `.gc/plan-rules.md` carry
+The repository's planning rules in `.gc/plan-rules.md` carry
 this convention as a mandatory plan constraint.
 
 ### Historical records

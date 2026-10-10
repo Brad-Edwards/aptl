@@ -88,8 +88,8 @@ to make a naming change pass.
 
 The extension seam is the separation already present in site metadata,
 packaging/CLI contracts, and the linked naming policy. Change display metadata
-without routing executable behavior through it. Keep the rule in the one
-Ground Control planning artifact, linked to its ADR. A future package or CLI
+without routing executable behavior through it. Keep the rule in
+`.gc/plan-rules.md`, linked to its ADR. A future package or CLI
 cutover can use the existing packaging and command-registration seams after
 its own compatibility decision; no brand registry, environment toggle, wrapper,
 or alias matrix is warranted here.
@@ -100,5 +100,5 @@ No repository-wide code rename, runtime or frontend rebranding, new import
 namespace, compatibility shim, feature removal, lifecycle refactor, data
 migration, historical-record rewrite, release/version/changelog edit, hosting
 move, or external account reconfiguration. No formal requirement exists for
-this run: use issue #1232 as the contract without fabricating a Ground Control
+this run: use issue #1232 as the contract without fabricating a requirement
 UID, traceability record, or requirement-status transition.

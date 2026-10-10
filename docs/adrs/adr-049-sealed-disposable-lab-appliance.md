@@ -420,7 +420,7 @@ canonical surfaces:
 - Kali/capture, SOC, target, OTel, and web container definitions and their
   capabilities, devices, mounts, healthchecks, and network memberships;
 - `docs/deployment.md`, workshop and recovery runbooks, architecture topology,
-  security guidance, and the Ground Control boundary declarations.
+  security guidance, and the `.ground-control.yaml` boundary declarations.
 
 ## Arsenal milestone controls
 

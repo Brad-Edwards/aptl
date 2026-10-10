@@ -1,0 +1,24 @@
+# Public docs refer to the requirements and planning tool generically
+# (for example "the GRC workflow platform" or "the planning rules"),
+# not by its product name (#1243). Literal configuration names stay
+# allowed: `.ground-control.yaml` is excluded below, and `.gc/` and
+# `gc_*` never match. The raw scope also catches a name that wraps
+# onto the next line inside a list item or blockquote. A blank line or
+# a new list item between the two words ends the match. AGENTS.md and
+# the other agent-facing paths are outside Vale (see .vale.ini).
+#
+# Vale wraps the tokens in word boundaries, and an underscore is a word
+# character, so the first token misses a name that touches underscore
+# emphasis: _Ground Control_, __Ground Control__, _Ground_ Control. The
+# second token also allows an underscore run before or after each word.
+# A run between the two words must touch the whitespace, hyphen,
+# asterisk or blockquote marker that separates them, so ground_control,
+# an identifier rather than emphasis, does not match.
+extends: existence
+message: "Use neutral wording such as 'the GRC workflow platform' instead of the product name '%s'."
+level: error
+ignorecase: true
+scope: raw
+tokens:
+  - '(?<!\.)ground(?:[^\S\r\n]|[*-])*(?:\r?\n(?:[^\S\r\n]|>)*)?control(?!\.ya?ml)'
+  - '(?<!\.)_*ground(?:_+(?=[\s*-]))?(?:[^\S\r\n]|[*-])*(?:\r?\n(?:[^\S\r\n]|>)*)?(?:(?<=[\s*>-])_+)?control(?!\.ya?ml)_*'

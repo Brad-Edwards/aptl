@@ -416,7 +416,7 @@ The implementation must audit the whole repository surface:
 - CLI live-validation and profile-qualification projections, and future API
   projections only through the existing auth/BFF/schema boundary;
 - `pyproject.toml`, `uv.lock`, hashed requirements, build/asset packaging, docs,
-  tests, pre-commit, GitHub Actions, Sonar, and Ground Control plan rules;
+  tests, pre-commit, GitHub Actions, Sonar, and `.gc/plan-rules.md`;
 - the active Python environment and distribution metadata, process argv/env,
   project and run-store filesystems, Docker/SSH/container operations, SOC
   HTTP/TLS, OTel, and archive/export readers.

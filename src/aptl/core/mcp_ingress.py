@@ -1,4 +1,8 @@
-"""Derive native Kali MCP ingress and capture targets from the Docker runtime."""
+"""Derive the native Kali MCP ingress and capture target.
+
+The ingress comes from the Docker runtime, and the capture target comes from
+the workspace ownership record.
+"""
 
 from ipaddress import ip_address
 from pathlib import Path

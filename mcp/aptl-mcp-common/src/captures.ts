@@ -189,8 +189,8 @@ async function copyPerSessionCaptures(
 
 /**
  * Record a missing capture container in the run evidence, not only on stderr.
- * The record takes the captures' place in the run directory, which run export
- * archives whole. `wx` refuses to follow or replace anything at its path.
+ * The record takes the captures' place in the run directory. `wx` refuses to
+ * follow or replace anything at its path.
  */
 async function recordContainerMissing(
   destDir: string,

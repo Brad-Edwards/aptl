@@ -19,7 +19,7 @@ The APTL backend shall consume ACES parser/compiler output and declared topology
 
 After ADR-035 and SCN-010, ACES SDL owns scenario authoring and topology declaration. APTL's Wave 1 responsibility is the backend realization contract: map ACES runtime/provisioning content to the local Docker lab without reviving aptl.core.sdl or a TechVault preset shortcut.
 
-NOT DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009 as requirements on the retired in-tree DSL. This record stays ACTIVE because its statement now covers how the backend realizes RAES-declared topology, not a LilRAE scenario DSL. #422 delivered it and made it ACTIVE on 2026-06-25 (PR #549). See GitHub issue #422.
+NOT DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009 as requirements on the retired in-tree DSL. This record stays ACTIVE because its statement now covers how the backend realizes RAES-declared topology, not a LilRAE scenario DSL. #422 (PR #549) closed its last clause, declared node health, and made it ACTIVE on 2026-06-25. See GitHub issue #422.
 
 ## Traceability
 

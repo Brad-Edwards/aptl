@@ -17,7 +17,7 @@ The scenario DSL shall support pre-conditions ("this step requires root access o
 
 ## Rationale
 
-DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009. #434 delivered the LilRAE side: the manifest declares propositions and assertions, and `_raes_proposition_truth.py` projects truth from real evidence (#911, #1020). The issue closed as completed on 2026-10-05. See GitHub issue #434. --- Original rationale: SCN-009 validates only container/profile presence. Semantic pre/post-conditions enable the engine to skip inapplicable steps, verify expected state, and provide meaningful error messages when scenarios fail mid-execution.
+DEPRECATED 2026-10-09: ADR-035 deprecates DSL-002 to DSL-009. #434 delivered part of the LilRAE side: the manifest declares propositions and assertions, and `_raes_proposition_truth.py` projects truth from real evidence (#911, #1020). The maintainer closed the remaining paper-scenario target. See GitHub issue #434. --- Original rationale: SCN-009 validates only container/profile presence. Semantic pre/post-conditions enable the engine to skip inapplicable steps, verify expected state, and provide meaningful error messages when scenarios fail mid-execution.
 
 ## Traceability
 

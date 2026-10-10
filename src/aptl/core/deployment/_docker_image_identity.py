@@ -16,6 +16,7 @@ EXACT_IMAGE_INSPECT_FORMAT = (
 LOCAL_IMAGE_PRESENT = "present"
 LOCAL_IMAGE_MISSING = "missing"
 LOCAL_IMAGE_MISMATCHED = "digest-mismatched"
+LOCAL_IMAGE_PLATFORM_MISMATCHED = "platform-mismatched"
 _IMAGE_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
 # Docker Hub names Docker drops when it reports a repo digest.
 _DOCKER_HUB_REGISTRIES = frozenset({"docker.io", "index.docker.io"})
@@ -112,14 +113,22 @@ def is_exact_image_reference(image_ref: str) -> bool:
     return _canonical_repo_digest(image_ref) is not None
 
 
-def local_image_state(run: Callable[..., Any], image_ref: str, *, timeout: int) -> str:
+def local_image_state(
+    run: Callable[..., Any],
+    image_ref: str,
+    *,
+    timeout: int,
+    platform: DockerPlatform | None = None,
+) -> str:
     """Read what the selected daemon holds under one reference (#953).
 
     An exact (digest-pinned) reference counts as present only when the
     daemon's own repo digests prove the pinned digest; resolving the name is
-    not enough. Any other reference, such as a component built during backend
-    preparation, only has to be present. ``run`` is the backend's list-form
-    runner and this issues one local inspection, never a registry request.
+    not enough. Given ``platform``, the daemon's own, the proven image must
+    also run natively on it, as a spawned child must. Any other reference, such
+    as a component built during backend preparation, only has to be present.
+    ``run`` is the backend's list-form runner and this issues one local
+    inspection, never a registry request.
     """
 
     exact = is_exact_image_reference(image_ref)
@@ -127,11 +136,20 @@ def local_image_state(run: Callable[..., Any], image_ref: str, *, timeout: int) 
     result = run(
         ["docker", "image", "inspect", *output_format, image_ref], timeout=timeout
     )
+    identity = None
+    if exact and result.returncode == 0:
+        identity = exact_inspected_image_identity(result.stdout, image_ref)
     state = LOCAL_IMAGE_PRESENT
     if result.returncode != 0:
         state = LOCAL_IMAGE_MISSING
-    elif exact and exact_inspected_image_identity(result.stdout, image_ref) is None:
+    elif exact and identity is None:
         state = LOCAL_IMAGE_MISMATCHED
+    elif (
+        identity is not None
+        and platform is not None
+        and not platform_is_compatible(platform, identity.platform)
+    ):
+        state = LOCAL_IMAGE_PLATFORM_MISMATCHED
     return state
 
 
